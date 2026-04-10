@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.log
+
+# Virtualenv
+.venv/
+venv/
+
+# Django uploads (方案图片等)
+media/
+
+# Chroma 向量库（本地持久化，可重建）
+data/chroma/
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/

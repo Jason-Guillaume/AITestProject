@@ -1,0 +1,408 @@
+/**
+ * Unified dark cyber / tech-noir surfaces for pages using .cyber-page wrapper.
+ * Teleported dialogs/drawers: add class cyber-dialog-dark / cyber-drawer-dark on the component.
+ */
+
+.cyber-page {
+  background: transparent;
+}
+
+.cyber-glass {
+  background: rgba(20, 28, 47, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 16px;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.cyber-glass--interactive:hover {
+  border-color: rgba(0, 255, 255, 0.28);
+  box-shadow: 0 0 22px rgba(0, 216, 255, 0.12);
+}
+
+/* ---------- Tables (any .el-table under .cyber-page) ---------- */
+.cyber-page .el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: rgba(255, 255, 255, 0.05);
+  --el-table-row-hover-bg-color: rgba(0, 255, 255, 0.08);
+  --el-table-border-color: transparent;
+  --el-table-text-color: rgba(255, 255, 255, 0.88);
+  --el-table-header-text-color: rgba(255, 255, 255, 0.72);
+}
+
+.cyber-page .el-table .el-table__inner-wrapper::before,
+.cyber-page .el-table::before {
+  display: none;
+}
+
+.cyber-page .el-table .el-table__header-wrapper th.el-table__cell {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-right: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.cyber-page .el-table .el-table__body-wrapper .el-table__body td.el-table__cell {
+  background: transparent !important;
+  border-right: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.cyber-page .el-table .el-table__body-wrapper .el-table__body tr:last-child td.el-table__cell {
+  border-bottom: none !important;
+}
+
+.cyber-page .el-table .el-table__body tr:hover > td.el-table__cell {
+  background-color: rgba(0, 255, 255, 0.06) !important;
+}
+
+.cyber-page .el-table .el-table__empty-block {
+  background: transparent;
+}
+
+.cyber-page .el-table .el-loading-mask {
+  background-color: rgba(10, 16, 29, 0.55);
+}
+
+/* ---------- 列表表格：垂直居中、横向留白、单元格内 flex 对齐 ---------- */
+.cyber-page .el-table th.el-table__cell,
+.cyber-page .el-table td.el-table__cell {
+  vertical-align: middle !important;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+}
+
+.cyber-page .el-table .cell {
+  display: flex;
+  align-items: center;
+  align-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  line-height: 1.5;
+  box-sizing: border-box;
+  /* 占满单元格宽度，justify-content 与表头 text-align 同轴 */
+  width: 100%;
+  /* 占满单元格高度，flex 垂直居中才相对整行生效（否则仅在一小段内容高度内居中，视觉上贴顶） */
+  min-height: 100%;
+  height: 100%;
+}
+
+/* 表体/表头单元格：占满行高，避免内容贴顶 */
+.cyber-page .el-table .el-table__body-wrapper .el-table__body td.el-table__cell,
+.cyber-page .el-table .el-table__header-wrapper .el-table__header th.el-table__cell {
+  vertical-align: middle !important;
+}
+
+.cyber-page .el-table .el-table__body td.el-table__cell > .cell,
+.cyber-page .el-table .el-table__header th.el-table__cell > .cell {
+  min-height: 2.75rem;
+}
+
+/*
+ * Element Plus：列 align 会生成修饰符 class（is-left / is-center / is-right），
+ * 不是单独的 .left / .center / .right（此前选错导致横向与垂直视觉都不符合预期）。
+ */
+.cyber-page .el-table td.el-table__cell.is-center > .cell,
+.cyber-page .el-table th.el-table__cell.is-center > .cell {
+  justify-content: center;
+  text-align: center;
+}
+
+.cyber-page .el-table td.el-table__cell.is-right > .cell,
+.cyber-page .el-table th.el-table__cell.is-right > .cell {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.cyber-page .el-table td.el-table__cell.is-left > .cell,
+.cyber-page .el-table th.el-table__cell.is-left > .cell {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+/* 未带 is-left / is-right 的列（含 is-center 与未写 align 的列）：默认水平居中 */
+.cyber-page .el-table td.el-table__cell:not(.is-left):not(.is-right) > .cell,
+.cyber-page .el-table th.el-table__cell:not(.is-left):not(.is-right) > .cell {
+  justify-content: center;
+  text-align: center;
+}
+
+.cyber-page .el-table .cell > * {
+  min-width: 0;
+}
+
+.cyber-page .el-table .cell .el-button,
+.cyber-page .el-table .cell .el-tag,
+.cyber-page .el-table .cell .el-dropdown,
+.cyber-page .el-table .cell .el-checkbox,
+.cyber-page .el-table .cell .el-icon {
+  min-width: auto;
+  flex-shrink: 0;
+}
+
+.cyber-page .el-table .cell .el-progress {
+  flex: 1;
+  min-width: 72px;
+  max-width: 100%;
+}
+
+.cyber-page .el-table .col-datetime .cell {
+  white-space: nowrap;
+}
+
+/* ---------- Admin 列表页：统一卡片、单行工具栏、表格区域 ---------- */
+.cyber-page.admin-list-page {
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.cyber-page .admin-list-card.el-card {
+  border: 1px solid rgba(0, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(18, 26, 44, 0.92) !important;
+  --el-card-bg-color: rgba(18, 26, 44, 0.92);
+}
+
+.cyber-page.admin-list-page > .admin-list-card.el-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cyber-page .admin-list-card > .el-card__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.cyber-page.testcase-page.admin-list-page .testcase-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 20px;
+  width: 100%;
+}
+
+/* 测试用例页：模块树 dock + 主内容 shell。
+   宽屏下 dock 随 isExpanded 变宽，主区 testcase-main-shell（flex:1;min-width:0）被侧向推挤，非覆盖。 */
+.cyber-page.testcase-page.admin-list-page .testcase-layout--module-dock > .testcase-main-shell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+}
+
+.cyber-page.testcase-page.admin-list-page
+  .testcase-layout--module-dock
+  .module-tree-slide
+  .admin-list-card.el-card.tc-card--tree {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cyber-page.testcase-page.admin-list-page
+  .testcase-layout--module-dock
+  > .testcase-main-shell
+  > .admin-list-card.el-card.tc-card--main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cyber-page .admin-toolbar-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.cyber-page .admin-toolbar-row__left {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+}
+
+.cyber-page .admin-toolbar-row__right {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.cyber-page .admin-toolbar-row .search-input {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.cyber-page .admin-table-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  width: 100%;
+}
+
+.cyber-page .el-table.admin-data-table .el-table__header th.el-table__cell .cell {
+  white-space: nowrap;
+  line-height: 1.35;
+}
+
+.cyber-page .el-table.admin-data-table td.el-table__cell,
+.cyber-page .el-table.admin-data-table th.el-table__cell {
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+/* ---------- Pagination ---------- */
+.cyber-page .pagination-wrap .el-pagination {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-text-color: rgba(255, 255, 255, 0.65);
+  --el-pagination-button-color: rgba(255, 255, 255, 0.78);
+  --el-pagination-button-disabled-bg-color: transparent;
+  --el-pagination-hover-color: #00d8ff;
+}
+
+.cyber-page .pagination-wrap .el-pager li {
+  background: transparent !important;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.cyber-page .pagination-wrap .el-pager li.is-active {
+  color: #00ffff !important;
+  border-color: rgba(0, 255, 255, 0.5);
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.2);
+  background: rgba(0, 255, 255, 0.06) !important;
+  font-weight: 600;
+}
+
+.cyber-page .pagination-wrap .el-pagination .btn-prev,
+.cyber-page .pagination-wrap .el-pagination .btn-next {
+  background: transparent !important;
+}
+
+.cyber-page .pagination-wrap .el-pagination__jump .el-input__wrapper,
+.cyber-page .pagination-wrap .el-pagination__sizes .el-select .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+
+/* ---------- Tree (e.g. TestCase module tree) ---------- */
+.cyber-page .el-tree {
+  --el-tree-node-hover-bg-color: rgba(0, 255, 255, 0.06);
+  --el-tree-text-color: rgba(226, 232, 240, 0.92);
+  background: transparent;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.cyber-page .el-tree-node__content:hover {
+  background-color: rgba(0, 255, 255, 0.06) !important;
+}
+
+/* ---------- Dialog (teleported) ---------- */
+.el-dialog.cyber-dialog-dark {
+  background: rgba(20, 28, 47, 0.96) !important;
+  border: 1px solid rgba(0, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.45);
+}
+
+.el-dialog.cyber-dialog-dark .el-dialog__header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 12px;
+  margin-right: 0;
+}
+
+.el-dialog.cyber-dialog-dark .el-dialog__title {
+  color: #e2e8f0;
+}
+
+.el-dialog.cyber-dialog-dark .el-dialog__body {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.el-dialog.cyber-dialog-dark .el-dialog__footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.el-dialog.cyber-dialog-dark .el-form-item__label {
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.el-dialog.cyber-dialog-dark .el-input__wrapper,
+.el-dialog.cyber-dialog-dark .el-textarea__inner,
+.el-dialog.cyber-dialog-dark .el-select .el-input__wrapper {
+  background: rgba(10, 16, 28, 0.5) !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(0, 255, 255, 0.12) !important;
+}
+
+.el-dialog.cyber-dialog-dark .el-textarea__inner {
+  color: #e2e8f0;
+}
+
+/* ---------- Drawer (teleported) ---------- */
+.el-drawer.cyber-drawer-dark .el-drawer__header {
+  color: #e2e8f0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 0;
+}
+
+.el-drawer.cyber-drawer-dark .el-drawer__body {
+  background: rgba(14, 20, 35, 0.98);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.el-drawer.cyber-drawer-dark .el-drawer__footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.el-drawer.cyber-drawer-dark .el-form-item__label {
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.el-drawer.cyber-drawer-dark .el-input__wrapper,
+.el-drawer.cyber-drawer-dark .el-select .el-input__wrapper {
+  background: rgba(10, 16, 28, 0.5) !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(0, 255, 255, 0.12) !important;
+}

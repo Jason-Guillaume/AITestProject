@@ -1,0 +1,63 @@
+import request from "@/utils/request";
+
+export const getApproachsApi = (params) => request.get("/testcase/approachs/", { params });
+export const createApproachApi = (data) => request.post("/testcase/approachs/", data);
+export const updateApproachApi = (id, data) => request.patch(`/testcase/approachs/${id}/`, data);
+export const deleteApproachApi = (id) => request.delete(`/testcase/approachs/${id}/`);
+
+// 方案图片
+export const getApproachImagesApi = (id) =>
+  request.get(`/testcase/approachs/${id}/images/`);
+
+// files: File[]，字段名建议为 images（multipart）
+export const uploadApproachImagesApi = (id, formData) =>
+  request.post(`/testcase/approachs/${id}/images/upload/`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+export const deleteApproachImageApi = (approachId, imageId) =>
+  request.delete(`/testcase/approachs/${approachId}/images/${imageId}/`);
+
+export const getDesignsApi = (params) => request.get("/testcase/designs/", { params });
+export const createDesignApi = (data) => request.post("/testcase/designs/", data);
+export const updateDesignApi = (id, data) => request.patch(`/testcase/designs/${id}/`, data);
+export const deleteDesignApi = (id) => request.delete(`/testcase/designs/${id}/`);
+export const getDesignDetailApi = (id) => request.get(`/testcase/designs/${id}/`);
+
+export const getModulesApi = (params) => request.get("/testcase/modules/", { params });
+export const createModuleApi = (data) => request.post("/testcase/modules/", data);
+export const updateModuleApi = (id, data) => request.patch(`/testcase/modules/${id}/`, data);
+export const deleteModuleApi = (id) => request.delete(`/testcase/modules/${id}/`);
+
+export const getCasesApi = (params) => request.get("/testcase/cases/", { params });
+/** 回收站：与 getCasesApi 相同资源，必须带 recycle=1（或 is_deleted=true） */
+export const getRecycleCasesApi = (params) =>
+  request.get("/testcase/cases/", { params: { ...params, recycle: "1" } });
+export const createCaseApi = (data) => request.post("/testcase/cases/", data);
+export const updateCaseApi = (id, data) => request.patch(`/testcase/cases/${id}/`, data);
+export const deleteCaseApi = (id) => request.delete(`/testcase/cases/${id}/`);
+export const restoreCaseApi = (id) => request.post(`/testcase/cases/${id}/restore/`);
+export const hardDeleteCaseApi = (id) => request.delete(`/testcase/cases/${id}/hard-delete/`);
+/** 批量逻辑删除，body: { ids: number[] } */
+export const batchDeleteCasesApi = (data) => request.post("/testcase/cases/batch-delete/", data);
+/** 批量记录执行（exec_count+1），body: { ids: number[] } */
+export const batchExecuteCasesApi = (data) => request.post("/testcase/cases/batch-execute/", data);
+/** 执行单条 API 用例（真实 HTTP + 落库 ApiTestLog） */
+export const executeApiCaseApi = (id) => request.post(`/testcase/cases/${id}/execute-api/`);
+/** 执行 API 用例（覆盖参数，落库 ExecutionLog） */
+export const runApiCaseApi = (id, data) =>
+  request.post(`/testcase/cases/${id}/run-api/`, data ?? {});
+/** AI 根据字段结构填充测试数据 */
+export const aiFillTestDataApi = (data) => request.post("/testcase/ai-fill-test-data/", data);
+export const getCaseDetailApi = (id) => request.get(`/testcase/cases/${id}/`);
+/** 单用例执行日志分页列表 */
+export const getCaseExecutionLogsApi = (id, params) =>
+  request.get(`/testcase/cases/${id}/execution-logs/`, { params });
+/** 单用例快照版本分页列表 */
+export const getCaseVersionsApi = (id, params) =>
+  request.get(`/testcase/cases/${id}/versions/`, { params });
+/** 用例版本回溯，body: { version_id: number } */
+export const rollbackCaseVersionApi = (id, data) =>
+  request.post(`/testcase/cases/${id}/rollback-version/`, data);
+
+export const createCaseStepApi = (data) => request.post("/testcase/steps/", data);

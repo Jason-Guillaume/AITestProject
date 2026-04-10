@@ -1,0 +1,108 @@
+/**
+ * Element Plus el-select 下拉层：AITesta 深色科技风
+ * 通过 popper-class="dark-tech-dropdown" 挂载到 body，须全局样式。
+ */
+
+.dark-tech-dropdown.el-select-dropdown,
+.dark-tech-dropdown.el-popper {
+  background: linear-gradient(
+    160deg,
+    rgba(30, 41, 59, 0.9),
+    rgba(37, 52, 77, 0.88)
+  ) !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  border-radius: 8px !important;
+  box-shadow:
+    0 14px 36px rgba(2, 8, 23, 0.38),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.dark-tech-dropdown .el-select-dropdown__item {
+  color: #e2e8f0 !important;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.dark-tech-dropdown .el-select-dropdown__item.hover,
+.dark-tech-dropdown .el-select-dropdown__item:hover {
+  background: rgba(56, 189, 248, 0.18) !important;
+  color: #f8fafc !important;
+}
+
+.dark-tech-dropdown .el-select-dropdown__item.selected {
+  background: rgba(30, 41, 59, 0.68) !important;
+  color: #7dd3fc !important;
+  font-weight: 600;
+}
+
+.dark-tech-dropdown .el-select-dropdown__item.is-selected {
+  background: rgba(30, 41, 59, 0.72) !important;
+  color: #7dd3fc !important;
+  font-weight: 600;
+}
+
+.dark-tech-dropdown .el-popper__arrow::before {
+  background: rgba(34, 48, 70, 0.92) !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+}
+
+/* 顶栏上下文切换（el-dropdown）弹层 */
+.dark-tech-dropdown.nav-context-dropdown .el-dropdown-menu {
+  padding: 6px;
+  background: transparent !important;
+  border: none !important;
+}
+
+.dark-tech-dropdown.nav-context-dropdown .el-dropdown-menu__item {
+  min-height: 34px;
+  margin: 2px 0;
+  border-radius: 8px;
+  color: #dbeafe !important;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.dark-tech-dropdown.nav-context-dropdown .el-dropdown-menu__item:focus,
+.dark-tech-dropdown.nav-context-dropdown .el-dropdown-menu__item:not(.is-disabled):hover {
+  color: #f0f9ff !important;
+  background: linear-gradient(120deg, rgba(0, 216, 255, 0.2), rgba(168, 85, 247, 0.2)) !important;
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, 0.25) inset,
+    0 0 16px rgba(34, 211, 238, 0.14);
+}
+
+.dark-tech-dropdown.nav-context-dropdown .el-dropdown-menu__item.is-disabled {
+  color: #64748b !important;
+}
+
+.dark-tech-dropdown.nav-context-dropdown .el-dropdown-menu__item.nav-context-dropdown__item--current {
+  position: relative;
+  color: #67e8f9 !important;
+  font-weight: 600;
+  background: linear-gradient(120deg, rgba(0, 216, 255, 0.12), rgba(168, 85, 247, 0.14)) !important;
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.2) inset,
+    0 0 18px rgba(34, 211, 238, 0.14);
+}
+
+.dark-tech-dropdown.nav-context-dropdown .el-dropdown-menu__item.nav-context-dropdown__item--current::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #22d3ee, #a78bfa);
+  box-shadow:
+    0 0 8px rgba(34, 211, 238, 0.8),
+    0 0 14px rgba(167, 139, 250, 0.45);
+}

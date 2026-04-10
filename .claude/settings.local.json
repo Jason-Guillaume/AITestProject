@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python test_consistency.py)",
+      "Bash(rm:*)",
+      "Bash(dir /s /b \"D:\\\\高四\\\\AITestProduct\\\\frontend\\\\src\\\\*.ts\")",
+      "Bash(findstr /v node_modules)",
+      "Bash(python -m py_compile AITestProduct/settings.py)",
+      "Bash(python manage.py check)",
+      "Bash(python manage.py makemigrations --check --dry-run)",
+      "Bash(python manage.py show_urls)",
+      "Bash(python -c \"from django.conf import settings; settings.configure\\(\\); import AITestProduct.urls; print\\('URLs imported successfully'\\)\")",
+      "Bash(python manage.py shell -c \"from django.urls import reverse; from AITestProduct.urls import urlpatterns; print\\(f'Total URL patterns: {len\\(urlpatterns\\)}'\\); [print\\(f'  {p.pattern}'\\) for p in urlpatterns]\")",
+      "Bash(python manage.py shell -c ':*)",
+      "Bash(python manage.py test user.tests --keepdb)",
+      "Bash(python manage.py test project.tests --keepdb)",
+      "Bash(python manage.py test testcase.tests --keepdb)",
+      "Bash(python -c ':*)",
+      "Bash(npm run:*)",
+      "Bash(pip install:*)",
+      "Bash(python manage.py show_migrations)",
+      "Bash(python manage.py showmigrations)"
+    ]
+  }
+}

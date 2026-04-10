@@ -1,0 +1,114 @@
+name: Backend API Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - "**/*.py"
+      - "requirements*.txt"
+      - "tests/**"
+      - ".github/workflows/api-tests.yml"
+  pull_request:
+    paths:
+      - "**/*.py"
+      - "requirements*.txt"
+      - "tests/**"
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: aitest
+          MYSQL_USER: aitest
+          MYSQL_PASSWORD: aitest
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    env:
+      TEST_API_BASE_URL: http://127.0.0.1:8000/api
+      TEST_API_USERNAME: ${{ secrets.TEST_API_USERNAME }}
+      TEST_API_PASSWORD: ${{ secrets.TEST_API_PASSWORD }}
+      TEST_API_ADMIN_USERNAME: ${{ secrets.TEST_API_ADMIN_USERNAME }}
+      TEST_API_ADMIN_PASSWORD: ${{ secrets.TEST_API_ADMIN_PASSWORD }}
+      TEST_AI_API_KEY: ${{ secrets.TEST_AI_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Wait for MySQL
+        run: |
+          python - <<'PY'
+          import socket, time
+          for _ in range(60):
+              s = socket.socket()
+              try:
+                  s.connect(("127.0.0.1", 3306))
+                  print("mysql ready")
+                  break
+              except Exception:
+                  time.sleep(2)
+              finally:
+                  s.close()
+          else:
+              raise SystemExit("mysql not ready")
+          PY
+
+      - name: Migrate database
+        run: |
+          python manage.py migrate --noinput
+
+      - name: Check testcase numbering consistency (dry-run)
+        run: |
+          python manage.py resequence_case_numbers --dry-run --strict --report-file reports/case-number-check.txt --report-json-file reports/case-number-check.json
+
+      - name: Start Django server
+        run: |
+          python manage.py runserver 0.0.0.0:8000 &
+          sleep 5
+
+      - name: Run smoke API tests with html report
+        run: |
+          pytest -m smoke tests/api --html=reports/api-test-report.html --self-contained-html
+
+      - name: Upload pytest html report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-report
+          path: reports/api-test-report.html
+
+      - name: Upload case-number check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: case-number-check-report
+          path: |
+            reports/case-number-check.txt
+            reports/case-number-check.json

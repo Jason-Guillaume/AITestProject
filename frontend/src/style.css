@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 内页深色壳（与 App.vue .dark 配合） */
+.app-root.dark {
+  color-scheme: dark;
+  min-height: 100%;
+  background: radial-gradient(ellipse 120% 80% at 50% -10%, #0f172a 0%, #020617 45%, #010409 100%);
+}
