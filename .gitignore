@@ -19,3 +19,11 @@ data/chroma/
 # Node / Vite
 frontend/node_modules/
 frontend/dist/
+
+# IDE / local workspace
+.idea/
+.vscode/
+
+# Test artifacts
+.pytest_cache/
+reports/
