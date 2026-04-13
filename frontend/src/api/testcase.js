@@ -38,8 +38,9 @@ export const updateCaseApi = (id, data) => request.patch(`/testcase/cases/${id}/
 export const deleteCaseApi = (id) => request.delete(`/testcase/cases/${id}/`);
 export const restoreCaseApi = (id) => request.post(`/testcase/cases/${id}/restore/`);
 export const hardDeleteCaseApi = (id) => request.delete(`/testcase/cases/${id}/hard-delete/`);
-/** 批量逻辑删除，body: { ids: number[] } */
-export const batchDeleteCasesApi = (data) => request.post("/testcase/cases/batch-delete/", data);
+/** 批量逻辑删除，body: { ids: number[] }；可选 config.params.project 与列表页一致，便于后端按项目收敛 */
+export const batchDeleteCasesApi = (data, config) =>
+  request.post("/testcase/cases/batch-delete/", data, config);
 /** 批量记录执行（exec_count+1），body: { ids: number[] } */
 export const batchExecuteCasesApi = (data) => request.post("/testcase/cases/batch-execute/", data);
 /** 执行单条 API 用例（真实 HTTP + 落库 ApiTestLog） */
@@ -47,6 +48,9 @@ export const executeApiCaseApi = (id) => request.post(`/testcase/cases/${id}/exe
 /** 执行 API 用例（覆盖参数，落库 ExecutionLog） */
 export const runApiCaseApi = (id, data) =>
   request.post(`/testcase/cases/${id}/run-api/`, data ?? {});
+/** 预览 API 用例执行前最终请求（不发请求） */
+export const previewRunApiCaseApi = (id, data) =>
+  request.post(`/testcase/cases/${id}/preview-run-api/`, data ?? {});
 /** AI 根据字段结构填充测试数据 */
 export const aiFillTestDataApi = (data) => request.post("/testcase/ai-fill-test-data/", data);
 export const getCaseDetailApi = (id) => request.get(`/testcase/cases/${id}/`);

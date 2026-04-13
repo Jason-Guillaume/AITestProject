@@ -111,7 +111,14 @@
                   style="max-width:600px;margin-top:12px"
                 >
                   <el-form-item label="模型类型">
-                    <el-select v-model="modelForm.type" placeholder="请选择模型" filterable style="width:100%">
+                    <el-select
+                      v-model="modelForm.type"
+                      placeholder="请选择或输入模型（支持自定义）"
+                      filterable
+                      allow-create
+                      default-first-option
+                      style="width:100%"
+                    >
                       <el-option-group label="智谱 AI (GLM)">
                         <el-option label="GLM-4.7-Flash" value="glm-4.7-flash" />
                         <el-option label="GLM-4" value="glm-4" />
@@ -119,7 +126,7 @@
                         <el-option label="GLM-4-Plus" value="glm-4-plus" />
                       </el-option-group>
                       <el-option-group label="讯飞 MaaS">
-                        <el-option label="iFLYTEK Spark MaaS Coding" value="iflytek-spark-maas-coding" />
+                        <el-option label="Astron Coding (astron-code-latest)" value="astron-code-latest" />
                       </el-option-group>
                       <el-option-group label="其他（需填写 API 地址）">
                         <el-option label="文心大模型 5.0" value="wenxin" />
@@ -135,10 +142,10 @@
                   <el-form-item label="API 地址">
                     <el-input
                       v-model="modelForm.baseUrl"
-                      :placeholder="isIflytekMaaSSelected ? IFLYTEK_MAAS_CHAT_COMPLETIONS : '可选，自定义接入地址'"
+                      :placeholder="isIflytekMaaSSelected ? IFLYTEK_MAAS_OPENAI_BASE : '可选，自定义接入地址'"
                     />
                     <div v-if="isIflytekMaaSSelected" class="config-hint">
-                      建议直接使用完整端点：{{ IFLYTEK_MAAS_CHAT_COMPLETIONS }}（你也可以手动修改）。
+                      建议使用根路径：{{ IFLYTEK_MAAS_OPENAI_BASE }}（系统会自动拼接 /chat/completions）。
                     </div>
                   </el-form-item>
                   <el-form-item>
@@ -192,8 +199,8 @@ const rules = ref([
 ])
 
 const IFLYTEK_MAAS_MODEL_TYPE = 'iflytek-spark-maas-coding'
-const IFLYTEK_MAAS_CHAT_COMPLETIONS =
-  'https://maas-coding-api.cn-huabei-1.xf-yun.com/v1/chat/completions'
+const IFLYTEK_MAAS_OPENAI_BASE =
+  'https://maas-coding-api.cn-huabei-1.xf-yun.com/v2'
 
 const modelForm = ref({ type: '', apiKey: '', baseUrl: '' })
 const llmTesting = ref(false)
@@ -203,15 +210,21 @@ const currentConfig = ref(null)
 
 const isSystemAdmin = computed(() => localStorage.getItem('is_system_admin') === '1')
 const isIflytekMaaSSelected = computed(
-  () => modelForm.value.type === IFLYTEK_MAAS_MODEL_TYPE,
+  () => isIflytekModelType(modelForm.value.type),
 )
+
+function isIflytekModelType(modelType) {
+  const t = String(modelType || '').trim().toLowerCase()
+  if (!t) return false
+  return t === IFLYTEK_MAAS_MODEL_TYPE || t.includes('iflytek') || t.includes('spark') || t.includes('astron')
+}
 
 function inferModelTypeFromBaseUrl(baseUrl) {
   const b = String(baseUrl || '').toLowerCase()
   if (!b) return ''
   if (b.includes('dashscope.aliyuncs.com') || b.includes('qwen')) return 'qwen-turbo'
   if (b.includes('bigmodel.cn') || b.includes('/paas/v4')) return 'glm-4.7-flash'
-  if (b.includes('xf-yun.com') || b.includes('iflytek')) return IFLYTEK_MAAS_MODEL_TYPE
+  if (b.includes('xf-yun.com') || b.includes('iflytek')) return 'astron-code-latest'
   return ''
 }
 
@@ -224,6 +237,7 @@ function inferModelDisplayName(modelType) {
   if (t === 'glm-4-flash') return 'GLM-4-Flash'
   if (t === 'glm-4-plus') return 'GLM-4-Plus'
   if (t === IFLYTEK_MAAS_MODEL_TYPE) return 'iFLYTEK Spark MaaS Coding'
+  if (t === 'astron-code-latest') return 'Astron Coding'
   return modelType
 }
 
@@ -245,15 +259,16 @@ const normalizedConfig = computed(() => {
 
 function syncModelFormFromConfig() {
   const cfg = normalizedConfig.value
-  modelForm.value.type = cfg.model_type || ''
+  // 兼容旧配置：历史别名自动迁移到可直接调用的具体模型名
+  modelForm.value.type = cfg.model_type === IFLYTEK_MAAS_MODEL_TYPE ? 'astron-code-latest' : (cfg.model_type || '')
   modelForm.value.baseUrl = cfg.base_url || ''
 }
 
 watch(
   () => modelForm.value.type,
   (type) => {
-    if (type === IFLYTEK_MAAS_MODEL_TYPE && !(modelForm.value.baseUrl || '').trim()) {
-      modelForm.value.baseUrl = IFLYTEK_MAAS_CHAT_COMPLETIONS
+    if (isIflytekModelType(type) && !(modelForm.value.baseUrl || '').trim()) {
+      modelForm.value.baseUrl = IFLYTEK_MAAS_OPENAI_BASE
     }
   },
   { immediate: true },
@@ -425,6 +440,14 @@ async function testModel() {
 }
 
 onMounted(() => {
+  try {
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    if (tab === 'model') {
+      activeTab.value = 'model'
+    }
+  } catch {
+    /* ignore invalid URL parsing */
+  }
   loadAiConfig()
   window.addEventListener('focus', loadAiConfig)
   document.addEventListener('visibilitychange', handleVisibilityRefresh)

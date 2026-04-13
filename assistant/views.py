@@ -2,6 +2,7 @@ import json
 import logging
 import importlib.util
 import re
+from difflib import SequenceMatcher
 from datetime import timedelta
 from pathlib import Path
 import socket
@@ -57,6 +58,7 @@ from assistant.services.case_batch_generation import (
 )
 from assistant.services.semantic_dedup import semantic_deduplicate_cases
 from assistant.api_case_generation import (
+    backfill_api_request_fields_in_batch,
     enrich_normalized_case_with_api_fields,
     renumber_api_business_ids,
 )
@@ -887,12 +889,11 @@ def _openai_missing_response_json(msg_prefix: str = "服务端未检测到 opena
 
 # 智谱 OpenAI 兼容接口默认地址（不含路径时自动补全 /chat/completions）
 ZHIPU_DEFAULT_CHAT_BASE = "https://open.bigmodel.cn/api/paas/v4"
-IFLYTEK_MAAS_OPENAI_BASE = "https://maas-coding-api.cn-huabei-1.xf-yun.com/v1"
+IFLYTEK_MAAS_OPENAI_BASE = "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2"
 IFLYTEK_MAAS_CHAT_COMPLETIONS = (
-    "https://maas-coding-api.cn-huabei-1.xf-yun.com/v1/chat/completions"
+    "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2/chat/completions"
 )
 IFLYTEK_MAAS_MODEL_TYPE = "iflytek-spark-maas-coding"
-IFLYTEK_MAAS_PAYLOAD_MODEL = "astron-code-latest"
 
 SYSTEM_PROMPT = (
     "You are a software testing assistant. Upon receiving this connection test, "
@@ -921,24 +922,34 @@ def _resolve_chat_completions_url(base_url: str, model: str) -> str:
     return f"{raw}/chat/completions"
 
 
+def _is_iflytek_maas_model(model: str) -> bool:
+    m = (model or "").strip().lower()
+    if not m:
+        return False
+    return (
+        m == IFLYTEK_MAAS_MODEL_TYPE
+        or "iflytek" in m
+        or "spark" in m
+        or "astron" in m
+    )
+
+
 def _resolve_openai_target(model: str, base_url: str):
     """
     统一解析 OpenAI 兼容目标：
-    - 讯飞 MaaS Coding：强制 payload model；base_url 允许外部自定义，空值时给默认完整端点
-    - 其他：保持用户/系统配置
+    - 不再覆盖模型名：前端/配置传什么模型，就按什么模型请求
+    - 若模型看起来是讯飞系且未填 base_url，则补默认 /v2 根路径
     """
     m = (model or "").strip()
     b = (base_url or "").strip()
-    if m == IFLYTEK_MAAS_MODEL_TYPE:
-        if not b:
-            b = IFLYTEK_MAAS_CHAT_COMPLETIONS
-        return IFLYTEK_MAAS_PAYLOAD_MODEL, b
+    if _is_iflytek_maas_model(m) and not b:
+        b = IFLYTEK_MAAS_OPENAI_BASE
     return m, b
 
 
 def _normalize_openai_sdk_base_url(base_url: str, model: str) -> str:
     """
-    OpenAI Python SDK 期望 base_url 是“根路径”（如 .../v1），
+    OpenAI Python SDK 期望 base_url 是“根路径”（如 .../v2），
     若传入了 .../chat/completions 会导致 SDK 再拼一次路径而 404。
     """
     raw = (base_url or "").strip().rstrip("/")
@@ -946,8 +957,8 @@ def _normalize_openai_sdk_base_url(base_url: str, model: str) -> str:
         return raw
     if raw.endswith("/chat/completions"):
         raw = raw[: -len("/chat/completions")]
-    # 讯飞模型兜底：若被裁成空或异常，回退到标准 /v1 根路径
-    if model == IFLYTEK_MAAS_PAYLOAD_MODEL and not raw:
+    # 讯飞模型兜底：若被裁成空或异常，回退到标准 /v2 根路径
+    if _is_iflytek_maas_model(model) and not raw:
         return IFLYTEK_MAAS_OPENAI_BASE
     return raw
 
@@ -1194,7 +1205,21 @@ class AiTestConnectionAPIView(APIView):
                 model,
                 api_base_url,
             )
-            return err_body(getattr(e, "message", None) or str(e), status_code=502)
+            raw_msg = getattr(e, "message", None) or str(e)
+            lower_msg = str(raw_msg).lower()
+            status_code = getattr(e, "status_code", None)
+            # 讯飞 MaaS 常见 404：地址路由不匹配（例如 base_url 填错）
+            if (
+                status_code == 404
+                or "no any schema route found" in lower_msg
+                or "schema route" in lower_msg
+            ):
+                return err_body(
+                    "上游返回 404：API 地址可能不正确。讯飞 MaaS 请使用 base_url 根路径 "
+                    "`https://maas-coding-api.cn-huabei-1.xf-yun.com/v2`（不要手填 /chat/completions）。",
+                    status_code=502,
+                )
+            return err_body(raw_msg, status_code=502)
         except Exception as e:
             logger.exception(
                 "AI test connection unexpected exception. user_id=%s model=%s base_url=%s",
@@ -1572,6 +1597,9 @@ def _prepare_ai_generate_context(request):
     rag_enabled = ext_config.get("is_rag_enabled", True)
     if rag_enabled is None:
         rag_enabled = True
+    dedup_debug = _parse_bool_flag(
+        request.data.get("dedup_debug") or request.data.get("debug_dedup")
+    )
 
     return (
         {
@@ -1587,6 +1615,7 @@ def _prepare_ai_generate_context(request):
             "context_data": context_data,
             "ext_config": ext_config,
             "rag_enabled": bool(rag_enabled),
+            "dedup_debug": dedup_debug,
         },
         None,
     )
@@ -1641,10 +1670,14 @@ _AI_GENERATE_SYSTEM_TEMPLATE = (
 3. Deduplication & Similarity (CRITICAL):
    - 用例之间不得语义高度重复；自相检查后删除冗余场景。
 
-4. Coverage:
+4. Business module naming (CRITICAL for 导入):
+   - 每条用例的 module_name 必须表示「被测业务功能域」的简短中文名（例如：用户登录、订单支付、权限管理），应与用例场景、需求描述一致。
+   - 严禁使用「接口测试」「安全测试」「性能测试」「UI自动化」等**测试类型**或**菜单栏名称**充当 module_name；接口类与安全类用例若同属「登录」场景，应使用同一业务模块名（如「用户登录」）。
+
+5. Coverage:
    - 恰好一条主流程正向用例 level P0；若干负向/边界 P1/P2；除非需求明确，少用 P3。
 
-5. RAG（当系统消息后文出现 Highly Relevant Existing Cases 时）：
+6. RAG（当系统消息后文出现 Highly Relevant Existing Cases 时）：
    - 若已有用例已完全覆盖需求：仅输出字面量 [ALL_COVERED]，勿输出 JSON。
    - 否则仅输出填补缺口的新用例 JSON 数组。
 
@@ -1665,7 +1698,7 @@ _AI_GENERATE_SYSTEM_TEMPLATE = (
     "precondition": "中文：详细前置条件",
     "steps": "1. 第一步（中文）\\n2. 第二步（中文）",
     "expectedResult": "中文：界面表现与后端状态的预期",
-    "module_name": "与上文「当前模块」一致的中文字符串（若模块为占位说明则从需求推断简短中文模块名）"
+    "module_name": "业务功能域中文名，须与场景一致（若上文「当前模块」为系统占位说明，则从需求与用例标题归纳，如用户登录、订单管理）；禁止填测试类型名"
   }}
 ]
 
@@ -1684,7 +1717,7 @@ _PHASE1_INTENT_SYSTEM_PROMPT = """
   "key_test_points": ["测试点1", "测试点2", "测试点3"]
 }
 要求：
-1) module_name 必须是简体中文，简短明确（例如：支付中心、购物车模块、订单管理）。
+1) module_name 必须是简体中文，表示被测业务功能域，简短明确（例如：用户登录、支付中心、订单管理）；禁止用「接口测试」「安全测试」等类型名。
 2) key_test_points 必须为数组，元素为简体中文短句，建议 3~8 条。
 3) 禁止输出 JSON 以外内容。
 """.strip()
@@ -1855,6 +1888,219 @@ def _phase1_query_text(requirement: str, phase1: dict, api_spec: str = "") -> st
     if spec:
         q += "\n\n【接口定义原文摘录】\n" + (spec[:6000] + ("...(truncated)" if len(spec) > 6000 else ""))
     return q.strip()
+
+
+def _is_placeholder_module_name(name: str) -> bool:
+    t = (name or "").strip()
+    if not t:
+        return True
+    return "未指定模块" in t or "module_name" in t
+
+
+def _backfill_case_module_names(cases: list[dict], *name_candidates: str) -> None:
+    """
+    批量生成 JSON 模板历史上未透传 module_name；模型若漏填，用当前匹配模块 / Phase1 推导名补全，
+    避免预览「目标模块」全空且导入强依赖「默认模块」。
+    """
+    fb = ""
+    for cand in name_candidates:
+        t = str(cand or "").strip()
+        if t and not _is_placeholder_module_name(t):
+            fb = t
+            break
+    if not fb:
+        return
+    for row in cases:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("module_name") or "").strip():
+            continue
+        row["module_name"] = fb
+
+
+def _module_name_key(name: str) -> str:
+    t = (name or "").strip().lower()
+    if not t:
+        return ""
+    return re.sub(r"[\s\-_，,。.:：/\\]+", "", t)
+
+
+def _resolve_effective_module(module_id, ctx_module_name: str, phase1_module_name: str, test_type: str):
+    """
+    未指定 module_id 时，尝试按 phase1 推导模块名自动匹配 TestModule。
+    返回：(effective_module_id, effective_module_name)
+    """
+    if module_id:
+        return module_id, (ctx_module_name or "").strip()
+
+    target = (phase1_module_name or "").strip() or (ctx_module_name or "").strip()
+    if _is_placeholder_module_name(target):
+        return None, (phase1_module_name or "").strip() or (ctx_module_name or "").strip()
+
+    try:
+        qs = TestModule.objects.filter(is_deleted=False)
+        tt = (test_type or "").strip()
+        if tt:
+            qs = qs.filter(test_type=tt)
+        module_rows = list(qs.values("id", "name")[:1000])
+    except Exception:
+        logger.exception("自动匹配模块失败：读取模块列表异常")
+        return None, target
+
+    if not module_rows:
+        return None, target
+
+    target_key = _module_name_key(target)
+    # 1) 精确（归一化后）匹配
+    for row in module_rows:
+        name = str(row.get("name") or "").strip()
+        if _module_name_key(name) == target_key:
+            return int(row.get("id")), name
+    # 2) 包含匹配
+    for row in module_rows:
+        name = str(row.get("name") or "").strip()
+        name_key = _module_name_key(name)
+        if target_key and name_key and (target_key in name_key or name_key in target_key):
+            return int(row.get("id")), name
+    # 3) 相似度匹配
+    best = None
+    best_score = 0.0
+    for row in module_rows:
+        name = str(row.get("name") or "").strip()
+        score = SequenceMatcher(None, target_key, _module_name_key(name)).ratio()
+        if score > best_score:
+            best = row
+            best_score = score
+    if best and best_score >= 0.58:
+        return int(best.get("id")), str(best.get("name") or "").strip()
+    return None, target
+
+
+def _load_existing_case_context(module_id, test_type: str):
+    """
+    读取去重上下文：
+    - existing_rows: 含 case_name 与 steps（首步骤+期望），用于语义去重
+    - existing_titles: 用于标题硬去重提示
+    """
+    from testcase.models import TestCase, TestCaseStep
+
+    existing_qs = TestCase.objects.filter(is_deleted=False)
+    tt = (test_type or "").strip()
+    if tt:
+        existing_qs = existing_qs.filter(test_type=tt)
+    if module_id:
+        existing_qs = existing_qs.filter(module_id=module_id)
+    case_rows = list(existing_qs.values("id", "case_name")[:3000])
+    case_ids = [int(x.get("id")) for x in case_rows if x.get("id")]
+
+    steps_by_case: dict[int, str] = {}
+    if case_ids:
+        step_qs = (
+            TestCaseStep.objects.filter(testcase_id__in=case_ids, is_deleted=False)
+            .values("testcase_id", "step_desc", "expected_result")
+            .order_by("testcase_id", "step_number", "id")
+        )
+        for row in step_qs:
+            cid = int(row.get("testcase_id"))
+            if cid in steps_by_case:
+                continue
+            step_desc = str(row.get("step_desc") or "").strip()
+            expected = str(row.get("expected_result") or "").strip()
+            steps_by_case[cid] = f"{step_desc}\n{expected}".strip()
+
+    existing_rows = [
+        {
+            "case_name": str(x.get("case_name") or "").strip(),
+            "steps": steps_by_case.get(int(x.get("id")), ""),
+        }
+        for x in case_rows
+    ]
+    existing_titles = [x["case_name"] for x in existing_rows if x.get("case_name")]
+    return existing_rows, existing_titles
+
+
+def _normalize_case_name_for_exact_dedup(name: str) -> str:
+    t = (name or "").strip().lower()
+    if not t:
+        return ""
+    return re.sub(r"[\W_]+", "", t)
+
+
+def _drop_cases_duplicated_with_existing_titles(cases: list[dict], existing_titles: list[str]) -> list[dict]:
+    if not cases or not existing_titles:
+        return cases
+    existing_keys = {_normalize_case_name_for_exact_dedup(x) for x in existing_titles if x}
+    out = []
+    for row in cases:
+        key = _normalize_case_name_for_exact_dedup(str(row.get("case_name") or ""))
+        if key and key in existing_keys:
+            continue
+        out.append(row)
+    return out
+
+
+def _parse_bool_flag(v) -> bool:
+    if isinstance(v, bool):
+        return v
+    t = str(v or "").strip().lower()
+    return t in {"1", "true", "yes", "y", "on"}
+
+
+def _collect_case_names(cases: list[dict]) -> list[str]:
+    out = []
+    for row in (cases or []):
+        name = str((row or {}).get("case_name") or "").strip()
+        if name:
+            out.append(name)
+    return out
+
+
+def _diff_dropped_names(before_names: list[str], after_names: list[str], limit: int = 20) -> list[str]:
+    after_set = set(after_names)
+    dropped = []
+    for n in before_names:
+        if n not in after_set:
+            dropped.append(n)
+    # 去重并保序
+    uniq = []
+    seen = set()
+    for n in dropped:
+        if n in seen:
+            continue
+        seen.add(n)
+        uniq.append(n)
+    return uniq[: max(1, int(limit))]
+
+
+def _apply_dedup_pipeline(
+    *,
+    cases: list[dict],
+    existing_titles: list[str],
+    existing_rows: list[dict],
+    api_key: str,
+    base_url: str,
+    debug: bool = False,
+):
+    before_names = _collect_case_names(cases)
+    after_exact = _drop_cases_duplicated_with_existing_titles(cases, existing_titles)
+    after_exact_names = _collect_case_names(after_exact)
+    after_semantic = semantic_deduplicate_cases(
+        after_exact,
+        existing_rows,
+        api_key=api_key,
+        base_url=base_url,
+    )
+    after_semantic_names = _collect_case_names(after_semantic)
+    if not debug:
+        return after_semantic, None
+    report = {
+        "input_count": len(cases),
+        "after_exact_title_dedup_count": len(after_exact),
+        "after_semantic_dedup_count": len(after_semantic),
+        "dropped_by_exact_title_dedup": _diff_dropped_names(before_names, after_exact_names),
+        "dropped_by_semantic_dedup": _diff_dropped_names(after_exact_names, after_semantic_names),
+    }
+    return after_semantic, report
 
 
 def _strip_code_fences(text: str) -> str:
@@ -2141,6 +2387,7 @@ def _expand_cases_to_minimum_if_needed(
         merged = _deduplicate_cases_with_guard(merged, "补生成结果")
         if use_api and merged:
             renumber_api_business_ids(merged)
+            backfill_api_request_fields_in_batch(merged)
         return merged
     except Exception:
         logger.exception("补生成最小条数失败，保留首轮结果")
@@ -2211,6 +2458,7 @@ class AiGenerateCasesAPIView(APIView):
         engine_addon = build_engine_addon(ctx)
         if engine_addon:
             domain_system = domain_system + "\n\n" + engine_addon
+        dedup_debug_report = None
 
         try:
             _debug_log_openai_target("ai_generate_cases_sync_sdk", model_used, api_base_url)
@@ -2245,26 +2493,27 @@ class AiGenerateCasesAPIView(APIView):
                 system_prompt = domain_system_with_phase1
             phase2_system_prompt = system_prompt + "\n\n" + _PHASE2_MULTI_CASE_MANDATE
 
+            # 未选模块时：用 Phase1 推导模块名自动匹配 module_id，确保 RAG/去重作用在正确范围
+            effective_module_id, effective_module_name = _resolve_effective_module(
+                module_id=module_id,
+                ctx_module_name=str(ctx.get("module_name") or ""),
+                phase1_module_name=phase1_module,
+                test_type=str(ctx.get("test_type") or ""),
+            )
+
             # 生成前规避：读取模块已有标题，注入批量生成 Prompt，降低意图重复概率
             existing_rows: list[dict] = []
             existing_titles: list[str] = []
             try:
-                from testcase.models import TestCase
-
-                existing_qs = TestCase.objects.filter(is_deleted=False)
-                if module_id:
-                    existing_qs = existing_qs.filter(module_id=module_id)
-                existing_rows = list(existing_qs.values("case_name"))
-                existing_titles = [
-                    str(x.get("case_name") or "").strip()
-                    for x in existing_rows
-                    if str(x.get("case_name") or "").strip()
-                ]
+                existing_rows, existing_titles = _load_existing_case_context(
+                    module_id=effective_module_id,
+                    test_type=str(ctx.get("test_type") or ""),
+                )
             except Exception:
                 logger.exception("读取已有用例失败，跳过前置规避提示")
 
             batch_user_prompt = build_batch_generation_prompt(
-                module_name=str(ctx.get("module_name") or ""),
+                module_name=effective_module_name or phase1_module or str(ctx.get("module_name") or ""),
                 requirement=str(ctx.get("requirement") or ""),
                 test_type_focus=str(ctx.get("test_type_focus") or ""),
                 existing_titles=existing_titles,
@@ -2320,16 +2569,13 @@ class AiGenerateCasesAPIView(APIView):
                         cases.append(norm)
 
                 cases = _deduplicate_cases_with_guard(cases, "生成结果")
-                # 生成后语义去重：与数据库已有用例做向量相似度过滤
-                existing_for_semantic = [
-                    {"case_name": x.get("case_name") or "", "steps": ""}
-                    for x in existing_rows
-                ]
-                cases = semantic_deduplicate_cases(
-                    cases,
-                    existing_for_semantic,
+                cases, dedup_debug_report = _apply_dedup_pipeline(
+                    cases=cases,
+                    existing_titles=existing_titles,
+                    existing_rows=existing_rows,
                     api_key=api_key,
                     base_url=api_base_url,
+                    debug=bool(ctx.get("dedup_debug")),
                 )
                 retry_round = 0
                 while len(cases) < AI_GENERATE_MIN_CASES and retry_round < AI_GENERATE_RETRY_ROUNDS:
@@ -2347,6 +2593,14 @@ class AiGenerateCasesAPIView(APIView):
                 cases = _enforce_cases_cap(cases, AI_GENERATE_MAX_CASES)
                 if use_api and cases:
                     renumber_api_business_ids(cases)
+                _backfill_case_module_names(
+                    cases,
+                    effective_module_name,
+                    phase1_module,
+                    str(ctx.get("module_name") or ""),
+                )
+                if use_api and cases:
+                    backfill_api_request_fields_in_batch(cases)
 
                 if not cases:
                     return fail(
@@ -2441,17 +2695,17 @@ class AiGenerateCasesAPIView(APIView):
         if guard_result is not None:
             return guard_result
 
-        return Response(
-            {
-                "success": True,
-                "phase1_analysis": phase1,
-                "error": None,
-                "message": f"已生成 {len(cases)} 条用例",
-                "cases": cases,
-                "model": model_used,
-            },
-            status=200,
-        )
+        resp_payload = {
+            "success": True,
+            "phase1_analysis": phase1,
+            "error": None,
+            "message": f"已生成 {len(cases)} 条用例",
+            "cases": cases,
+            "model": model_used,
+        }
+        if ctx.get("dedup_debug"):
+            resp_payload["dedup_debug"] = dedup_debug_report
+        return Response(resp_payload, status=200)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -2616,24 +2870,23 @@ class AiGenerateCasesStreamView(View):
             else:
                 stream_system_prompt = domain_system_with_phase1
             stream_phase2_system_prompt = stream_system_prompt + "\n\n" + _PHASE2_MULTI_CASE_MANDATE
+            effective_module_id, effective_module_name = _resolve_effective_module(
+                module_id=module_id,
+                ctx_module_name=str(ctx.get("module_name") or ""),
+                phase1_module_name=phase1_module_name,
+                test_type=str(ctx.get("test_type") or ""),
+            )
             existing_rows: list[dict] = []
             existing_titles: list[str] = []
             try:
-                from testcase.models import TestCase
-
-                existing_qs = TestCase.objects.filter(is_deleted=False)
-                if module_id:
-                    existing_qs = existing_qs.filter(module_id=module_id)
-                existing_rows = list(existing_qs.values("case_name"))
-                existing_titles = [
-                    str(x.get("case_name") or "").strip()
-                    for x in existing_rows
-                    if str(x.get("case_name") or "").strip()
-                ]
+                existing_rows, existing_titles = _load_existing_case_context(
+                    module_id=effective_module_id,
+                    test_type=str(ctx.get("test_type") or ""),
+                )
             except Exception:
                 logger.exception("读取已有用例失败（流式），跳过前置规避提示")
             stream_batch_user_prompt = build_batch_generation_prompt(
-                module_name=str(ctx.get("module_name") or ""),
+                module_name=effective_module_name or phase1_module_name or str(ctx.get("module_name") or ""),
                 requirement=str(ctx.get("requirement") or ""),
                 test_type_focus=str(ctx.get("test_type_focus") or ""),
                 existing_titles=existing_titles,
@@ -2696,7 +2949,12 @@ class AiGenerateCasesStreamView(View):
                     module_id,
                 )
                 yield _sse_event(
-                    {"type": "error", "message": f"API Key 无效：{e}", "detail": str(e)}
+                    {
+                        "type": "error",
+                        "code": "AUTH_ERROR",
+                        "message": f"API Key 无效：{e}",
+                        "detail": str(e),
+                    }
                 )
                 return
             except APITimeoutError:
@@ -2803,15 +3061,13 @@ class AiGenerateCasesStreamView(View):
                         cases.append(norm)
 
                 cases = _deduplicate_cases_with_guard(cases, "流式生成结果")
-                existing_for_semantic = [
-                    {"case_name": x.get("case_name") or "", "steps": ""}
-                    for x in existing_rows
-                ]
-                cases = semantic_deduplicate_cases(
-                    cases,
-                    existing_for_semantic,
+                cases, dedup_debug_report = _apply_dedup_pipeline(
+                    cases=cases,
+                    existing_titles=existing_titles,
+                    existing_rows=existing_rows,
                     api_key=api_key,
                     base_url=api_base_url,
+                    debug=bool(ctx.get("dedup_debug")),
                 )
                 if use_api and cases:
                     renumber_api_business_ids(cases)
@@ -2838,6 +3094,14 @@ class AiGenerateCasesStreamView(View):
                 cases = _enforce_cases_cap(cases, AI_GENERATE_MAX_CASES)
                 if use_api and cases:
                     renumber_api_business_ids(cases)
+                _backfill_case_module_names(
+                    cases,
+                    effective_module_name,
+                    phase1_module_name,
+                    str(ctx.get("module_name") or ""),
+                )
+                if use_api and cases:
+                    backfill_api_request_fields_in_batch(cases)
             except Exception as parse_err:
                 logger.exception("AI stream phase2 parse/normalize failed: %s", parse_err)
                 yield _sse_event(
@@ -2858,16 +3122,17 @@ class AiGenerateCasesStreamView(View):
                 )
                 return
 
-            yield _sse_event(
-                {
-                    "type": "done",
-                    "success": True,
-                    "phase1_analysis": phase1,
-                    "message": f"已生成 {len(cases)} 条用例",
-                    "cases": cases,
-                    "model": model_used,
-                }
-            )
+            done_payload = {
+                "type": "done",
+                "success": True,
+                "phase1_analysis": phase1,
+                "message": f"已生成 {len(cases)} 条用例",
+                "cases": cases,
+                "model": model_used,
+            }
+            if ctx.get("dedup_debug"):
+                done_payload["dedup_debug"] = dedup_debug_report
+            yield _sse_event(done_payload)
 
         response = StreamingHttpResponse(
             streaming_content=event_stream(),

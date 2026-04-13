@@ -374,31 +374,57 @@ class SystemMessageListAPIView(APIView):
     """
 
     def get(self, request):
-        qs = SystemMessage.objects.filter(recipient=request.user).order_by(
-            "-created_at"
-        )
-        raw = (request.query_params.get("is_read") or "").lower()
-        if raw in ("0", "false"):
-            qs = qs.filter(is_read=False)
-        elif raw in ("1", "true"):
-            qs = qs.filter(is_read=True)
-        serializer = SystemMessageSerializer(qs, many=True)
-        return Response({"code": 200, "msg": "ok", "data": serializer.data})
+        try:
+            qs = SystemMessage.objects.filter(recipient=request.user).order_by(
+                "-created_at"
+            )
+            raw = (request.query_params.get("is_read") or "").lower()
+            if raw in ("0", "false"):
+                qs = qs.filter(is_read=False)
+            elif raw in ("1", "true"):
+                qs = qs.filter(is_read=True)
+            serializer = SystemMessageSerializer(qs, many=True)
+            return Response({"code": 200, "msg": "ok", "data": serializer.data})
+        except RuntimeError as exc:
+            # 开发环境重启/解释器关闭瞬间可能出现：
+            # RuntimeError: cannot schedule new futures after interpreter shutdown
+            if "cannot schedule new futures after interpreter shutdown" in str(exc):
+                return Response(
+                    {
+                        "code": 503,
+                        "msg": "服务正在重启，请稍后重试",
+                        "data": [],
+                    },
+                    status=503,
+                )
+            raise
 
 
 class SystemMessageMarkReadAPIView(APIView):
     """将一条站内信标记为已读（仅能操作自己的）。"""
 
     def patch(self, request, pk):
-        n = SystemMessage.objects.filter(
-            pk=pk, recipient=request.user
-        ).update(is_read=True)
-        if not n:
-            return Response(
-                {"code": 404, "msg": "消息不存在", "data": None},
-                status=404,
-            )
-        return Response({"code": 200, "msg": "ok", "data": {"id": pk}})
+        try:
+            n = SystemMessage.objects.filter(
+                pk=pk, recipient=request.user
+            ).update(is_read=True)
+            if not n:
+                return Response(
+                    {"code": 404, "msg": "消息不存在", "data": None},
+                    status=404,
+                )
+            return Response({"code": 200, "msg": "ok", "data": {"id": pk}})
+        except RuntimeError as exc:
+            if "cannot schedule new futures after interpreter shutdown" in str(exc):
+                return Response(
+                    {
+                        "code": 503,
+                        "msg": "服务正在重启，请稍后重试",
+                        "data": None,
+                    },
+                    status=503,
+                )
+            raise
 
 
 class AdminUserChangeRequestListAPIView(APIView):

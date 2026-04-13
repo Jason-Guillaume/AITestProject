@@ -19,6 +19,31 @@ function Run-Step($name, $cmd) {
     Invoke-Expression $cmd
 }
 
+function Stop-StaleRunserverProcesses {
+    Write-Host "`n[预处理] 清理残留 Django runserver 进程..." -ForegroundColor Yellow
+    $escapedRoot = [Regex]::Escape($PSScriptRoot)
+    $targets = Get-CimInstance Win32_Process | Where-Object {
+        $_.Name -eq "python.exe" -and
+        $_.CommandLine -and
+        $_.CommandLine -match "manage\.py\s+runserver" -and
+        $_.CommandLine -match $escapedRoot
+    }
+
+    if (-not $targets) {
+        Write-Host "未发现需要清理的 runserver 残留进程。" -ForegroundColor DarkGray
+        return
+    }
+
+    foreach ($p in $targets) {
+        try {
+            Stop-Process -Id $p.ProcessId -Force
+            Write-Host ("已结束 runserver 进程 PID={0}" -f $p.ProcessId) -ForegroundColor DarkGray
+        } catch {
+            Write-Host ("结束进程失败 PID={0}: {1}" -f $p.ProcessId, $_.Exception.Message) -ForegroundColor Red
+        }
+    }
+}
+
 # 1) 基础依赖（可重复执行，已安装会自动跳过）
 Run-Step "安装 Celery-MySQL 关键依赖" "& '$PyExe' -m pip install sqlalchemy pymysql django-celery-results"
 
@@ -28,7 +53,10 @@ Run-Step "执行数据库迁移" "& '$PyExe' manage.py migrate"
 # 3) Django 配置检查
 Run-Step "执行 Django 自检" "& '$PyExe' manage.py check"
 
-# 4) 启动服务（新开两个窗口，分别跑 Django 与 Celery Worker）
+# 4) 清理残留 runserver 进程，避免端口占用
+Stop-StaleRunserverProcesses
+
+# 5) 启动服务（新开两个窗口，分别跑 Django 与 Celery Worker）
 Write-Host "`n[启动] 拉起 Django 与 Celery Worker..." -ForegroundColor Green
 
 Start-Process powershell -ArgumentList @(

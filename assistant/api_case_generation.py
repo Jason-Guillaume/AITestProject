@@ -4,6 +4,7 @@ ApiCasePrompt：结构化输出与 ApiTestCase（api_method/api_url/api_headers/
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from typing import Any, Dict, List, Optional, Union
@@ -13,6 +14,46 @@ _ALLOWED_HTTP_METHODS = frozenset(
 )
 _MAX_URL_LEN = 2048
 _MAX_METHOD_LEN = 16
+
+
+def _build_curl_from_request(
+    method: str,
+    url: str,
+    headers: Dict[str, str],
+    body: Any,
+) -> str:
+    """
+    从请求信息构建 cURL 命令字符串，用于保存 api_source_curl。
+    便于后续重新解析或审计追踪。
+    """
+    parts = ["curl"]
+
+    # 添加请求方法
+    if method and method != "GET":
+        parts.append(f"-X {method}")
+
+    # 添加请求头
+    if headers:
+        for k, v in headers.items():
+            escaped_v = str(v).replace('"', '\\"')
+            parts.append(f'-H "{k}: {escaped_v}"')
+
+    # 添加请求体
+    if body:
+        if isinstance(body, (dict, list)):
+            import json
+            body_json = json.dumps(body, ensure_ascii=False)
+            escaped_body = body_json.replace('"', '\\"')
+            parts.append(f'-d "{escaped_body}"')
+        else:
+            escaped_body = str(body).replace('"', '\\"')
+            parts.append(f'-d "{escaped_body}"')
+
+    # 添加 URL（转义特殊字符）
+    escaped_url = str(url).replace('"', '\\"')
+    parts.append(f'"{escaped_url}"')
+
+    return " ".join(parts)
 
 ZH_JSON_MANDATE_API = """
 ══════════════════════════════════════════════════════
@@ -426,6 +467,7 @@ def enrich_normalized_case_with_api_fields(
     out["api_url"] = url
     out["api_headers"] = headers
     out["api_body"] = body if isinstance(body, (dict, list)) else {}
+    out["api_source_curl"] = _build_curl_from_request(method, url, headers, body)
     if exp_status_int is not None:
         out["api_expected_status"] = exp_status_int
 
@@ -437,6 +479,104 @@ def enrich_normalized_case_with_api_fields(
     }
 
     return out
+
+
+def _is_placeholder_api_url(url: str) -> bool:
+    u = (url or "").strip().lower()
+    if not u:
+        return True
+    return "example.com" in u or "example.org" in u
+
+
+def _is_empty_api_body(body: Any) -> bool:
+    if body is None:
+        return True
+    if isinstance(body, dict):
+        return len(body) == 0
+    if isinstance(body, list):
+        return len(body) == 0
+    return False
+
+
+def _is_empty_api_headers(h: Any) -> bool:
+    return not isinstance(h, dict) or len(h) == 0
+
+
+def _api_case_request_richness(c: Dict[str, Any]) -> int:
+    """分数越高越适合作同批回填补全的锚点用例。"""
+    score = 0
+    u = str(c.get("api_url") or "").strip()
+    if u and not _is_placeholder_api_url(u):
+        score += 6
+    if not _is_empty_api_headers(c.get("api_headers")):
+        score += 2
+    if not _is_empty_api_body(c.get("api_body")):
+        score += 4
+    m = str(c.get("api_method") or "GET").strip().upper()
+    if m in ("POST", "PUT", "PATCH", "DELETE"):
+        score += 1
+    return score
+
+
+def backfill_api_request_fields_in_batch(cases: List[Dict[str, Any]]) -> None:
+    """
+    同批多条 API 用例时，模型常在首条写全 request，后续只写步骤而省略 body/headers。
+    将「本批中请求信息最完整的一条」作为模板，给后续条补全空的 url/headers/body（及必要时 method），
+    避免前端执行台大量 `{}`。
+    """
+    if not cases or len(cases) < 2:
+        return
+    anchor: Optional[Dict[str, Any]] = None
+    best = -1
+    for c in cases:
+        if not isinstance(c, dict):
+            continue
+        sc = _api_case_request_richness(c)
+        if sc > best:
+            best = sc
+            anchor = c
+    if anchor is None or best <= 0:
+        return
+
+    a_url = str(anchor.get("api_url") or "").strip()[:_MAX_URL_LEN]
+    a_method = str(anchor.get("api_method") or "GET").strip().upper()
+    if a_method not in _ALLOWED_HTTP_METHODS:
+        a_method = "GET"
+    a_headers = anchor.get("api_headers") if isinstance(anchor.get("api_headers"), dict) else {}
+    a_body = anchor.get("api_body")
+
+    for c in cases:
+        if c is anchor or not isinstance(c, dict):
+            continue
+        u = str(c.get("api_url") or "").strip()
+        replaced_url = False
+        if (not u) or _is_placeholder_api_url(u):
+            if a_url:
+                c["api_url"] = a_url
+                replaced_url = True
+        if _is_empty_api_headers(c.get("api_headers")) and a_headers:
+            c["api_headers"] = copy.deepcopy(a_headers)
+        copied_body = False
+        if _is_empty_api_body(c.get("api_body")) and not _is_empty_api_body(a_body):
+            c["api_body"] = copy.deepcopy(a_body)
+            copied_body = True
+        if (replaced_url or copied_body) and a_method in _ALLOWED_HTTP_METHODS:
+            c["api_method"] = a_method
+
+        # 补全请求字段后，同步重新生成 curl
+        c["api_method"] = c.get("api_method", a_method)
+        c["api_url"] = c.get("api_url", a_url)
+        c["api_headers"] = c.get("api_headers", a_headers)
+        c["api_body"] = c.get("api_body", a_body)
+        c["api_source_curl"] = _build_curl_from_request(
+            c["api_method"], c["api_url"], c["api_headers"], c["api_body"]
+        )
+        c["request_config"] = {
+            "method": c["api_method"],
+            "url": c["api_url"],
+            "headers": c["api_headers"],
+            "body": c["api_body"],
+        }
 
 
 def renumber_api_business_ids(cases: List[Dict[str, Any]]) -> None:

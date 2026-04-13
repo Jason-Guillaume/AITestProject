@@ -34,12 +34,14 @@ def build_batch_generation_prompt(
 4) 严禁生成与“已有用例标题”语义重复的测试意图。
 
 【JSON Schema】
+每条须带 module_name（简体中文，与下方【当前模块】一致或为其合理子域），便于导入时落库到正确模块。
 [
   {{
     "title": "用例标题",
     "type": "正向/逆向/边界",
     "steps": "操作步骤",
-    "expected": "预期结果"
+    "expected": "预期结果",
+    "module_name": "与【当前模块】一致的中文模块名"
   }}
 ]
 
@@ -91,6 +93,7 @@ def parse_batch_json_array(raw_text: str) -> list[dict[str, Any]]:
 def normalize_batch_case_item(item: dict[str, Any], index: int) -> dict[str, Any]:
     """
     将批量 JSON 用例归一化为系统通用用例字段。
+    须保留 module_name：下游 _normalize_generated_case 依赖该字段写入预览与导入。
     """
     name = str(item.get("title") or item.get("caseName") or item.get("name") or "").strip()
     if not name:
@@ -98,12 +101,23 @@ def normalize_batch_case_item(item: dict[str, Any], index: int) -> dict[str, Any
     case_type = str(item.get("type") or "").strip()
     steps = str(item.get("steps") or "").strip()
     expected = str(item.get("expected") or item.get("expectedResult") or "").strip()
+    level_raw = str(item.get("level") or "").strip().upper()
+    level = level_raw if level_raw in ("P0", "P1", "P2", "P3") else "P2"
+    mod = str(
+        item.get("module_name")
+        or item.get("moduleName")
+        or item.get("belonging_module")
+        or item.get("所属模块")
+        or ""
+    ).strip()[:100]
+    pre = str(item.get("precondition") or item.get("pre_condition") or "").strip()
 
     return {
         "case_name": name[:255],
-        "level": "P2",
-        "precondition": "",
+        "level": level,
+        "precondition": pre,
         "steps": steps,
         "expected_result": expected,
         "case_type": case_type,
+        "module_name": mod,
     }

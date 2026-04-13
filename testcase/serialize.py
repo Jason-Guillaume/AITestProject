@@ -116,6 +116,9 @@ class TestCaseSerializer(BaseModelSerializers):
     api_expected_status = serializers.IntegerField(
         write_only=True, required=False, allow_null=True, default=None
     )
+    api_source_curl = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
 
     concurrency = serializers.IntegerField(
         write_only=True, required=False, default=1, min_value=1
@@ -172,6 +175,7 @@ class TestCaseSerializer(BaseModelSerializers):
             "api_headers",
             "api_body",
             "api_expected_status",
+            "api_source_curl",
             "concurrency",
             "duration_seconds",
             "target_rps",

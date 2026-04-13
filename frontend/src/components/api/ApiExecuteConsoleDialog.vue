@@ -7,7 +7,6 @@
     destroy-on-close
     class="api-exec-console-dialog"
     append-to-body
-    @opened="onDialogOpened"
   >
     <div v-if="caseRow" class="api-exec-dialog-body">
       <div class="api-exec-status-ribbon" role="status" aria-live="polite">
@@ -50,6 +49,19 @@
               controls-position="right"
               class="api-exec-status-num"
             />
+          </el-form-item>
+          <el-form-item label="cURL（可选，一键填充请求）">
+            <el-input
+              v-model="curlText"
+              type="textarea"
+              :rows="4"
+              class="api-exec-code-input"
+              spellcheck="false"
+              placeholder="curl -X POST 'https://api.example.com/login' -H 'Content-Type: application/json' -d '{&quot;username&quot;:&quot;test&quot;}'"
+            />
+            <div style="margin-top:8px">
+              <el-button size="small" plain @click="onApplyCurl">从 cURL 填充</el-button>
+            </div>
           </el-form-item>
 
           <el-form-item>
@@ -132,6 +144,15 @@
           </el-row>
 
           <div class="api-exec-run-actions">
+            <el-button
+              size="large"
+              plain
+              class="api-exec-run-btn-half"
+              :disabled="activeRunMode !== 'idle'"
+              @click="onPreviewResolved"
+            >
+              预览替换
+            </el-button>
             <el-button
               size="large"
               plain
@@ -222,6 +243,7 @@ import { MagicStick } from '@element-plus/icons-vue'
 import type { TestCaseRow } from '@/types/testcase'
 import { formatCaseDisplayId } from '@/composables/useTestCaseTypeColumns'
 import { useApiExecuteConsole, HTTP_STATUS_PHRASE } from '@/composables/useApiExecuteConsole'
+import { updateCaseApi } from '@/api/testcase'
 import 'prismjs/themes/prism-tomorrow.min.css'
 
 const visible = defineModel<boolean>({ default: false })
@@ -259,8 +281,11 @@ const {
   lastErrorHttpStatus,
   running,
   runAiFill,
+  applyCurlCommand,
+  runPreviewResolved,
   runExecute,
   runExecuteAndSaveReport,
+  buildApiCasePatch,
   loadPlans,
   initReportFormName,
   resetFromRow,
@@ -324,6 +349,7 @@ const responseBodyLangLabel = computed(() => {
 
 /** idle | only | withReport — 避免两个执行按钮 loading 状态串台 */
 const activeRunMode = ref<'idle' | 'only' | 'withReport'>('idle')
+const curlText = ref('')
 
 function scrollTerminalToBottom() {
   const el = terminalRef.value
@@ -352,16 +378,62 @@ const assertionTableData = computed(() => {
   }))
 })
 
-async function onDialogOpened() {
-  activeRunMode.value = 'idle'
-  consoleLines.value = []
-  executionLog.value = null
-  lastErrorHttpStatus.value = null
-  resetFromRow()
-  initReportFormName()
-  await loadPlans()
-  await nextTick()
-  requestAnimationFrame(scrollTerminalToBottom)
+/** 与抽屉面板一致：依赖 visible + 用例 id，避免仅 @opened 时未触发或关开竞态导致仍显示上一用例/空表 */
+watch(
+  () => [visible.value, props.caseRow?.id ?? null] as const,
+  async ([open, id]) => {
+    if (!open || id == null || !props.caseRow) return
+    activeRunMode.value = 'idle'
+    consoleLines.value = []
+    executionLog.value = null
+    lastErrorHttpStatus.value = null
+    await resetFromRow()
+    curlText.value = String((props.caseRow as TestCaseRow)?.api_source_curl || '').trim()
+    initReportFormName()
+    await loadPlans()
+    await nextTick()
+    requestAnimationFrame(scrollTerminalToBottom)
+  },
+  { flush: 'post' },
+)
+
+function onApplyCurl() {
+  applyCurlAndPersist().catch((e) => {
+    ElMessage.error((e as Error)?.message || 'cURL 解析失败')
+  })
+}
+
+async function applyCurlAndPersist() {
+  try {
+    if (!props.caseRow?.id) throw new Error('当前用例不存在，无法保存')
+    const parsed = applyCurlCommand(curlText.value || '')
+    const moduleId =
+      typeof props.caseRow.module === 'number'
+        ? props.caseRow.module
+        : Number(props.caseRow.module || 0) || null
+    const patch = buildApiCasePatch(props.caseRow, moduleId, curlText.value?.trim() ?? '')
+    await updateCaseApi(props.caseRow.id, patch)
+    Object.assign(props.caseRow, patch)
+    ElMessage.success(`已从 cURL 填充并保存：${parsed.method} ${parsed.url}`)
+  } catch (e) {
+    throw e
+  }
+}
+
+async function onPreviewResolved() {
+  try {
+    const data = await runPreviewResolved()
+    const req = (data as { request?: Record<string, unknown> })?.request || {}
+    const pretty = JSON.stringify(req, null, 2)
+    const lines = [
+      '> 预览执行前最终请求（未发送）',
+      ...String(pretty).split('\n').map((x) => `  ${x}`),
+    ]
+    consoleLines.value = [...consoleLines.value, ...lines]
+    ElMessage.success('已输出预览到执行日志')
+  } catch (e) {
+    ElMessage.error((e as Error)?.message || '预览失败')
+  }
 }
 
 async function onAiFillBody() {

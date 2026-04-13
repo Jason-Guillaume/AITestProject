@@ -13,7 +13,7 @@ from testcase.services.case_subtypes import (
     create_typed_case,
     get_api_profile_for_execute,
 )
-from testcase.services.api_execution import run_api_case
+from testcase.services.api_execution import preview_resolved_request, run_api_case
 from testcase.services.ai_openai import ai_fill_test_data, ai_import_api_cases
 from testcase.services.variable_runtime import suggest_extractions
 from assistant.knowledge_rag import KnowledgeSearcher
@@ -24,7 +24,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 from django.db import transaction
-from django.db.models import Max, F
+from django.db.models import Max, F, Q
 
 logger = logging.getLogger(__name__)
 
@@ -243,9 +243,24 @@ class TestCaseViewSet(BaseModelViewSet):
                 project_id = int(project)
             except (TypeError, ValueError):
                 return qs.none()
-            qs = qs.filter(module__project_id=project_id)
+            if recycle_mode and user and getattr(user, "is_authenticated", False):
+                # 回收站：无 module 的软删用例仅用 module__project_id 会筛掉（module 被删或 SET_NULL）。
+                # 普通用户：本人创建的孤儿；管理员：创建者须为该项目成员，避免跨项目误展示。
+                if self._is_admin_user(user):
+                    qs = qs.filter(
+                        Q(module__project_id=project_id)
+                        | Q(module__isnull=True, creator__projects=project_id)
+                    ).distinct()
+                else:
+                    qs = qs.filter(
+                        Q(module__project_id=project_id)
+                        | Q(module__isnull=True, creator=user)
+                    )
+            else:
+                qs = qs.filter(module__project_id=project_id)
+        # 回收站列表须覆盖「本项目 + 测试类型」下全部软删项；忽略 module 以免残留筛选导致「回收站是空的」
         module = params.get("module")
-        if module not in (None, ""):
+        if not recycle_mode and module not in (None, ""):
             try:
                 mid = int(module)
             except (TypeError, ValueError):
@@ -300,7 +315,19 @@ class TestCaseViewSet(BaseModelViewSet):
         id_list, err = self._parse_id_list(request.data.get("ids"))
         if err is not None:
             return err
-        qs = self.get_queryset().filter(id__in=id_list)
+        # 不得沿用「回收站列表」语义：若请求 URL 误带 recycle=1，get_queryset 只剩已删行，id 匹配为 0
+        qs = TestCase.objects.filter(is_deleted=False, id__in=id_list)
+        user = getattr(request, "user", None)
+        if self.enable_data_scope and user and user.is_authenticated and not self._is_admin_user(user):
+            qs = self._apply_member_scope(qs, user)
+        params = request.query_params
+        proj = params.get("project")
+        if proj not in (None, ""):
+            try:
+                pid = int(proj)
+                qs = qs.filter(module__project_id=pid)
+            except (TypeError, ValueError):
+                qs = qs.none()
         n = qs.update(is_deleted=True, deleted_at=timezone.now())
         return Response({"deleted": n, "msg": f"已删除 {n} 条用例"})
 
@@ -360,6 +387,32 @@ class TestCaseViewSet(BaseModelViewSet):
         return self._run_api_core(
             request, overrides=ov, write_legacy_apilog=False
         )
+
+    @action(detail=True, methods=["post"], url_path="preview-run-api")
+    def preview_run_api(self, request, pk=None):
+        """
+        预览执行前最终请求（不发网络请求）：
+        - 应用 environment_id 对 base_url 拼接
+        - 应用环境变量/运行时变量替换 ${var}
+        """
+        case = self.get_object()
+        if case.test_type != TestCase.TEST_TYPE_API:
+            return Response(
+                {"msg": "仅 API 测试类型的用例支持预览执行请求"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        api_prof = get_api_profile_for_execute(case)
+        if api_prof is None:
+            return Response(
+                {"msg": "API 用例扩展数据缺失，请编辑保存该用例后再预览"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ov = request.data if isinstance(request.data, dict) else {}
+        try:
+            data = preview_resolved_request(api_prof, overrides=ov)
+        except ValueError as exc:
+            return Response({"msg": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(data)
 
     def _run_api_core(self, request, overrides, write_legacy_apilog: bool):
         case = self.get_object()
@@ -698,6 +751,9 @@ class ApiImportFromSpecAPIView(APIView):
         if err:
             return Response({"msg": err}, status=status.HTTP_400_BAD_REQUEST)
 
+        is_curl = str(source_type or "").strip().lower() == "curl"
+        stored_curl = (str(content or "").strip()[:120_000]) if is_curl else ""
+
         user = request.user
         created_ids = []
         for item in items:
@@ -725,6 +781,8 @@ class ApiImportFromSpecAPIView(APIView):
                 "api_body": body,
                 "api_expected_status": exp,
             }
+            if stored_curl:
+                api_payload["api_source_curl"] = stored_curl
             base = {
                 "module": module,
                 "case_name": name,

@@ -46,5 +46,5 @@ export function mergeTestTypePromptWithRequirement(testType, userRequirement) {
   const system =
     AI_TEST_TYPE_SYSTEM_PROMPTS[key] ?? AI_TEST_TYPE_SYSTEM_PROMPTS[DEFAULT_TEST_TYPE]
   const user = String(userRequirement ?? '').trim()
-  return `${system}\n\n---\n【用户需求（主要输入，可为中文）】\n${user}\n\n【刚性要求】服务端将要求模型：仅输出 JSON 数组，且 caseName、precondition、steps、expectedResult、module_name 等所有字符串取值必须全部为简体中文；不要用英文写用例句子。`
+  return `${system}\n\n---\n【用户需求（主要输入，可为中文）】\n${user}\n\n【刚性要求】服务端将要求模型：仅输出 JSON 数组，且 caseName、precondition、steps、expectedResult、module_name 等所有字符串取值必须全部为简体中文；不要用英文写用例句子。\n【模块命名】每条用例的 module_name 表示被测业务功能域（如：用户登录、订单支付、权限管理），须与需求场景一致；禁止使用「接口测试」「安全测试」「性能测试」等测试类型名称作为 module_name。`
 }

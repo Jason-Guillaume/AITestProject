@@ -78,9 +78,9 @@ def build_rag_system_prompt(
 
 
 def is_all_covered_output(raw: str) -> bool:
-    t = (raw or "").strip()
-    if t == "[ALL_COVERED]":
-        return True
-    if t.replace("\n", "").replace("\r", "") == "[ALL_COVERED]":
-        return True
-    return False
+    """检查模型输出是否为'已覆盖'标记（大小写不敏感，空格忽略）。"""
+    t = (raw or "").strip().upper()
+    # 移除空格和换行符，但保留下划线后比较
+    normalized = t.replace(" ", "").replace("\n", "").replace("\r", "")
+    # 允许两种格式：[ALL_COVERED] 和 [ALLCOVERED]
+    return normalized in ("[ALL_COVERED]", "[ALLCOVERED]")

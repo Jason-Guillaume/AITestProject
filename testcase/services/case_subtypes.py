@@ -27,6 +27,7 @@ API_FIELD_KEYS = (
     "api_headers",
     "api_body",
     "api_expected_status",
+    "api_source_curl",
 )
 PERF_FIELD_KEYS = ("concurrency", "duration_seconds", "target_rps")
 SECURITY_FIELD_KEYS = ("attack_surface", "tool_preset", "risk_level")
@@ -38,6 +39,7 @@ API_DEFAULTS: Dict[str, Any] = {
     "api_headers": {},
     "api_body": {},
     "api_expected_status": None,
+    "api_source_curl": "",
 }
 PERF_DEFAULTS = {"concurrency": 1, "duration_seconds": 60, "target_rps": None}
 SECURITY_DEFAULTS = {"attack_surface": "", "tool_preset": "", "risk_level": ""}
@@ -98,6 +100,7 @@ def inject_typed_read_representation(instance: TestCase, data: dict) -> None:
             data["api_headers"] = a.api_headers
             data["api_body"] = a.api_body
             data["api_expected_status"] = a.api_expected_status
+            data["api_source_curl"] = getattr(a, "api_source_curl", "") or ""
         except ObjectDoesNotExist:
             for k, v in API_DEFAULTS.items():
                 data[k] = v

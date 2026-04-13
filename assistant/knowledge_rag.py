@@ -69,6 +69,23 @@ def _build_embedding_function():
                     out.append(vals[:128])
                 return out
 
+            def embed_query(self, input) -> list[float]:
+                """ChromaDB 查询时调用的方法。
+
+                ChromaDB 会传入一个字符串或字符串列表，需要返回对应的向量或向量列表。
+                """
+                # 处理 ChromaDB 可能传入单个字符串或字符串列表的情况
+                if isinstance(input, str):
+                    return self([input])[0]
+                elif isinstance(input, list):
+                    return self(input)
+                else:
+                    return [0.0] * 128
+
+            def embed_documents(self, texts: list[str]) -> list[list[float]]:
+                """ChromaDB 插入时调用的方法（文档列表）。"""
+                return self(texts)
+
         return _HashEmbeddingFunction()
     if mode == "chroma":
         return DefaultEmbeddingFunction()

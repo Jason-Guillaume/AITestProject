@@ -543,6 +543,33 @@ class AiBatchAndSemanticDedupTests(TestCase):
         with self.assertRaises(ValueError):
             parse_batch_json_array('{"x":1}')
 
+    def test_backfill_api_request_fields_in_batch(self):
+        from assistant.api_case_generation import backfill_api_request_fields_in_batch
+
+        cases = [
+            {
+                "api_url": "https://real.api/login",
+                "api_method": "POST",
+                "api_headers": {"Content-Type": "application/json"},
+                "api_body": {"username": "a", "password": "b"},
+            },
+            {
+                "api_url": "https://api.example.com/pa",
+                "api_method": "GET",
+                "api_headers": {},
+                "api_body": {},
+                "request_config": {"method": "GET", "url": "old", "headers": {}, "body": {}},
+            },
+        ]
+        backfill_api_request_fields_in_batch(cases)
+        self.assertEqual(cases[1]["api_url"], "https://real.api/login")
+        self.assertEqual(cases[1]["api_method"], "POST")
+        self.assertEqual(cases[1]["api_headers"].get("Content-Type"), "application/json")
+        self.assertEqual(cases[1]["api_body"], {"username": "a", "password": "b"})
+        rc = cases[1].get("request_config")
+        self.assertIsInstance(rc, dict)
+        self.assertEqual(rc.get("url"), cases[1]["api_url"])
+
     def test_normalize_batch_case_item(self):
         item = normalize_batch_case_item(
             {"title": "登录成功", "type": "正向", "steps": "输入账号密码", "expected": "登录成功"},
@@ -551,6 +578,20 @@ class AiBatchAndSemanticDedupTests(TestCase):
         self.assertEqual(item["case_name"], "登录成功")
         self.assertEqual(item["level"], "P2")
         self.assertEqual(item["expected_result"], "登录成功")
+        self.assertEqual(item.get("module_name"), "")
+        with_mod = normalize_batch_case_item(
+            {
+                "title": "登录失败",
+                "type": "逆向",
+                "steps": "s",
+                "expected": "e",
+                "module_name": "用户登录模块",
+                "level": "P1",
+            },
+            1,
+        )
+        self.assertEqual(with_mod["module_name"], "用户登录模块")
+        self.assertEqual(with_mod["level"], "P1")
 
     def test_cosine_similarity(self):
         self.assertAlmostEqual(cosine_similarity([1.0, 0.0], [1.0, 0.0]), 1.0, places=6)

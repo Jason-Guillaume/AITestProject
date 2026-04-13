@@ -1,12 +1,15 @@
-import { ref, computed, type Ref } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
 import Prism from 'prismjs'
 import 'prismjs/components/prism-json'
 import 'prismjs/components/prism-markup'
 import 'prismjs/components/prism-markup-templating'
 import 'prismjs/components/prism-php'
-import { runApiCaseApi, aiFillTestDataApi } from '@/api/testcase'
+import { runApiCaseApi, aiFillTestDataApi, previewRunApiCaseApi } from '@/api/testcase'
 import { useCurrentEnvironment } from '@/composables/useCurrentEnvironment'
-import { resolveApiUrlWithBase } from '@/utils/resolveApiUrlWithBase'
+import {
+  relativizeApiUrlIfUnderBase,
+  resolveApiUrlWithBase,
+} from '@/utils/resolveApiUrlWithBase'
 import { getPlansApi, createReportApi, updateReportApi } from '@/api/execution'
 import type { TestCaseRow } from '@/types/testcase'
 import type { ApiVariableExtractRule } from '@/types/testcase'
@@ -36,6 +39,107 @@ export interface ExecutionLogLike {
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+function splitCurlArgs(raw: string): string[] {
+  const s = String(raw || '').trim()
+  const out: string[] = []
+  let cur = ''
+  let quote: '"' | "'" | '' = ''
+  let escaped = false
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i]
+    if (escaped) {
+      cur += ch
+      escaped = false
+      continue
+    }
+    if (ch === '\\') {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (ch === quote) {
+        quote = ''
+      } else {
+        cur += ch
+      }
+      continue
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch as '"' | "'"
+      continue
+    }
+    if (/\s/.test(ch)) {
+      if (cur) {
+        out.push(cur)
+        cur = ''
+      }
+      continue
+    }
+    cur += ch
+  }
+  if (cur) out.push(cur)
+  return out
+}
+
+function parseCurlCommand(raw: string): {
+  method: string
+  url: string
+  headers: Record<string, string>
+  body: unknown
+} {
+  const args = splitCurlArgs(raw)
+  if (!args.length || String(args[0]).toLowerCase() !== 'curl') {
+    throw new Error('请输入有效 cURL 命令（以 curl 开头）')
+  }
+  const headers: Record<string, string> = {}
+  let url = ''
+  let method = ''
+  let bodyRaw = ''
+  for (let i = 1; i < args.length; i += 1) {
+    const t = args[i]
+    const n = args[i + 1]
+    if ((t === '-X' || t === '--request') && n) {
+      method = String(n).toUpperCase()
+      i += 1
+      continue
+    }
+    if ((t === '-H' || t === '--header') && n) {
+      const p = String(n)
+      const idx = p.indexOf(':')
+      if (idx > 0) {
+        const k = p.slice(0, idx).trim()
+        const v = p.slice(idx + 1).trim()
+        if (k) headers[k] = v
+      }
+      i += 1
+      continue
+    }
+    if ((t === '-d' || t === '--data' || t === '--data-raw' || t === '--data-binary') && n) {
+      bodyRaw = String(n)
+      i += 1
+      continue
+    }
+    if (!t.startsWith('-') && /^https?:\/\//i.test(t)) {
+      url = t
+      continue
+    }
+  }
+  if (!url) {
+    throw new Error('cURL 中未识别到 URL')
+  }
+  if (!method) method = bodyRaw ? 'POST' : 'GET'
+  let body: unknown = {}
+  if (bodyRaw) {
+    const trimmed = bodyRaw.trim()
+    try {
+      body = JSON.parse(trimmed)
+    } catch {
+      body = { _raw: trimmed }
+    }
+  }
+  return { method, url, headers, body }
 }
 
 export const HTTP_STATUS_PHRASE: Record<number, string> = {
@@ -161,7 +265,7 @@ export function highlightResponseBody(code: string): { html: string; lang: strin
 }
 
 export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined>) {
-  const { environmentId, baseUrl } = useCurrentEnvironment()
+  const { environmentId, baseUrl, loadEnvironments } = useCurrentEnvironment()
   const requestUrl = ref('')
   const requestMethod = ref('GET')
   const headersText = ref('{}')
@@ -216,6 +320,9 @@ export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined
     }
   })
 
+  /** 丢弃过期的 reset（快速关开/切换用例时多个 await loadEnvironments 交错） */
+  let resetFromRowSeq = 0
+
   const responseBodyPrism = computed(() => {
     const log = executionLog.value
     if (!log) {
@@ -229,9 +336,30 @@ export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined
     return highlightResponseBody(s || '{"empty":true}')
   })
 
-  function resetFromRow() {
+  /** 先拉取环境列表再拼接 Base URL，避免弹窗早于顶栏环境选择器完成加载时出现「只有相对路径」 */
+  async function resetFromRow() {
+    const seq = ++resetFromRowSeq
+    await loadEnvironments()
+    if (seq !== resetFromRowSeq) return
     const row = caseRow.value
     if (!row) return
+    const sc = String((row as TestCaseRow & { api_source_curl?: string }).api_source_curl || '').trim()
+    if (sc) {
+      try {
+        applyCurlCommand(sc)
+        expectedStatus.value =
+          row.api_expected_status != null ? Number(row.api_expected_status) : null
+        extractionRules.value = normalizeExtractionRules((row as TestCaseRow).api_extract_rules)
+        const reconciled = String(requestUrl.value || '').trim()
+        requestUrl.value = resolveApiUrlWithBase(
+          baseUrl.value,
+          relativizeApiUrlIfUnderBase(baseUrl.value, reconciled) || reconciled,
+        )
+        return
+      } catch {
+        /* cURL 无效时回退为库中 api_* */
+      }
+    }
     requestUrl.value = resolveApiUrlWithBase(
       baseUrl.value,
       String(row.api_url || '').trim(),
@@ -262,6 +390,24 @@ export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined
     extractionRules.value = normalizeExtractionRules((row as TestCaseRow).api_extract_rules)
   }
 
+  /** 挂载 / 切换用例 / 详情刷新后同步表单，避免沿用上一用例的空 {} 覆盖库内请求体 */
+  watch(
+    () => [caseRow.value?.id, caseRow.value?.update_time] as const,
+    () => {
+      if (caseRow.value?.id != null) void resetFromRow()
+    },
+    { immediate: true, flush: 'post' },
+  )
+
+  /** 切换执行环境时，用例里存的是相对路径则同步刷新展示 URL */
+  watch(baseUrl, () => {
+    const row = caseRow.value
+    if (!row) return
+    const raw = String(row.api_url || '').trim()
+    if (!raw || /^https?:\/\//i.test(raw)) return
+    requestUrl.value = resolveApiUrlWithBase(baseUrl.value, raw)
+  })
+
   async function appendStreamLines(lines: string[]) {
     for (const line of lines) {
       await sleep(220 + Math.random() * 180)
@@ -289,6 +435,15 @@ export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined
     return JSON.parse(t)
   }
 
+  function applyCurlCommand(rawCurl: string) {
+    const parsed = parseCurlCommand(rawCurl)
+    requestMethod.value = parsed.method
+    requestUrl.value = parsed.url
+    headersText.value = JSON.stringify(parsed.headers || {}, null, 2)
+    bodyText.value = JSON.stringify(parsed.body ?? {}, null, 2)
+    return parsed
+  }
+
   async function runAiFill(target: 'body' | 'headers' = 'body') {
     aiFilling.value = true
     try {
@@ -296,19 +451,7 @@ export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined
         target === 'body'
           ? inferFieldsFromJsonText(bodyText.value)
           : inferFieldsFromJsonText(headersText.value)
-      const cfgRaw = localStorage.getItem('ai_model_config')
       const payload: Record<string, unknown> = { fields }
-      if (cfgRaw) {
-        try {
-          const o = JSON.parse(cfgRaw) as { apiKey?: string; baseUrl?: string }
-          if (o.apiKey) {
-            payload.api_key = String(o.apiKey).trim()
-            if (o.baseUrl) payload.base_url = String(o.baseUrl).trim()
-          }
-        } catch {
-          /* ignore */
-        }
-      }
       const { data } = await aiFillTestDataApi(payload)
       const filled = (data as { data?: Record<string, unknown> })?.data
       if (!filled || typeof filled !== 'object') {
@@ -335,11 +478,15 @@ export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined
         headersText.value = JSON.stringify({ ...base, ...filled }, null, 2)
       }
     } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { msg?: string } } })?.response?.data?.msg ||
+      const rsp = (e as { response?: { status?: number; data?: { msg?: string } } })?.response
+      const rawMsg =
+        rsp?.data?.msg ||
         (e as Error)?.message ||
         'AI 填充失败'
-      throw new Error(typeof msg === 'string' ? msg : 'AI 填充失败')
+      if (rsp?.status === 401) {
+        throw new Error('登录已过期，请重新登录后再试 AI 填充')
+      }
+      throw new Error(typeof rawMsg === 'string' ? rawMsg : 'AI 填充失败')
     } finally {
       aiFilling.value = false
     }
@@ -373,9 +520,18 @@ export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined
       const payload: Record<string, unknown> = {
         api_url: requestUrl.value,
         api_method: requestMethod.value,
-        api_headers: headersObj,
-        api_body: bodyObj,
         api_expected_status: expectedStatus.value,
+      }
+      if (Object.keys(headersObj).length > 0) {
+        payload.api_headers = headersObj
+      }
+      const bodyEmptyPlainObject =
+        bodyObj &&
+        typeof bodyObj === 'object' &&
+        !Array.isArray(bodyObj) &&
+        Object.keys(bodyObj as Record<string, unknown>).length === 0
+      if (!bodyEmptyPlainObject) {
+        payload.api_body = bodyObj
       }
       const eid = environmentId.value
       if (eid != null) {
@@ -418,6 +574,43 @@ export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined
     }
   }
 
+  async function runPreviewResolved() {
+    const id = caseRow.value?.id
+    if (!id) throw new Error('缺少用例 ID')
+    let headersObj: Record<string, string>
+    let bodyObj: unknown
+    try {
+      headersObj = parseHeaders()
+    } catch {
+      throw new Error('请求头 JSON 格式不正确')
+    }
+    try {
+      bodyObj = parseBody()
+    } catch {
+      throw new Error('请求体 JSON 格式不正确')
+    }
+    const payload: Record<string, unknown> = {
+      api_url: requestUrl.value,
+      api_method: requestMethod.value,
+      api_expected_status: expectedStatus.value,
+    }
+    if (Object.keys(headersObj).length > 0) {
+      payload.api_headers = headersObj
+    }
+    const bodyEmptyPlainObject =
+      bodyObj &&
+      typeof bodyObj === 'object' &&
+      !Array.isArray(bodyObj) &&
+      Object.keys(bodyObj as Record<string, unknown>).length === 0
+    if (!bodyEmptyPlainObject) {
+      payload.api_body = bodyObj
+    }
+    const eid = environmentId.value
+    if (eid != null) payload.environment_id = eid
+    const { data } = await previewRunApiCaseApi(id, payload)
+    return data
+  }
+
   /** 先 run-api（落库 ExecutionLog），再生成测试报告 */
   async function runExecuteAndSaveReport() {
     await runExecute()
@@ -428,22 +621,27 @@ export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined
   function buildApiCasePatch(
     base: import('@/types/testcase').TestCaseRow,
     moduleId: number | null,
+    sourceCurl?: string | null,
   ): Record<string, unknown> {
     if (!base?.id) throw new Error('缺少用例 ID')
     const headersObj = parseHeaders()
     const bodyObj = parseBody()
-    return {
+    const patch: Record<string, unknown> = {
       case_name: base.case_name,
       level: base.level,
       module: moduleId,
       test_type: String(base.test_type || 'api'),
-      api_url: requestUrl.value.trim(),
+      api_url: relativizeApiUrlIfUnderBase(baseUrl.value, requestUrl.value.trim()),
       api_method: requestMethod.value,
       api_headers: headersObj,
       api_body: bodyObj,
       api_expected_status: expectedStatus.value,
       api_extract_rules: normalizeExtractionRules(extractionRules.value),
     }
+    if (sourceCurl !== undefined) {
+      patch.api_source_curl = String(sourceCurl ?? '').trim()
+    }
+    return patch
   }
 
   async function loadPlans() {
@@ -532,6 +730,8 @@ export function useApiExecuteConsole(caseRow: Ref<TestCaseRow | null | undefined
     lastErrorHttpStatus,
     resetFromRow,
     runAiFill,
+    applyCurlCommand,
+    runPreviewResolved,
     runExecute,
     runExecuteAndSaveReport,
     buildApiCasePatch,

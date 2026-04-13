@@ -417,6 +417,10 @@ class TestCase(BaseModel):
                 "api_headers": self.apitestcase.api_headers,
                 "api_body": self.apitestcase.api_body,
                 "api_expected_status": self.apitestcase.api_expected_status,
+                "api_source_curl": getattr(
+                    self.apitestcase, "api_source_curl", ""
+                )
+                or "",
             }
         elif self.test_type == TEST_CASE_TYPE_PERFORMANCE and hasattr(self, "perftestcase"):
             subtype_data = {
@@ -497,6 +501,7 @@ class TestCase(BaseModel):
             ap.api_headers = subtype.get("api_headers", ap.api_headers)
             ap.api_body = subtype.get("api_body", ap.api_body)
             ap.api_expected_status = subtype.get("api_expected_status", ap.api_expected_status)
+            ap.api_source_curl = subtype.get("api_source_curl", ap.api_source_curl)
             ap.save()
         elif self.test_type == TEST_CASE_TYPE_PERFORMANCE and hasattr(self, "perftestcase"):
             pf = self.perftestcase
@@ -611,6 +616,12 @@ class ApiTestCase(TestCase):
         blank=True,
         verbose_name="期望状态码",
         help_text="为空则仅校验 2xx；与步骤里「预期结果」子串断言可同时生效",
+    )
+    api_source_curl = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="来源 cURL",
+        help_text="生成或「从 cURL 填充」时保存的原始命令；执行前可据此还原请求",
     )
 
     class Meta:

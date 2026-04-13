@@ -32,6 +32,19 @@
               class="drawer-api-status"
             />
           </el-form-item>
+          <el-form-item label="cURL（可选，一键填充）">
+            <el-input
+              v-model="curlText"
+              type="textarea"
+              :rows="4"
+              class="drawer-api-code"
+              spellcheck="false"
+              placeholder="curl -X GET 'https://api.example.com/path' -H 'Authorization: Bearer ${token}'"
+            />
+            <div style="margin-top:8px">
+              <el-button size="small" plain @click="onApplyCurl">从 cURL 填充</el-button>
+            </div>
+          </el-form-item>
           <el-form-item>
             <template #label>
               <span class="drawer-api-label-row">
@@ -68,15 +81,25 @@
               spellcheck="false"
             />
           </el-form-item>
-          <el-button
-            type="warning"
-            class="drawer-api-run-now"
-            :loading="running"
-            :disabled="saving"
-            @click="onRunNow"
-          >
-            ⚡ 立即执行（不保存草稿）
-          </el-button>
+          <div class="drawer-api-run-row">
+            <el-button
+              plain
+              class="drawer-api-run-now"
+              :disabled="running || saving"
+              @click="onPreviewResolved"
+            >
+              👀 预览替换（不发送）
+            </el-button>
+            <el-button
+              type="warning"
+              class="drawer-api-run-now"
+              :loading="running"
+              :disabled="saving"
+              @click="onRunNow"
+            >
+              ⚡ 立即执行（不保存草稿）
+            </el-button>
+          </div>
         </el-form>
       </el-tab-pane>
       <el-tab-pane label="Variable Extraction" name="variable-extraction">
@@ -220,6 +243,8 @@ const {
   aiFilling,
   resetFromRow,
   runAiFill,
+  applyCurlCommand,
+  runPreviewResolved,
   runExecute,
   buildApiCasePatch,
 } = useApiExecuteConsole(caseRowRef)
@@ -228,6 +253,7 @@ const saving = ref(false)
 const terminalRef = ref<HTMLElement | null>(null)
 const activeTab = ref('request')
 const aiAssistantVisible = ref(false)
+const curlText = ref('')
 const ruleTableActions = [{ key: 'delete', tooltip: '删除规则', icon: Delete, type: 'danger' }]
 
 function handleRuleTableAction(action: string, row: { index: number }) {
@@ -307,10 +333,12 @@ function isSuggestionFresh(item: ApiVariableExtractRule, index: number): boolean
 }
 
 watch(
-  () => props.caseRow?.id,
+  () =>
+    [props.caseRow?.id, props.caseRow?.update_time, (props.caseRow as TestCaseRow)?.api_source_curl] as const,
   () => {
-    nextTick(() => resetFromRow())
+    curlText.value = String((props.caseRow as TestCaseRow)?.api_source_curl || '').trim()
   },
+  { immediate: true },
 )
 
 watch(
@@ -391,6 +419,41 @@ async function onRunNow() {
       (e as Error)?.message ||
       '执行失败'
     ElMessage.error(typeof msg === 'string' ? msg : '执行失败')
+  }
+}
+
+async function onPreviewResolved() {
+  try {
+    const data = await runPreviewResolved()
+    const req = (data as { request?: Record<string, unknown> })?.request || {}
+    const pretty = JSON.stringify(req, null, 2)
+    const lines = [
+      '> 预览执行前最终请求（未发送）',
+      ...String(pretty).split('\n').map((x) => `  ${x}`),
+    ]
+    consoleLines.value = [...consoleLines.value, ...lines]
+    ElMessage.success('已输出预览到执行日志')
+  } catch (e) {
+    ElMessage.error((e as Error)?.message || '预览失败')
+  }
+}
+
+function onApplyCurl() {
+  applyCurlAndPersist().catch((e) => {
+    ElMessage.error((e as Error)?.message || 'cURL 解析失败')
+  })
+}
+
+async function applyCurlAndPersist() {
+  try {
+    if (!props.caseRow?.id) throw new Error('当前用例不存在，无法保存')
+    const parsed = applyCurlCommand(curlText.value || '')
+    const patch = buildApiCasePatch(props.caseRow, props.moduleId, curlText.value?.trim() ?? '')
+    await updateCaseApi(props.caseRow.id, patch)
+    Object.assign(props.caseRow, patch)
+    ElMessage.success(`已从 cURL 填充并保存：${parsed.method} ${parsed.url}`)
+  } catch (e) {
+    throw e
   }
 }
 
@@ -604,6 +667,11 @@ defineExpose({
 .drawer-api-run-now {
   width: 100%;
   margin-bottom: 12px;
+}
+
+.drawer-api-run-row {
+  display: flex;
+  gap: 8px;
 }
 
 .drawer-api-extract-head {

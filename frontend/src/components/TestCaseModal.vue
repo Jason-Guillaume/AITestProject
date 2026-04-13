@@ -12,15 +12,15 @@
       <div
         class="ai-gen-rag-strip"
         :class="{
-          'ai-gen-rag-strip--on': aiGenModuleSelected,
-          'ai-gen-rag-strip--info': !aiGenModuleSelected,
+          'ai-gen-rag-strip--on': aiGenRagLinked,
+          'ai-gen-rag-strip--info': !aiGenRagLinked,
         }"
       >
         <span class="ai-gen-rag-strip__dot" aria-hidden="true" />
         <span class="ai-gen-rag-strip__text">
           {{
-            aiGenModuleSelected
-              ? '已链接当前模块知识库，将基于 RAG 检索增强生成'
+            aiGenRagLinked
+              ? '已链接模块知识库（手选模块或左侧当前模块），将基于 RAG 检索增强生成'
               : '未链接模块知识库，采用大模型通用生成'
           }}
         </span>
@@ -41,8 +41,8 @@
               <el-option v-for="m in flatModules" :key="m.id" :label="m.name" :value="m.id" />
             </el-select>
             <div class="ai-gen-module-hint">
-              选定模块后，生成时<strong>仅在该模块内</strong>检索相似用例（RAG 去重）；导入时还可作为未带
-              <code>module_name</code> 的用例的默认归属模块。
+              选定模块后，生成时<strong>仅在该模块内</strong>检索相似用例（RAG 去重）；导入时若某行无
+              <code>module_name</code>，可选手动「默认模块」覆盖自动归属（见下方预览区说明）。
             </div>
           </el-form-item>
 
@@ -191,7 +191,7 @@
         <el-form-item label="默认模块" class="ai-gen-module-row">
           <el-select
             v-model="aiImportModule"
-            placeholder="可选：当某条用例未带「目标模块」时使用"
+            placeholder="可选：当无法从用例/需求推断业务模块时，全部归入此模块"
             filterable
             clearable
             style="width: 280px"
@@ -199,7 +199,9 @@
             <el-option v-for="m in flatModules" :key="m.id" :label="m.name" :value="m.id" />
           </el-select>
           <div class="ai-gen-module-hint">
-            AI 会为每条用例生成 <code>module_name</code>：导入时将<strong>按名称匹配</strong>已有模块，没有则<strong>自动新建</strong>同名模块。
+            模块名表示<strong>业务功能域</strong>（如「用户登录」「订单支付」），与接口/安全等测试类型无关。
+            优先用每条用例的 <code>module_name</code>；若无则从<strong>需求首句/首行</strong>按规则抽取业务模块名；再依次用 Phase1「推导模块」、标题+需求关键词推断；仍无法确定时请选「默认模块」。
+            匹配到已有模块则复用，否则<strong>自动新建</strong>同名模块。
           </div>
         </el-form-item>
         <el-table
@@ -250,7 +252,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createCaseApi,
   createCaseStepApi,
@@ -260,8 +262,9 @@ import {
   AI_QUICK_START_BY_TYPE,
   mergeTestTypePromptWithRequirement,
 } from '@/utils/aiTestTypePrompts'
+import { extractBusinessModuleNameFromRequirement } from '@/utils/extractBusinessModuleFromRequirement'
 
-const AI_MODEL_STORAGE_KEY = 'ai_model_config'
+const AI_ASSISTANT_MODEL_ROUTE = '/ai-assistant?tab=model'
 
 const TEST_CASE_ROUTE_TYPES = ['functional', 'api', 'performance', 'security', 'ui-automation'] as const
 
@@ -305,6 +308,75 @@ const effectiveTestType = computed(() => {
     ? t
     : 'functional'
 })
+
+/** Phase1 占位名：不作为真实业务模块导入 */
+const WEAK_PHASE1_MODULE_NAMES = new Set(
+  ['通用功能模块', '通用模块', '未分类模块', '其它', '其他', '未知模块'].map((s) => s.toLowerCase()),
+)
+
+/** 从用例标题/步骤与需求描述推断业务模块（按场景而非测试类型） */
+const MODULE_NAME_INFER_RULES: Array<{ needles: string[]; moduleName: string }> = [
+  {
+    needles: ['登录', '登入', '口令', '密码错误', '账号锁定', 'session', 'token', '鉴权', '登出', '单点'],
+    moduleName: '用户登录',
+  },
+  {
+    needles: ['注册', '开户', '验证码', '重置密码', '找回密码', '绑定手机'],
+    moduleName: '用户注册与账户',
+  },
+  { needles: ['支付', '付款', '收银', '退款', '对账', '结算'], moduleName: '支付' },
+  { needles: ['订单', '下单', '取消订单', '发货', '物流'], moduleName: '订单管理' },
+  { needles: ['购物车', '加购'], moduleName: '购物车' },
+  { needles: ['优惠券', '促销', '折扣', '满减'], moduleName: '营销优惠' },
+  { needles: ['权限', '越权', '角色', 'rbac', '访问控制', '授权'], moduleName: '权限与访问控制' },
+  { needles: ['注入', 'sql', 'xss', 'csrf', '漏洞', '渗透', '敏感信息'], moduleName: '安全加固' },
+  { needles: ['上传', '附件', '文件下载'], moduleName: '文件与附件' },
+  { needles: ['搜索', '筛选', '列表查询', '分页'], moduleName: '检索与列表' },
+  { needles: ['通知', '消息', '站内信', '推送', '短信', '邮件'], moduleName: '消息通知' },
+]
+
+function collectRowTextForInference(row: Record<string, unknown>): string {
+  const parts = [
+    row.case_name,
+    row.caseName,
+    row.name,
+    row.precondition,
+    row.steps,
+    row.expected_result,
+    row.expectedResult,
+  ]
+  return parts.map((x) => String(x ?? '').trim()).filter(Boolean).join(' ')
+}
+
+function inferModuleNameFromScenario(row: Record<string, unknown>, requirement: string): string {
+  const blob = `${collectRowTextForInference(row)} ${String(requirement || '').trim()}`
+  if (!blob.trim()) return ''
+  const lower = blob.toLowerCase()
+  for (const { needles, moduleName } of MODULE_NAME_INFER_RULES) {
+    if (needles.some((n) => blob.includes(n) || lower.includes(n.toLowerCase()))) {
+      return moduleName
+    }
+  }
+  return ''
+}
+
+function phase1ModuleNameForImport(): string {
+  const raw = String(aiPhase1Analysis.value?.module_name ?? '').trim()
+  if (!raw) return ''
+  if (WEAK_PHASE1_MODULE_NAMES.has(raw.toLowerCase())) return ''
+  return raw
+}
+
+/** 导入时解析业务模块：用例字段 → 需求首句抽取 → Phase1 → 场景关键词；均无时需「默认模块」 */
+function resolvedModuleNameForImport(row: Record<string, unknown>): string {
+  const direct = aiRowModuleName(row)
+  if (direct) return direct
+  const fromReq = extractBusinessModuleNameFromRequirement(aiRequirement.value)
+  if (fromReq) return fromReq
+  const p1 = phase1ModuleNameForImport()
+  if (p1) return p1
+  return inferModuleNameFromScenario(row, aiRequirement.value)
+}
 
 const aiRequirement = ref('')
 const aiApiSpec = ref('')
@@ -409,18 +481,30 @@ function startAiLoadingHints() {
   }, 6000)
 }
 
-function getStoredAiConfig() {
-  try {
-    const raw = localStorage.getItem(AI_MODEL_STORAGE_KEY)
-    if (!raw) return { apiKey: '', baseUrl: '' }
-    const o = JSON.parse(raw) as { apiKey?: string; baseUrl?: string }
-    return {
-      apiKey: String(o.apiKey ?? '').trim(),
-      baseUrl: String(o.baseUrl ?? '').trim(),
-    }
-  } catch {
-    return { apiKey: '', baseUrl: '' }
-  }
+function handleAiAuthExpired(message?: string) {
+  const tip =
+    message ||
+    '模型 API Key 可能已失效或过期，请到「智能助手 -> 模型接入」更新后重试'
+  ElMessageBox.confirm(
+    `${tip}\n\n是否立即前往模型接入页面？`,
+    '模型配置提示',
+    {
+      confirmButtonText: '前往配置',
+      cancelButtonText: '留在当前页',
+      type: 'warning',
+    },
+  )
+    .then(() => {
+      if (
+        window.location.pathname !== '/ai-assistant' ||
+        !window.location.search.includes('tab=model')
+      ) {
+        window.location.href = AI_ASSISTANT_MODEL_ROUTE
+      }
+    })
+    .catch(() => {
+      /* 用户选择留在当前页面 */
+    })
 }
 
 function extractCreatedCaseId(axiosRes: { data?: { data?: { id?: number }; id?: number } }) {
@@ -504,7 +588,6 @@ async function runAiGenerate() {
     ElMessage.warning('请填写需求描述，或完善当前测试类型下的补充字段')
     return
   }
-  const cfg = getStoredAiConfig()
   const effectiveType = effectiveTestType.value
   const req = (aiRequirement.value || '').trim()
   const spec = (aiApiSpec.value || '').trim()
@@ -526,10 +609,6 @@ async function runAiGenerate() {
   }
   if (ragMid != null && ragMid !== '') {
     payload.module_id = ragMid
-  }
-  if (cfg.apiKey) {
-    payload.api_key = cfg.apiKey
-    if (cfg.baseUrl) payload.api_base_url = cfg.baseUrl
   }
   aiGenerating.value = true
   startAiLoadingHints()
@@ -564,8 +643,10 @@ async function runAiGenerate() {
     const ct = (res.headers.get('content-type') || '').toLowerCase()
     if (!res.ok && !ct.includes('event-stream') && !ct.includes('text/stream')) {
       let msg = `请求失败 (${res.status})`
+      let errCode = ''
       try {
-        const j = (await res.json()) as { error?: string; message?: string; detail?: string }
+        const j = (await res.json()) as { error?: string; message?: string; detail?: string; code?: string }
+        errCode = String(j.code || '').trim()
         msg =
           (typeof j.error === 'string' && j.error) ||
           (typeof j.message === 'string' && j.message) ||
@@ -573,6 +654,18 @@ async function runAiGenerate() {
           msg
       } catch {
         /* ignore */
+      }
+      if (errCode === 'AUTH_ERROR') {
+        handleAiAuthExpired(msg)
+        return
+      }
+      if (res.status === 401) {
+        ElMessage.error('登录已过期，请重新登录')
+        localStorage.removeItem('token')
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+        return
       }
       ElMessage.error(msg)
       return
@@ -644,7 +737,13 @@ async function runAiGenerate() {
             aiStreamText.value += deltaRun
             deltaRun = ''
           }
-          ElMessage.error((evt.message as string) || '生成失败')
+          const evtCode = String(evt.code || '').trim()
+          const evtMsg = (evt.message as string) || '生成失败'
+          if (evtCode === 'AUTH_ERROR') {
+            handleAiAuthExpired(evtMsg)
+          } else {
+            ElMessage.error(evtMsg)
+          }
           finished = true
           break
         } else if (evt.type === 'done' && evt.success && Array.isArray(evt.cases)) {
@@ -655,7 +754,25 @@ async function runAiGenerate() {
             deltaRun = ''
           }
           const cases = evt.cases as Record<string, unknown>[]
-          aiPreviewCases.value = cases.map((row, idx) => ({ ...row, _rowKey: idx }))
+          aiPreviewCases.value = cases.map((row, idx) => {
+            const headersRaw = row.api_headers
+            const headersClone =
+              headersRaw && typeof headersRaw === 'object' && !Array.isArray(headersRaw)
+                ? { ...(headersRaw as object) }
+                : {}
+            let bodyClone: unknown = {}
+            const ab = row.api_body
+            if (ab !== undefined && ab !== null && typeof ab === 'object') {
+              try {
+                bodyClone = JSON.parse(JSON.stringify(ab))
+              } catch {
+                bodyClone = ab
+              }
+            } else if (ab !== undefined && ab !== null) {
+              bodyClone = ab
+            }
+            return { ...row, api_headers: headersClone, api_body: bodyClone, _rowKey: idx }
+          })
           aiStreamText.value = ''
           ElMessage.success((evt.message as string) || `已生成 ${cases.length} 条用例`)
           finished = true
@@ -753,6 +870,29 @@ async function ensureModuleIdForAiImport(moduleName: string, createdByKey: Map<s
   return newId
 }
 
+/** 回收站同名冲突时自动改名再建，避免批量 AI 导入整批失败 */
+async function createCaseApiResolvingRecycleConflict(
+  payload: Record<string, unknown>,
+  originalCaseName: string,
+) {
+  try {
+    return await createCaseApi(payload)
+  } catch (err: unknown) {
+    const ax = err as { response?: { status?: number; data?: Record<string, unknown> } }
+    const status = ax.response?.status
+    const data = ax.response?.data || {}
+    const codeRaw = data.code
+    const code = Array.isArray(codeRaw) ? codeRaw[0] : codeRaw
+    if (status === 409 && String(code || '') === 'RECYCLE_CONFLICT') {
+      const base = String(originalCaseName || payload.case_name || '').trim() || '用例'
+      const suffix = `·${Date.now().toString(36).slice(-6)}`
+      const nextName = `${base}${suffix}`.slice(0, 255)
+      return await createCaseApi({ ...payload, case_name: nextName })
+    }
+    throw err
+  }
+}
+
 async function confirmAiImport() {
   const selected = aiSelectedPreview.value.length ? aiSelectedPreview.value : []
   if (!selected.length) {
@@ -763,26 +903,21 @@ async function confirmAiImport() {
     ElMessage.warning('请先在顶部选择项目')
     return
   }
-  const needDefault = selected.some((row) => !aiRowModuleName(row))
-  if (needDefault && aiImportModule.value == null) {
-    ElMessage.warning('部分用例未包含「目标模块」，请在「默认模块」中选一个，或重新生成带 module_name 的用例')
-    return
-  }
   aiImporting.value = true
   let ok = 0
+  let skippedNoModule = 0
   const createdByKey = new Map<string, number>()
   const tt = effectiveTestType.value
   try {
     for (const row of selected) {
-      const mn = aiRowModuleName(row)
+      const mn = resolvedModuleNameForImport(row)
       let mid: number | null = null
       if (mn) {
         mid = await ensureModuleIdForAiImport(mn, createdByKey)
-      } else {
+      } else if (aiImportModule.value != null) {
         mid = aiImportModule.value
-      }
-      if (mid == null) {
-        ElMessage.warning(`用例「${row.case_name}」无法确定所属模块，已跳过`)
+      } else {
+        skippedNoModule += 1
         continue
       }
       const createPayload: Record<string, unknown> = {
@@ -819,7 +954,10 @@ async function confirmAiImport() {
         const rl = String(row.risk_level || '').trim()
         if (['高', '中', '低'].includes(rl)) createPayload.risk_level = rl
       }
-      const createRes = await createCaseApi(createPayload)
+      const createRes = await createCaseApiResolvingRecycleConflict(
+        createPayload,
+        String(row.case_name || ''),
+      )
       const caseId = extractCreatedCaseId(createRes)
       if (!caseId) {
         throw new Error('创建用例后未返回 ID')
@@ -833,10 +971,20 @@ async function confirmAiImport() {
       ok += 1
     }
     if (!ok) {
-      ElMessage.warning('没有成功导入任何用例')
+      ElMessage.warning(
+        skippedNoModule
+          ? '未能导入：无法从用例/Phase1/标题推断业务模块名。请在需求中写明功能域（如登录、订单）、或勾选「默认模块」、或重新生成带 module_name 的用例。'
+          : '没有成功导入任何用例',
+      )
       return
     }
-    ElMessage.success(`成功导入 ${ok} 条用例`)
+    if (skippedNoModule) {
+      ElMessage.warning(
+        `已导入 ${ok} 条；另有 ${skippedNoModule} 条因缺少业务模块归属已跳过（可选手动默认模块或补充需求后重试）。`,
+      )
+    } else {
+      ElMessage.success(`成功导入 ${ok} 条用例`)
+    }
     emit('update:modelValue', false)
     emit('imported')
   } catch (err) {

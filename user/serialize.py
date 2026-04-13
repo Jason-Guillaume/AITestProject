@@ -386,6 +386,7 @@ AI_MODEL_DISPLAY_NAMES = {
     "glm-4-flash": "GLM-4-Flash",
     "glm-4-plus": "GLM-4-Plus",
     "iflytek-spark-maas-coding": "iFLYTEK Spark MaaS Coding",
+    "astron-code-latest": "Astron Coding",
     "wenxin": "文心大模型 5.0",
     "gpt-4o": "GPT-4o",
     "claude-3-5-sonnet": "Claude 3.5",
@@ -393,9 +394,7 @@ AI_MODEL_DISPLAY_NAMES = {
 }
 
 IFLYTEK_MAAS_MODEL_TYPE = "iflytek-spark-maas-coding"
-IFLYTEK_MAAS_CHAT_COMPLETIONS = (
-    "https://maas-coding-api.cn-huabei-1.xf-yun.com/v1/chat/completions"
-)
+IFLYTEK_MAAS_OPENAI_BASE = "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2"
 
 
 def ai_model_display_name(model_type: str) -> str:
@@ -448,8 +447,8 @@ class AIModelConfigWriteSerializer(serializers.Serializer):
             attrs.pop("api_key", None)
         base = (attrs.get("base_url") or "").strip()
         if mt == IFLYTEK_MAAS_MODEL_TYPE:
-            # 支持编辑；若未填写则默认完整端点，便于直连测试。
-            base = base or IFLYTEK_MAAS_CHAT_COMPLETIONS
+            # 支持编辑；若未填写则默认 v1 根路径（由后端统一拼接 /chat/completions）。
+            base = base or IFLYTEK_MAAS_OPENAI_BASE
         attrs["base_url"] = base
         return attrs
 

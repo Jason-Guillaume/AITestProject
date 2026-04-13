@@ -39,6 +39,8 @@ export interface ApiTestCaseFields {
   /** 后端 JSONField：对象/数组或历史字符串 */
   api_body?: string | Record<string, unknown> | unknown[]
   api_expected_status?: number | null
+  /** 保存的原始 cURL（导入/从 cURL 填充），打开执行台时优先还原请求 */
+  api_source_curl?: string
   api_extract_rules?: ApiVariableExtractRule[]
 }
 

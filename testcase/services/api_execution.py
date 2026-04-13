@@ -14,7 +14,14 @@ from urllib.parse import urlparse
 import requests
 from django.db.models import F
 
-from testcase.models import ApiTestCase, ApiTestLog, ExecutionLog, TestCase, TestEnvironment
+from testcase.models import (
+    ApiTestCase,
+    ApiTestLog,
+    EnvironmentVariable,
+    ExecutionLog,
+    TestCase,
+    TestEnvironment,
+)
 from testcase.services.variable_runtime import VariableExtractor, VariableResolver
 
 _ALLOWED_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
@@ -102,6 +109,7 @@ def resolve_url_with_environment(url: str, environment_id: Optional[int]) -> str
     """
     若提供已登记环境 ID，则将非绝对 URL（相对路径）与该环境的 base_url 拼接。
     已是 http(s) 完整地址时保持不变。
+    注意：变量替换在调用方 resolver.resolve 中进行，此处不处理 ${var}。
     """
     u = (url or "").strip()
     if not environment_id:
@@ -124,7 +132,7 @@ def resolve_url_with_environment(url: str, environment_id: Optional[int]) -> str
 
 def merge_execute_params(
     api_prof: ApiTestCase, overrides: Optional[Dict[str, Any]]
-) -> Tuple[str, str, Dict[str, str], Any, Optional[int]]:
+) -> Tuple[str, str, Dict[str, str], Any, Optional[int], Optional[int]]:
     o = overrides or {}
     env_raw = o.get("environment_id")
     env_id: Optional[int] = None
@@ -166,7 +174,28 @@ def merge_execute_params(
             exp = int(exp)
         except (TypeError, ValueError):
             exp = api_prof.api_expected_status
-    return url, method, headers, body, exp
+    return url, method, headers, body, exp, env_id
+
+
+def load_environment_runtime_variables(environment_id: Optional[int]) -> Dict[str, Any]:
+    """读取当前环境下的变量池（含敏感变量解密值），用于 ${var} 运行时替换。"""
+    if not environment_id:
+        return {}
+    rows = EnvironmentVariable.objects.filter(
+        environment_id=environment_id,
+        is_deleted=False,
+    ).order_by("id")
+    out: Dict[str, Any] = {}
+    for row in rows:
+        key = str(getattr(row, "key", "") or "").strip()
+        if not key:
+            continue
+        try:
+            value = row.get_decrypted_value() if getattr(row, "is_secret", False) else (row.value or "")
+        except Exception:
+            value = row.value or ""
+        out[key] = value
+    return out
 
 
 def build_requests_kwargs(
@@ -375,15 +404,17 @@ def run_api_case(
     """
     执行 API 用例并写入 ExecutionLog；可选同步写入 ApiTestLog。
     """
-    url, method, headers, body, expected_status = merge_execute_params(api_prof, overrides)
+    url, method, headers, body, expected_status, env_id = merge_execute_params(api_prof, overrides)
     runtime_vars, extraction_rules = prepare_runtime_variable_context(overrides)
+    env_runtime_vars = load_environment_runtime_variables(env_id)
+    merged_runtime_vars = {**env_runtime_vars, **(runtime_vars or {})}
     resolver = VariableResolver(missing_policy="keep")
     extractor = VariableExtractor(keep_none_on_error=True)
 
     # 执行前变量替换：支持 URL / Header / Body 中的 ${var_name}
-    url = resolver.resolve(url, runtime_vars)
-    headers = resolver.resolve(headers, runtime_vars)
-    body = resolver.resolve(body, runtime_vars)
+    url = resolver.resolve(url, merged_runtime_vars)
+    headers = resolver.resolve(headers, merged_runtime_vars)
+    body = resolver.resolve(body, merged_runtime_vars)
     trace_id = str(uuid.uuid4())
     request_payload_snapshot = build_request_payload(url, method, headers, body)
     err = validate_before_request(url, method)
@@ -556,3 +587,42 @@ def run_api_case(
     TestCase.objects.filter(pk=case.pk).update(exec_count=F("exec_count") + 1)
     msg = "通过" if passed else "未通过断言（状态码或预期结果）"
     return RunApiResult(log_ex, legacy, msg, extracted_vars)
+
+
+def preview_resolved_request(
+    api_prof: ApiTestCase,
+    *,
+    overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    仅预览执行前的最终请求（不发请求）：
+    - 合并环境 base_url
+    - 注入环境变量 + 运行时变量
+    - 替换 URL/Headers/Body 中的 ${var}
+    """
+    url, method, headers, body, expected_status, env_id = merge_execute_params(api_prof, overrides)
+    runtime_vars, _ = prepare_runtime_variable_context(overrides)
+    env_runtime_vars = load_environment_runtime_variables(env_id)
+    merged_runtime_vars = {**env_runtime_vars, **(runtime_vars or {})}
+
+    resolver = VariableResolver(missing_policy="keep")
+    final_url = resolver.resolve(url, merged_runtime_vars)
+    final_headers = resolver.resolve(headers, merged_runtime_vars)
+    final_body = resolver.resolve(body, merged_runtime_vars)
+
+    return {
+        "request": {
+            "method": method,
+            "url": final_url,
+            "headers": final_headers,
+            "body": final_body,
+            "expected_status": expected_status,
+            "environment_id": env_id,
+        },
+        "variables": {
+            "environment_count": len(env_runtime_vars),
+            "runtime_count": len(runtime_vars or {}),
+            "merged_count": len(merged_runtime_vars),
+            "keys": sorted(list(merged_runtime_vars.keys()))[:100],
+        },
+    }

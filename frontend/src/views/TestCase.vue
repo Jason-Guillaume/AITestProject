@@ -1503,7 +1503,7 @@ async function locateRecycleCaseAcrossPages() {
       }
       const q = (searchKw.value || '').trim()
       if (q) params.search = q
-      if (selectedModule.value) params.module = selectedModule.value
+      if (selectedModule.value && !isRecycleMode.value) params.module = selectedModule.value
       const tt = activeTestCaseType.value
       if (TEST_CASE_ROUTE_TYPES.includes(tt)) params.testType = tt
       const { data } = await getCasesApi({ ...params, recycle: "1" })
@@ -1553,7 +1553,9 @@ async function fetchTestCases() {
   }
   const q = (searchKw.value || '').trim()
   if (q) params.search = q
-  if (selectedModule.value) params.module = selectedModule.value
+  // 回收站须展示「本项目 + 当前测试类型」下全部软删用例；若仍带左侧模块筛选，
+  // 会只显示该模块子树内的删除项，其它模块删的用例看不到，表现为「回收站是空的」。
+  if (selectedModule.value && !isRecycleMode.value) params.module = selectedModule.value
   const tt = activeTestCaseType.value
   if (TEST_CASE_ROUTE_TYPES.includes(tt)) params.testType = tt
   try {
@@ -1578,6 +1580,24 @@ async function fetchTestCases() {
     if (seq === fetchTestCasesSeq) isTableLoading.value = false
   }
 }
+
+/**
+ * 进入回收站时：清空名称搜索、取消左侧模块筛选（避免仍按子模块收敛导致「回收站是空的」）、回到第 1 页。
+ * 含直达 ?recycle=1 场景。
+ */
+watch(
+  isRecycleMode,
+  (on) => {
+    if (!on) return
+    searchKw.value = ''
+    currentPage.value = 1
+    selectedModule.value = null
+    nextTick(() => {
+      moduleTreeRef.value?.setCurrentKey?.(null)
+    })
+  },
+  { flush: 'post', immediate: true },
+)
 
 /**
  * 同一路由组件复用（/test-case/:type）：必须监听 fullPath，仅监听 params.type 在部分场景下不可靠。
@@ -1648,7 +1668,11 @@ async function batchDeleteCases() {
   }
   isDeleting.value = true
   try {
-    const { data } = await batchDeleteCasesApi({ ids })
+    const pid = readCurrentProjectId()
+    const { data } = await batchDeleteCasesApi(
+      { ids },
+      pid != null ? { params: { project: pid } } : undefined,
+    )
     const msg = typeof data?.msg === 'string' ? data.msg : `已成功删除 ${n} 条用例`
     ElMessage.success(msg)
     clearCaseSelection()
