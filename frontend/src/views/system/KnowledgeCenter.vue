@@ -212,6 +212,7 @@ import {
   getKnowledgeRuntimeStatusApi,
   ingestKnowledgeDocumentApi,
   listKnowledgeDocumentsApi,
+  previewKnowledgeDocumentChunksApi,
   probeKnowledgeDocumentDeleteApi,
   retryKnowledgeDocumentApi,
 } from "@/api/assistant";
@@ -819,6 +820,24 @@ async function runSemanticLookup(row) {
     const { data } = await getKnowledgeDocumentStatusApi(row.id);
     if (data?.data) {
       activeDrawerDocument.value = { ...row, ...data.data };
+    }
+    try {
+      const { data: p } = await previewKnowledgeDocumentChunksApi(row.id, { limit: 50 });
+      const payload = p?.data || {};
+      const previewChunks = Array.isArray(payload?.preview_chunks) ? payload.preview_chunks : [];
+      if (previewChunks.length) {
+        const normalized = previewChunks.map((x, idx) => ({
+          id: `preview-${idx}`,
+          text: String(x?.text || ""),
+        }));
+        activeDrawerDocument.value = {
+          ...(activeDrawerDocument.value || {}),
+          semantic_chunks: normalized,
+          semantic_summary: payload?.summary || (activeDrawerDocument.value?.semantic_summary || ""),
+        };
+      }
+    } catch (_) {
+      // ignore: preview 接口不可用时回退原有 status 结果
     }
   } catch (error) {
     ElMessage.error(error?.response?.data?.message || "摘要读取失败");

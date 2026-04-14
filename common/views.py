@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
 from django.db.models import Q
+from django.db import models
 
 # Create your views here.
 
@@ -26,53 +27,80 @@ class BaseModelViewSet(viewsets.ModelViewSet):
     def _has_field(self, field_name: str) -> bool:
         return any(f.name == field_name for f in self.queryset.model._meta.get_fields())
 
+    def _has_rel_field(self, field_name: str) -> bool:
+        """
+        是否存在“关系字段”（FK/O2O/M2M）。
+
+        重要：避免字段同名但类型不匹配导致的错误 join。
+        例如 TestApproach.version 是 CharField，但其他模型的 version 常为 FK，
+        若误按 FK 链路拼接 version__project 会触发 FieldError。
+        """
+        try:
+            f = self.queryset.model._meta.get_field(field_name)
+        except Exception:
+            return False
+        if isinstance(f, (models.ForeignKey, models.OneToOneField, models.ManyToManyField)):
+            return True
+        return False
+
     def _apply_member_scope(self, qs, user):
         """
         普通用户数据隔离：
         - 优先按项目成员关系放行（project/module/release/version/plan/testcase 等链路）
         - 兜底：仅可见自己创建的数据
         """
-        if self._has_field("project"):
+        if self._has_rel_field("project"):
             return qs.filter(Q(project__members=user) | Q(creator=user)).distinct()
-        if self._has_field("module"):
+        # 同时存在 module/release_version 的模型（如缺陷）需要两条链路都覆盖，避免仅按 module 过滤导致“按版本关联项目”的权限漏掉
+        if self._has_rel_field("module") and self._has_rel_field("release_version"):
+            return qs.filter(
+                Q(module__project__members=user)
+                | Q(release_version__project__members=user)
+                | Q(creator=user)
+            ).distinct()
+        if self._has_rel_field("module"):
             return qs.filter(Q(module__project__members=user) | Q(creator=user)).distinct()
-        if self._has_field("testcase"):
+        if self._has_rel_field("testcase"):
             return qs.filter(
                 Q(testcase__module__project__members=user) | Q(creator=user)
             ).distinct()
-        if self._has_field("test_case"):
+        if self._has_rel_field("test_case"):
             return qs.filter(
                 Q(test_case__module__project__members=user) | Q(creator=user)
             ).distinct()
-        if self._has_field("release_version"):
+        if self._has_rel_field("release_version"):
             return qs.filter(
                 Q(release_version__project__members=user) | Q(creator=user)
             ).distinct()
-        if self._has_field("version"):
+        if self._has_rel_field("version"):
             return qs.filter(Q(version__project__members=user) | Q(creator=user)).distinct()
-        if self._has_field("plan"):
+        if self._has_rel_field("plan"):
             return qs.filter(
                 Q(plan__version__project__members=user)
                 | Q(plan__testers=user)
                 | Q(creator=user)
             ).distinct()
-        if self._has_field("members"):
+        if self._has_rel_field("members"):
             return qs.filter(Q(members=user) | Q(creator=user)).distinct()
-        if self._has_field("assignee"):
+        if self._has_rel_field("assignee"):
             return qs.filter(Q(assignee=user) | Q(creator=user)).distinct()
-        if self._has_field("handler"):
+        if self._has_rel_field("handler"):
             return qs.filter(Q(handler=user) | Q(creator=user)).distinct()
         return qs.filter(creator=user)
 
     def get_queryset(self):
         """重写查询集,默认只查未被逻辑删除的数据"""
-        qs = self.queryset.filter(is_deleted=False)
+        qs = self.queryset
         user = getattr(self.request, "user", None)
-        if not self.enable_data_scope:
-            return qs
-        if not user or not user.is_authenticated or self._is_admin_user(user):
-            return qs
-        return self._apply_member_scope(qs, user)
+        active = qs.filter(is_deleted=False)
+        if (
+            not self.enable_data_scope
+            or not user
+            or not user.is_authenticated
+            or self._is_admin_user(user)
+        ):
+            return active
+        return self._apply_member_scope(active, user)
 
     def perform_create(self, serializer):
         """创建时,自动填充ceator"""

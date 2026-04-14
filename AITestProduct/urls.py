@@ -19,6 +19,7 @@ urlpatterns = [
     path('api/defect/', include('defect.urls')),
     path('api/assistant/', include('assistant.urls')),
     path('api/ai/', include('assistant.ai_urls')),
+    path("api/server-logs/", include("server_logs.urls")),
 ]
 
 # 开发环境静态提供：用于显示上传到 MEDIA_ROOT 的图片

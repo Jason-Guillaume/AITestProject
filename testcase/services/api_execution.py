@@ -5,6 +5,7 @@ API 用例执行：合并用例与实时覆盖参数、发起 HTTP、落库 Exec
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -18,11 +19,14 @@ from testcase.models import (
     ApiTestCase,
     ApiTestLog,
     EnvironmentVariable,
+    EnvironmentVariableDecryptionError,
     ExecutionLog,
     TestCase,
     TestEnvironment,
 )
 from testcase.services.variable_runtime import VariableExtractor, VariableResolver
+
+logger = logging.getLogger(__name__)
 
 _ALLOWED_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
 _LOG_BODY_MAX = 200_000
@@ -192,8 +196,13 @@ def load_environment_runtime_variables(environment_id: Optional[int]) -> Dict[st
             continue
         try:
             value = row.get_decrypted_value() if getattr(row, "is_secret", False) else (row.value or "")
-        except Exception:
-            value = row.value or ""
+        except EnvironmentVariableDecryptionError:
+            logger.warning(
+                "环境变量解密失败，已跳过注入: env_id=%s key=%s",
+                getattr(row, "environment_id", None),
+                key,
+            )
+            continue
         out[key] = value
     return out
 

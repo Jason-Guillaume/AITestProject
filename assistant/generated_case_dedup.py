@@ -135,3 +135,40 @@ def deduplicate_generated_cases(
         if not drop:
             kept.append(c)
     return kept
+
+
+def string_similarity_candidates(
+    generated_cases: list[dict[str, Any]],
+    existing_cases: list[dict[str, Any]],
+    *,
+    top_k: int = 3,
+) -> list[list[dict[str, Any]]]:
+    """
+    返回每条 generated_case 对应的 TopK 候选（基于字符串相似度，来自 existing_cases）。
+    结构：[[{score, case_name, steps}, ...], ...]
+    """
+    if not generated_cases:
+        return []
+    top_k = max(0, int(top_k))
+    if top_k <= 0 or not existing_cases:
+        return [[] for _ in generated_cases]
+
+    out: list[list[dict[str, Any]]] = []
+    for g in generated_cases:
+        name = str(g.get("case_name") or "").strip()
+        steps = str(g.get("steps") or "").strip()
+        scored = []
+        for e in existing_cases:
+            kn = str(e.get("case_name") or "").strip()
+            ks = str(e.get("steps") or "").strip()
+            sim = pairwise_generated_case_similarity(name, steps, kn, ks)
+            scored.append((sim, kn, ks))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        out.append(
+            [
+                {"score": float(sim), "case_name": kn, "steps": ks}
+                for sim, kn, ks in scored[:top_k]
+                if sim > 0
+            ]
+        )
+    return out

@@ -280,9 +280,9 @@
         <el-menu
           ref="sideMenuRef"
           :default-active="activeMenu"
-          router
           class="side-menu side-menu--tech"
           :collapse="false"
+          @select="onSideMenuSelect"
         >
           <el-menu-item index="/dashboard">
             <el-icon><HomeFilled /></el-icon>
@@ -326,6 +326,10 @@
           <el-menu-item index="/performance/load-monitor">
             <el-icon><DataLine /></el-icon>
             <span>k6 压测看板</span>
+          </el-menu-item>
+          <el-menu-item index="/server-logs">
+            <el-icon><Monitor /></el-icon>
+            <span>服务器日志</span>
           </el-menu-item>
           <el-sub-menu index="defect">
             <template #title>
@@ -417,7 +421,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh, ArrowDown,
   HomeFilled, Document, EditPen, Calendar, List,
-  DataLine, Warning, Tools, MagicStick, Back
+  DataLine, Warning, Tools, MagicStick, Back, Monitor
 } from '@element-plus/icons-vue'
 import { TEST_CASE_TYPE_LABEL_ZH } from '@/constants/testCaseTypeLabels'
 import { changePasswordApi, getCurrentUserApi, getUserProfileApi, getSystemMessagesApi } from '@/api/user'
@@ -428,6 +432,13 @@ import { useAppContextStore } from '@/stores/appContextStore'
 const router = useRouter()
 const route = useRoute()
 const appContextStore = useAppContextStore()
+
+/** 不用 el-menu 的 router 模式：其内部依赖 globalProperties.$router，在部分环境下会取不到导致点击无跳转 */
+function onSideMenuSelect(index) {
+  if (typeof index === 'string' && index.startsWith('/')) {
+    router.push(index).catch(() => {})
+  }
+}
 
 const searchKw = ref('')
 const backendHealthMessage = ref('')
@@ -600,6 +611,7 @@ const BREADCRUMB_MAP = {
   '/defect/board': ['缺陷管理', '任务看板'],
   '/defect/release': ['缺陷管理', '发布计划'],
   '/ai-assistant': ['智能助手', ''],
+  '/server-logs': ['智能运维', '服务器日志'],
   '/system/message': ['系统管理', '消息设置'],
   '/system/messages': ['系统管理', '消息管理'],
   '/system/org': ['系统管理', '组织管理'],
@@ -872,7 +884,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 28px;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .brand-logo {
@@ -999,13 +1012,14 @@ onUnmounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
+  min-width: 320px;
 }
 
 .nav-context-selectors {
   display: flex;
   align-items: center;
   gap: 12px;
-  max-width: min(720px, 44vw);
+  max-width: min(760px, 52vw);
   width: 100%;
 }
 
@@ -1446,11 +1460,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 20px;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .top-search {
-  width: 200px;
+  width: clamp(120px, 14vw, 200px);
 }
 
 .top-search--cyber :deep(.el-input__wrapper) {
@@ -1788,6 +1803,8 @@ onUnmounted(() => {
 
 /* ===== 左侧菜单：与主内容区同系渐变，无突兀色块 ===== */
 .side-nav--tech {
+  position: relative;
+  z-index: 4;
   width: 188px;
   flex-shrink: 0;
   background: linear-gradient(

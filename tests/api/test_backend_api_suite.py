@@ -49,7 +49,7 @@ AUTH_ENDPOINTS = [
     ("GET", "/testcase/cases/"),
     ("GET", "/testcase/steps/"),
     ("GET", "/testcase/designs/"),
-    ("GET", "/testcase/approachs/"),
+    ("GET", "/testcase/approaches/"),
     ("GET", "/execution/plans/"),
     ("GET", "/execution/reports/"),
     ("GET", "/execution/tasks/"),
@@ -198,7 +198,7 @@ def test_testcase_module_case_step_design_approach_happy_paths(authed_client, se
         "/testcase/cases/",
         "/testcase/steps/",
         "/testcase/designs/",
-        "/testcase/approachs/",
+        "/testcase/approaches/",
     ]:
         resp = authed_client.get(_url(authed_client, path), timeout=20)
         _assert_status(resp, (200,))
@@ -211,7 +211,7 @@ def test_testcase_module_case_step_design_approach_happy_paths(authed_client, se
     _assert_status(step_detail, (200,))
     design_detail = authed_client.get(_url(authed_client, f"/testcase/designs/{design_id}/"), timeout=20)
     _assert_status(design_detail, (200,))
-    approach_detail = authed_client.get(_url(authed_client, f"/testcase/approachs/{approach_id}/"), timeout=20)
+    approach_detail = authed_client.get(_url(authed_client, f"/testcase/approaches/{approach_id}/"), timeout=20)
     _assert_status(approach_detail, (200,))
 
 
@@ -265,14 +265,14 @@ def test_testcase_batch_actions_and_boundary(authed_client, seed_objects):
 def test_approach_custom_actions(authed_client, seed_objects):
     approach_id = seed_objects["approach_id"]
     list_img = authed_client.get(
-        _url(authed_client, f"/testcase/approachs/{approach_id}/images/"),
+        _url(authed_client, f"/testcase/approaches/{approach_id}/images/"),
         timeout=20,
     )
     _assert_status(list_img, (200,))
 
     # 非法上传：无文件
     upload_bad = authed_client.post(
-        _url(authed_client, f"/testcase/approachs/{approach_id}/images/upload/"),
+        _url(authed_client, f"/testcase/approaches/{approach_id}/images/upload/"),
         json={},
         timeout=20,
     )

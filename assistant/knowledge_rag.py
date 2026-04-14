@@ -61,11 +61,11 @@ def _build_embedding_function():
                 for t in texts:
                     raw = (t or "").encode("utf-8", errors="ignore")
                     # 128 维离线向量：sha256 循环扩展
-                    vals = []
+                    vals: list[float] = []
                     seed = raw or b"empty"
                     while len(vals) < 128:
                         seed = hashlib.sha256(seed).digest()
-                        vals.extend([(b / 255.0) * 2.0 - 1.0 for b in seed])
+                        vals.extend(((b / 255.0) * 2.0 - 1.0) for b in seed)
                     out.append(vals[:128])
                 return out
 
@@ -76,9 +76,15 @@ def _build_embedding_function():
                 """
                 # 处理 ChromaDB 可能传入单个字符串或字符串列表的情况
                 if isinstance(input, str):
-                    return self([input])[0]
+                    vecs = self([input])
+                    if not vecs or not isinstance(vecs, list) or vecs[0] is None:
+                        return [0.0] * 128
+                    return vecs[0]
                 elif isinstance(input, list):
-                    return self(input)
+                    vecs = self(input)
+                    if vecs is None:
+                        return []
+                    return vecs
                 else:
                     return [0.0] * 128
 

@@ -19,55 +19,62 @@ _SENSITIVE_BODY_KEYS = {"password", "token", "secret", "access_token", "refresh_
 class APIExecutor:
     """API 执行器：负责请求发送、基础断言与耗时统计。"""
 
-    _session = requests.Session()
+    def __init__(self):
+        self._session = requests.Session()
 
     def execute(self, task: ExecutionTask) -> Dict[str, Any]:
-        dimension = {
-            "execution_task_id": task.id,
-            "task_name": task.task_name,
-        }
-        checker = HealthChecker()
-        summary = checker.check_before_task(api_url=task.url, dimension=dimension)
-        if not summary.get("ok"):
-            checker.send_alert_email(task_name=task.task_name, summary=summary)
-            raise RuntimeError(f"ENV_UNHEALTHY: {summary.get('unhealthy')}")
+        try:
+            dimension = {
+                "execution_task_id": task.id,
+                "task_name": task.task_name,
+            }
+            checker = HealthChecker()
+            summary = checker.check_before_task(api_url=task.url, dimension=dimension)
+            if not summary.get("ok"):
+                checker.send_alert_email(task_name=task.task_name, summary=summary)
+                raise RuntimeError(f"ENV_UNHEALTHY: {summary.get('unhealthy')}")
 
-        method = (task.method or "GET").strip().upper()
-        if method not in _ALLOWED_METHODS:
-            raise ValueError(f"不支持的 HTTP 方法: {method}")
-        if not task.url:
-            raise ValueError("请求 URL 不能为空")
-        parsed = urlparse(task.url)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise ValueError("请求 URL 必须是合法的 http/https 地址")
+            method = (task.method or "GET").strip().upper()
+            if method not in _ALLOWED_METHODS:
+                raise ValueError(f"不支持的 HTTP 方法: {method}")
+            if not task.url:
+                raise ValueError("请求 URL 不能为空")
+            parsed = urlparse(task.url)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise ValueError("请求 URL 必须是合法的 http/https 地址")
 
-        request_payload = self._build_request_payload(task, method)
-        start = time.perf_counter()
-        response = self._session.request(**request_payload)
-        duration_ms = int((time.perf_counter() - start) * 1000)
+            request_payload = self._build_request_payload(task, method)
+            start = time.perf_counter()
+            response = self._session.request(**request_payload)
+            duration_ms = int((time.perf_counter() - start) * 1000)
 
-        assertion_result = self._build_assertion_result(task, response)
-        passed = all(item["passed"] for item in assertion_result.values())
-        sanitized_req_headers = self._sanitize_headers(task.headers or {})
-        sanitized_body = self._sanitize_body(task.body)
+            assertion_result = self._build_assertion_result(task, response)
+            passed = all(item["passed"] for item in assertion_result.values())
+            sanitized_req_headers = self._sanitize_headers(task.headers or {})
+            sanitized_body = self._sanitize_body(task.body)
 
-        return {
-            "passed": passed,
-            "duration_ms": duration_ms,
-            "request": {
-                "method": method,
-                "url": task.url,
-                "headers": sanitized_req_headers,
-                "body": sanitized_body,
-                "timeout_seconds": task.timeout_seconds,
-            },
-            "response": {
-                "status_code": response.status_code,
-                "headers": self._sanitize_headers(dict(response.headers)),
-                "body_text": self._truncate_text(response.text or ""),
-            },
-            "assertions": assertion_result,
-        }
+            return {
+                "passed": passed,
+                "duration_ms": duration_ms,
+                "request": {
+                    "method": method,
+                    "url": task.url,
+                    "headers": sanitized_req_headers,
+                    "body": sanitized_body,
+                    "timeout_seconds": task.timeout_seconds,
+                },
+                "response": {
+                    "status_code": response.status_code,
+                    "headers": self._sanitize_headers(dict(response.headers)),
+                    "body_text": self._truncate_text(response.text or ""),
+                },
+                "assertions": assertion_result,
+            }
+        finally:
+            try:
+                self._session.close()
+            except Exception:
+                pass
 
     def _build_request_payload(self, task: ExecutionTask, method: str) -> Dict[str, Any]:
         payload: Dict[str, Any] = {

@@ -4,6 +4,8 @@
 
 from django.db.models import Q
 
+from django.utils import timezone
+
 from user.models import SystemMessage, User, UserChangeRequest
 
 
@@ -63,7 +65,7 @@ def mark_messages_for_request(change_request, *, is_read=True):
     )
 
 
-def approve_change_request(cr):
+def approve_change_request(cr, *, approver=None):
     """
     通过申请：写回 User，更新状态，标记关联站内信已读。
     Raises ValueError：[reason] 业务失败（便于视图返回 400）。
@@ -88,15 +90,21 @@ def approve_change_request(cr):
         raise ValueError("未知申请类型")
 
     cr.status = UserChangeRequest.Status.APPROVED
-    cr.save(update_fields=["status", "updated_at"])
+    if approver is not None:
+        cr.approver = approver
+    cr.approved_at = timezone.now()
+    cr.save(update_fields=["status", "approver", "approved_at", "updated_at"])
     mark_messages_for_request(cr, is_read=True)
 
 
-def reject_change_request(cr):
+def reject_change_request(cr, *, approver=None):
     """拒绝申请：更新状态并标记关联站内信已读。"""
     if cr.status != UserChangeRequest.Status.PENDING:
         raise ValueError("该申请已处理")
 
     cr.status = UserChangeRequest.Status.REJECTED
-    cr.save(update_fields=["status", "updated_at"])
+    if approver is not None:
+        cr.approver = approver
+    cr.approved_at = timezone.now()
+    cr.save(update_fields=["status", "approver", "approved_at", "updated_at"])
     mark_messages_for_request(cr, is_read=True)

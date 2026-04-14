@@ -91,6 +91,24 @@
         <el-form-item label="编制人数" prop="headcount">
           <el-input-number v-model="form.headcount" :min="0" :max="99999" controls-position="right" class="w-full-num" />
         </el-form-item>
+        <el-form-item label="组织成员" prop="member_ids">
+          <el-select
+            v-model="form.member_ids"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="选择可共享本组织资源的用户（如服务器日志主机）"
+            class="w-full"
+          >
+            <el-option
+              v-for="u in userOptions"
+              :key="u.id"
+              :label="u.real_name || u.username"
+              :value="u.id"
+            />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -105,7 +123,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { Delete, Edit } from "@element-plus/icons-vue";
 import TableActionGroup from "@/components/common/TableActionGroup.vue";
-import { createOrgApi, deleteOrgApi, getOrgsApi, updateOrgApi } from "@/api/system";
+import { createOrgApi, deleteOrgApi, getOrgsApi, getUsersApi, updateOrgApi } from "@/api/system";
 
 const OVERLAY_KEY = "sys_org_tree_overlay_v1";
 
@@ -118,12 +136,15 @@ const dialogVisible = ref(false);
 const editing = ref(null);
 const saving = ref(false);
 const formRef = ref(null);
+const userOptions = ref([]);
+
 const form = reactive({
   parent_id: null,
   org_name: "",
   description: "",
   leader_name: "",
   headcount: 0,
+  member_ids: [],
 });
 
 const orgTableActions = [
@@ -175,11 +196,13 @@ function formatDate(dt) {
 
 function mergeRow(org) {
   const ex = getOverlayFor(org.id);
+  const members = Array.isArray(org.members) ? org.members : [];
   return {
     ...org,
     parent_id: ex.parent_id != null ? ex.parent_id : null,
     leader_name: ex.leader_name ?? "—",
     headcount: typeof ex.headcount === "number" ? ex.headcount : 0,
+    members,
   };
 }
 
@@ -224,27 +247,42 @@ function stripSelfSubtree(nodes, exId) {
 
 const parentTreeOptions = computed(() => stripSelfSubtree(treeData.value, editing.value?.id));
 
+async function loadUserOptions() {
+  try {
+    const { data } = await getUsersApi({ page: 1, page_size: 500 });
+    const list = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+    userOptions.value = list;
+  } catch {
+    userOptions.value = [];
+  }
+}
+
 function openCreateDialog() {
   editing.value = null;
+  loadUserOptions();
   Object.assign(form, {
     parent_id: null,
     org_name: "",
     description: "",
     leader_name: "",
     headcount: 0,
+    member_ids: [],
   });
   dialogVisible.value = true;
 }
 
 function openEditDialog(row) {
   editing.value = row;
+  loadUserOptions();
   const ex = getOverlayFor(row.id);
+  const m = mergeRow(row);
   Object.assign(form, {
     parent_id: ex.parent_id ?? row.parent_id ?? null,
     org_name: row.org_name || "",
     description: row.description || "",
     leader_name: ex.leader_name === "—" ? "" : ex.leader_name || "",
     headcount: typeof ex.headcount === "number" ? ex.headcount : row.headcount ?? 0,
+    member_ids: Array.isArray(m.members) ? [...m.members] : [],
   });
   dialogVisible.value = true;
 }
@@ -317,7 +355,11 @@ async function handleSubmit() {
   await formRef.value.validate(async (valid) => {
     if (!valid) return;
     saving.value = true;
-    const apiPayload = { org_name: form.org_name, description: form.description || "" };
+    const apiPayload = {
+      org_name: form.org_name,
+      description: form.description || "",
+      members: Array.isArray(form.member_ids) ? form.member_ids : [],
+    };
     const meta = {
       parent_id: form.parent_id ?? null,
       leader_name: (form.leader_name || "").trim() || "—",

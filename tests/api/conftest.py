@@ -203,7 +203,7 @@ def seed_objects(authed_client, user_context):
 
     approach_payload = {"scheme_name": f"approach-{nonce}", "version": "1.0", "test_category": 2}
     approach_resp = authed_client.post(
-        f"{authed_client.base_url}/testcase/approachs/",
+        f"{authed_client.base_url}/testcase/approaches/",
         json=approach_payload,
         timeout=20,
     )

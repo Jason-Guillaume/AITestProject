@@ -11,6 +11,10 @@ export const verifyAiConnectionApi = (data) =>
 export const testAiConnectionApi = (data) =>
   request.post("/ai/test-connection/", data);
 
+/** POST /api/ai/phase1-preview/：仅 Phase1 预览（用于生成前确认 AI 理解） */
+export const previewAiPhase1Api = (data) =>
+  request.post("/ai/phase1-preview/", data);
+
 /**
  * POST /api/ai/generate-cases/：按需求描述生成测试用例（JSON，非流式）。
  * 成功时 body 含 success、cases、message；若 RAG 判定已有用例全覆盖则为 all_covered: true、cases: []。
@@ -155,6 +159,12 @@ export const listKnowledgeDocumentsApi = (params) =>
 
 export const getKnowledgeDocumentStatusApi = (id) =>
   request.get(`/assistant/knowledge/documents/${id}/status/`);
+
+export const previewKnowledgeDocumentChunksApi = (id, params) =>
+  request.get(`/assistant/knowledge/documents/${id}/chunks-preview/`, { params });
+
+export const previewKnowledgeArticleChunksApi = (id, params) =>
+  request.get(`/assistant/knowledge/articles/${id}/chunks-preview/`, { params });
 
 export const probeKnowledgeDocumentDeleteApi = (id = 0) =>
   request({

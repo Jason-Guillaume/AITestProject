@@ -95,3 +95,56 @@ def semantic_deduplicate_cases(
         if max_sim < th:
             kept.append(item)
     return kept
+
+
+def semantic_similarity_candidates(
+    generated_cases: list[dict[str, Any]],
+    existing_cases: list[dict[str, Any]],
+    *,
+    api_key: str,
+    base_url: str,
+    top_k: int = 3,
+) -> list[list[dict[str, Any]]]:
+    """
+    返回每条 generated_case 对应的 TopK 相似候选（来自 existing_cases）。
+    结构：[[{score, case_name, steps}, ...], ...]
+    若向量服务不可用则返回空候选列表（不影响主流程）。
+    """
+    if not generated_cases:
+        return []
+    top_k = max(0, int(top_k))
+    if top_k <= 0 or not existing_cases:
+        return [[] for _ in generated_cases]
+
+    generated_texts = [_build_case_semantic_text(x) for x in generated_cases]
+    existing_texts = [_build_case_semantic_text(x) for x in existing_cases]
+    generated_vectors = embed_batch(generated_texts, api_key=api_key, base_url=base_url)
+    existing_vectors = embed_batch(existing_texts, api_key=api_key, base_url=base_url)
+    if not existing_vectors or all(v is None for v in existing_vectors):
+        return [[] for _ in generated_cases]
+
+    results: list[list[dict[str, Any]]] = []
+    for idx, g in enumerate(generated_cases):
+        gv = generated_vectors[idx] if idx < len(generated_vectors) else None
+        if not gv:
+            results.append([])
+            continue
+        scored = []
+        for j, ev in enumerate(existing_vectors):
+            if not ev:
+                continue
+            sim = cosine_similarity(gv, ev)
+            scored.append((sim, j))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        cand = []
+        for sim, j in scored[:top_k]:
+            e = existing_cases[j] if j < len(existing_cases) else {}
+            cand.append(
+                {
+                    "score": float(sim),
+                    "case_name": str(e.get("case_name") or ""),
+                    "steps": str(e.get("steps") or ""),
+                }
+            )
+        results.append(cand)
+    return results

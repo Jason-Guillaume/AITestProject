@@ -41,7 +41,6 @@ def _build_curl_from_request(
     # 添加请求体
     if body:
         if isinstance(body, (dict, list)):
-            import json
             body_json = json.dumps(body, ensure_ascii=False)
             escaped_body = body_json.replace('"', '\\"')
             parts.append(f'-d "{escaped_body}"')
@@ -445,8 +444,7 @@ def enrich_normalized_case_with_api_fields(
     except (TypeError, ValueError):
         exp_status_int = _first_status_code_from_assertions(rules)
 
-    if exp_status_int is None:
-        exp_status_int = _first_status_code_from_assertions(rules)
+    # 上面 except 分支已做一次兜底，无需重复调用
     if exp_status_int is None and logic_text:
         exp_status_int = _status_from_assert_logic(logic_text)
 
@@ -566,8 +564,10 @@ def backfill_api_request_fields_in_batch(cases: List[Dict[str, Any]]) -> None:
         # 补全请求字段后，同步重新生成 curl
         c["api_method"] = c.get("api_method", a_method)
         c["api_url"] = c.get("api_url", a_url)
-        c["api_headers"] = c.get("api_headers", a_headers)
-        c["api_body"] = c.get("api_body", a_body)
+        h = c.get("api_headers", a_headers)
+        c["api_headers"] = h if isinstance(h, dict) else (a_headers if isinstance(a_headers, dict) else {})
+        b = c.get("api_body", a_body)
+        c["api_body"] = b if isinstance(b, (dict, list)) else (a_body if isinstance(a_body, (dict, list)) else {})
         c["api_source_curl"] = _build_curl_from_request(
             c["api_method"], c["api_url"], c["api_headers"], c["api_body"]
         )

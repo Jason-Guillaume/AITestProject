@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 
 from django.conf import settings
+from django.db.models import OuterRef, Subquery
 from django.http import JsonResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -65,7 +66,24 @@ from assistant.api_case_generation import (
 from assistant.generated_case_dedup import deduplicate_generated_cases
 from assistant.rag_pipeline import build_rag_system_prompt, is_all_covered_output
 from assistant.knowledge_rag import KnowledgeSearcher
+from assistant.ai_errors import (
+    resolve_ai_generate_cases_outer_openai_error,
+    resolve_ai_test_connection_openai_error,
+    resolve_ai_verify_connection_openai_error,
+)
+from assistant.ai_prompts import (
+    AI_VERIFY_CONNECTION_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    _AI_GENERATE_SYSTEM_TEMPLATE,
+    _PHASE1_INTENT_SYSTEM_PROMPT,
+    _PHASE1_REPAIR_SYSTEM_PROMPT,
+    _PHASE2_MULTI_CASE_MANDATE,
+)
 from assistant.models import KnowledgeArticle, KnowledgeDocument
+from assistant.permissions import (
+    IsAdminOrDocumentCreator,
+    user_is_knowledge_document_privileged,
+)
 from assistant.serialize import KnowledgeArticleSerializer, KnowledgeDocumentSerializer
 from assistant.error_parser import simplify_vector_error
 from assistant.services.document_parser import (
@@ -75,6 +93,14 @@ from assistant.services.document_parser import (
 from testcase.models import TestModule
 
 logger = logging.getLogger(__name__)
+
+
+def _knowledge_document_forbidden_if_no_object_permission(request, view, doc, message: str):
+    """403 with project JSON shape when any ``permission_classes`` entry denies object access."""
+    for p in view.get_permissions():
+        if not p.has_object_permission(request, view, doc):
+            return Response({"success": False, "message": message}, status=403)
+    return None
 
 
 def _sanitize_doc_error_fields(payload):
@@ -523,32 +549,22 @@ class KnowledgeDocumentUploadAPIView(APIView):
             updater=request.user,
         )
 
-        # 优先 Celery 异步；若当前环境未安装/未启动 Celery，则降级为后台线程。
-        try:
-            from assistant.tasks import process_knowledge_document_task
+        from assistant.tasks import process_knowledge_document_task
+        from assistant.services.rag_service import process_and_embed_document
 
-            process_knowledge_document_task.delay(int(doc.id))
-            doc.status = KnowledgeDocument.STATUS_PROCESSING
-            doc.save(update_fields=["status", "update_time"])
-            enqueue_msg = "文档已上传，已加入异步处理队列"
-        except Exception:
-            import threading
-            from assistant.services.rag_service import process_and_embed_document
-
-            def _bg_process(document_id: int):
-                try:
-                    process_and_embed_document(document_id)
-                except Exception:
-                    logger.exception("知识库文档向量化失败: doc_id=%s", document_id)
-
-            threading.Thread(
-                target=_bg_process,
-                args=(int(doc.id),),
-                daemon=True,
-            ).start()
-            doc.status = KnowledgeDocument.STATUS_PROCESSING
-            doc.save(update_fields=["status", "update_time"])
-            enqueue_msg = "文档已上传，正在后台处理（线程降级模式）"
+        mode = _enqueue_celery_or_thread(
+            celery_delay=process_knowledge_document_task.delay,
+            thread_target=process_and_embed_document,
+            args=(int(doc.id),),
+            error_log_msg=f"知识库文档向量化失败: doc_id={doc.id}",
+        )
+        doc.status = KnowledgeDocument.STATUS_PROCESSING
+        doc.save(update_fields=["status", "update_time"])
+        enqueue_msg = (
+            "文档已上传，已加入异步处理队列"
+            if mode == "celery"
+            else "文档已上传，正在后台处理（线程降级模式）"
+        )
         return Response(
             {
                 "success": True,
@@ -640,26 +656,14 @@ class KnowledgeDocumentIngestAPIView(APIView):
         # 4) 异步触发 RAG 处理：优先 Celery；不可用时降级线程执行。
         from assistant.tasks import process_document_rag
 
-        try:
-            process_document_rag.delay(int(document.id))
-            document.status = KnowledgeDocument.STATUS_PROCESSING
-            document.save(update_fields=["status", "update_time"])
-        except Exception:
-            import threading
-
-            def _bg_rag_task(document_id: int):
-                try:
-                    process_document_rag(int(document_id))
-                except Exception:
-                    logger.exception("知识文档 RAG 处理失败: doc_id=%s", document_id)
-
-            threading.Thread(
-                target=_bg_rag_task,
-                args=(int(document.id),),
-                daemon=True,
-            ).start()
-            document.status = KnowledgeDocument.STATUS_PROCESSING
-            document.save(update_fields=["status", "update_time"])
+        mode = _enqueue_celery_or_thread(
+            celery_delay=process_document_rag.delay,
+            thread_target=process_document_rag,
+            args=(int(document.id),),
+            error_log_msg=f"知识文档 RAG 处理失败: doc_id={document.id}",
+        )
+        document.status = KnowledgeDocument.STATUS_PROCESSING
+        document.save(update_fields=["status", "update_time"])
 
         return Response(
             {
@@ -672,24 +676,18 @@ class KnowledgeDocumentIngestAPIView(APIView):
 
 
 class KnowledgeDocumentStatusAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrDocumentCreator]
 
     def get(self, request, doc_id: int):
         _mark_stuck_processing_docs_failed()
         doc = KnowledgeDocument.objects.filter(pk=doc_id, is_deleted=False).first()
         if doc is None:
             return Response({"success": False, "message": "文档不存在"}, status=404)
-        is_admin = bool(
-            request.user
-            and request.user.is_authenticated
-            and (
-                request.user.is_superuser
-                or request.user.is_staff
-                or bool(getattr(request.user, "is_system_admin", False))
-            )
+        denied = _knowledge_document_forbidden_if_no_object_permission(
+            request, self, doc, "无权限访问该文档"
         )
-        if not is_admin and int(getattr(doc, "creator_id", 0) or 0) != int(request.user.id):
-            return Response({"success": False, "message": "无权限访问该文档"}, status=403)
+        if denied is not None:
+            return denied
         if doc.status == KnowledgeDocument.STATUS_COMPLETED and not (
             (doc.semantic_summary or "").strip() or (doc.semantic_chunks or [])
         ):
@@ -706,24 +704,114 @@ class KnowledgeDocumentStatusAPIView(APIView):
         )
 
 
-class KnowledgeDocumentRetryAPIView(APIView):
+class KnowledgeDocumentChunksPreviewAPIView(APIView):
+    """预览文档切片（用于监控切片质量）。"""
+
+    permission_classes = [IsAuthenticated, IsAdminOrDocumentCreator]
+
+    def get(self, request, doc_id: int):
+        doc = KnowledgeDocument.objects.filter(pk=doc_id, is_deleted=False).first()
+        if doc is None:
+            return Response({"success": False, "message": "文档不存在"}, status=404)
+        denied = _knowledge_document_forbidden_if_no_object_permission(
+            request, self, doc, "无权限访问该文档"
+        )
+        if denied is not None:
+            return denied
+
+        limit = request.query_params.get("limit", 20)
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            limit = 20
+        limit = min(max(limit, 1), 200)
+
+        chunks = doc.semantic_chunks if isinstance(doc.semantic_chunks, list) else []
+        summary = (doc.semantic_summary or "").strip()
+        if not chunks:
+            fb_summary, fb_chunks = _build_fallback_semantic_payload(doc)
+            summary = summary or fb_summary
+            chunks = fb_chunks if isinstance(fb_chunks, list) else []
+
+        preview = []
+        for idx, c in enumerate(chunks[:limit]):
+            if isinstance(c, dict):
+                text = str(c.get("text") or "").strip()
+            else:
+                text = str(c or "").strip()
+            preview.append(
+                {
+                    "index": idx,
+                    "text": text,
+                    "chars": len(text),
+                }
+            )
+        return Response(
+            {
+                "success": True,
+                "data": {
+                    "doc_id": doc.id,
+                    "title": doc.title,
+                    "status": doc.status,
+                    "summary": summary,
+                    "total_chunks": len(chunks),
+                    "preview_chunks": preview,
+                },
+            }
+        )
+
+
+class KnowledgeArticleChunksPreviewAPIView(APIView):
+    """预览知识文章切片（用于监控切片质量）。"""
+
     permission_classes = [IsAuthenticated]
+
+    def get(self, request, article_id: int):
+        article = KnowledgeArticle.objects.filter(pk=article_id, is_deleted=False).first()
+        if article is None:
+            return Response({"success": False, "message": "文章不存在"}, status=404)
+
+        limit = request.query_params.get("limit", 20)
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            limit = 20
+        limit = min(max(limit, 1), 200)
+
+        from assistant.knowledge_rag import _build_article_text, _chunk_text
+
+        text = _build_article_text(article)
+        chunks = _chunk_text(text)
+        preview = [
+            {"index": i, "text": (c or ""), "chars": len(c or "")}
+            for i, c in enumerate(chunks[:limit])
+        ]
+        return Response(
+            {
+                "success": True,
+                "data": {
+                    "article_id": article.id,
+                    "title": article.title,
+                    "category": article.category,
+                    "total_chunks": len(chunks),
+                    "preview_chunks": preview,
+                },
+            }
+        )
+
+
+class KnowledgeDocumentRetryAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrDocumentCreator]
 
     def post(self, request, doc_id: int):
         doc = KnowledgeDocument.objects.filter(pk=doc_id, is_deleted=False).first()
         if doc is None:
             return Response({"success": False, "message": "文档不存在"}, status=404)
-        is_admin = bool(
-            request.user
-            and request.user.is_authenticated
-            and (
-                request.user.is_superuser
-                or request.user.is_staff
-                or bool(getattr(request.user, "is_system_admin", False))
-            )
+        denied = _knowledge_document_forbidden_if_no_object_permission(
+            request, self, doc, "无权限重试该任务"
         )
-        if not is_admin and int(getattr(doc, "creator_id", 0) or 0) != int(request.user.id):
-            return Response({"success": False, "message": "无权限重试该任务"}, status=403)
+        if denied is not None:
+            return denied
         # 允许待处理/失败/已完成状态重提任务；仅“处理中”禁止重复触发。
         if doc.status == KnowledgeDocument.STATUS_PROCESSING:
             return Response({"success": False, "message": "当前任务仍在处理中，无需重试"}, status=400)
@@ -772,23 +860,17 @@ class KnowledgeDocumentRetryAPIView(APIView):
 
 
 class KnowledgeDocumentDeleteAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrDocumentCreator]
 
     def delete(self, request, doc_id: int):
         doc = KnowledgeDocument.objects.filter(pk=doc_id, is_deleted=False).first()
         if doc is None:
             return Response({"success": False, "message": "文档不存在"}, status=404)
-        is_admin = bool(
-            request.user
-            and request.user.is_authenticated
-            and (
-                request.user.is_superuser
-                or request.user.is_staff
-                or bool(getattr(request.user, "is_system_admin", False))
-            )
+        denied = _knowledge_document_forbidden_if_no_object_permission(
+            request, self, doc, "无权限删除该文档"
         )
-        if not is_admin and int(getattr(doc, "creator_id", 0) or 0) != int(request.user.id):
-            return Response({"success": False, "message": "无权限删除该文档"}, status=403)
+        if denied is not None:
+            return denied
 
         doc.is_deleted = True
         doc.updater = request.user
@@ -808,16 +890,7 @@ class KnowledgeDocumentListAPIView(APIView):
             page_size = 20
         page_size = max(1, min(page_size, 100))
         qs = KnowledgeDocument.objects.filter(is_deleted=False)
-        is_admin = bool(
-            request.user
-            and request.user.is_authenticated
-            and (
-                request.user.is_superuser
-                or request.user.is_staff
-                or bool(getattr(request.user, "is_system_admin", False))
-            )
-        )
-        if not is_admin:
+        if not user_is_knowledge_document_privileged(request.user):
             qs = qs.filter(creator=request.user)
         rows = qs.order_by("-created_at")[:page_size]
         return Response(
@@ -836,16 +909,7 @@ class KnowledgeRuntimeStatusAPIView(APIView):
         celery_installed = importlib.util.find_spec("celery") is not None
         queue_mode = "celery" if celery_installed else "thread_fallback"
         base_qs = KnowledgeDocument.objects.filter(is_deleted=False)
-        is_admin = bool(
-            request.user
-            and request.user.is_authenticated
-            and (
-                request.user.is_superuser
-                or request.user.is_staff
-                or bool(getattr(request.user, "is_system_admin", False))
-            )
-        )
-        if not is_admin:
+        if not user_is_knowledge_document_privileged(request.user):
             base_qs = base_qs.filter(creator=request.user)
         counters = {
             "pending": base_qs.filter(status=KnowledgeDocument.STATUS_PENDING).count(),
@@ -894,11 +958,6 @@ IFLYTEK_MAAS_CHAT_COMPLETIONS = (
     "https://maas-coding-api.cn-huabei-1.xf-yun.com/v2/chat/completions"
 )
 IFLYTEK_MAAS_MODEL_TYPE = "iflytek-spark-maas-coding"
-
-SYSTEM_PROMPT = (
-    "You are a software testing assistant. Upon receiving this connection test, "
-    "simply reply: 'Connection successful, Zhipu AI is ready.'"
-)
 
 
 def _resolve_chat_completions_url(base_url: str, model: str) -> str:
@@ -996,121 +1055,60 @@ class LlmTestConnectionAPIView(APIView):
                 status=200,
             )
 
-        url = _resolve_chat_completions_url(base_url, model)
-        _debug_log_openai_target("llm_test_connection_raw_http", model, url)
-        if not url:
+        # 与 AiTestConnectionAPIView 统一：使用 OpenAI SDK 调用兼容端点
+        if not OPENAI_SDK_AVAILABLE:
             return Response(
-                {
-                    "code": 400,
-                    "msg": "当前模型需填写自定义 API 地址（Base URL）",
-                    "data": None,
-                },
+                {"code": 400, "msg": _openai_missing_response_json(), "data": None},
                 status=200,
             )
 
-        body = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": "Connection test. Reply as instructed."},
-            ],
-            "max_tokens": 80,
-            "temperature": 0.3,
-        }
-        body_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
-
-        req = urllib.request.Request(
-            url,
-            data=body_bytes,
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-                "Accept": "application/json",
-            },
-        )
-        ctx = ssl.create_default_context()
+        api_base_url = _normalize_openai_sdk_base_url(base_url, model).rstrip("/")
+        if not api_base_url:
+            return Response(
+                {"code": 400, "msg": "当前模型需填写自定义 API 地址（Base URL）", "data": None},
+                status=200,
+            )
 
         try:
-            with urllib.request.urlopen(req, timeout=20, context=ctx) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
-                parsed = json.loads(raw)
-        except socket.timeout:
-            return Response(
-                {
-                    "code": 400,
-                    "msg": "连接超时，请检查网络、代理或稍后重试。",
-                    "data": None,
-                },
-                status=200,
+            _debug_log_openai_target("llm_test_connection_sdk", model, api_base_url)
+            client = OpenAI(api_key=api_key, base_url=api_base_url, timeout=20.0)
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": "Connection test. Reply as instructed."},
+                ],
+                max_tokens=80,
+                temperature=0.3,
             )
-        except urllib.error.HTTPError as e:
-            err_text = e.read().decode("utf-8", errors="replace")
-            try:
-                err_json = json.loads(err_text)
-                detail = err_json.get("error") or err_json.get("message") or err_text
-                if isinstance(detail, dict):
-                    detail = detail.get("message") or str(detail)
-            except json.JSONDecodeError:
-                detail = err_text[:500] or e.reason
-            if e.code in (401, 403):
-                return Response(
-                    {
-                        "code": 400,
-                        "msg": f"鉴权失败（{e.code}）：请检查 API Key 是否有效。{detail}",
-                        "data": None,
-                    },
-                    status=200,
-                )
-            return Response(
-                {
-                    "code": 400,
-                    "msg": f"上游返回错误 {e.code}: {detail}",
-                    "data": None,
-                },
-                status=200,
-            )
-        except urllib.error.URLError as e:
-            reason = getattr(e, "reason", str(e))
-            if isinstance(reason, TimeoutError) or "timed out" in str(e).lower():
-                return Response(
-                    {
-                        "code": 400,
-                        "msg": "连接超时，请检查网络或稍后重试。",
-                        "data": None,
-                    },
-                    status=200,
-                )
-            return Response(
-                {"code": 400, "msg": f"网络错误: {reason}", "data": None},
-                status=200,
-            )
-        except json.JSONDecodeError:
-            return Response(
-                {"code": 400, "msg": "上游返回非 JSON，请确认 API 地址是否为 OpenAI 兼容的 Chat Completions。", "data": None},
-                status=200,
-            )
+            choice = completion.choices[0].message
+            reply = (getattr(choice, "content", None) or "").strip()
         except Exception as e:
+            def _err_body(msg: str, status_code: int = 400):
+                return Response({"code": 400, "msg": msg, "data": None}, status=200)
+
+            handled = resolve_ai_test_connection_openai_error(
+                e,
+                request=request,
+                model=model,
+                api_base_url=api_base_url,
+                err_body=_err_body,
+            )
+            if handled is not None:
+                return handled
             return Response(
                 {"code": 400, "msg": f"请求异常: {str(e)}", "data": None},
                 status=200,
             )
 
-        reply = _extract_reply(parsed)
-        if not reply and "error" in parsed:
-            err = parsed["error"]
-            msg = err if isinstance(err, str) else err.get("message", str(err))
+        if not reply:
             return Response(
-                {"code": 400, "msg": f"模型接口报错: {msg}", "data": None},
+                {"code": 400, "msg": "模型未返回有效内容，请检查 model 名称与账户权限。", "data": None},
                 status=200,
             )
 
         return Response(
-            {
-                "code": 200,
-                "msg": "连接成功",
-                "data": {"reply": reply, "model": model},
-            },
+            {"code": 200, "msg": "连接成功", "data": {"reply": reply, "model": model}},
             status=200,
         )
 
@@ -1174,53 +1172,16 @@ class AiTestConnectionAPIView(APIView):
             )
             choice = completion.choices[0].message
             reply = (getattr(choice, "content", None) or "").strip()
-        except AuthenticationError as e:
-            logger.exception(
-                "AI test connection auth failed. user_id=%s model=%s base_url=%s",
-                getattr(request.user, "id", None),
-                model,
-                api_base_url,
-            )
-            return err_body(f"鉴权失败，请检查 API Key：{e}")
-        except APITimeoutError:
-            logger.exception(
-                "AI test connection timeout. user_id=%s model=%s base_url=%s",
-                getattr(request.user, "id", None),
-                model,
-                api_base_url,
-            )
-            return err_body("连接上游超时，请检查网络或代理后重试。", status_code=504)
-        except APIConnectionError as e:
-            logger.exception(
-                "AI test connection upstream unreachable. user_id=%s model=%s base_url=%s",
-                getattr(request.user, "id", None),
-                model,
-                api_base_url,
-            )
-            return err_body(f"无法连接模型服务：{e}", status_code=502)
-        except APIError as e:
-            logger.exception(
-                "AI test connection API error. user_id=%s model=%s base_url=%s",
-                getattr(request.user, "id", None),
-                model,
-                api_base_url,
-            )
-            raw_msg = getattr(e, "message", None) or str(e)
-            lower_msg = str(raw_msg).lower()
-            status_code = getattr(e, "status_code", None)
-            # 讯飞 MaaS 常见 404：地址路由不匹配（例如 base_url 填错）
-            if (
-                status_code == 404
-                or "no any schema route found" in lower_msg
-                or "schema route" in lower_msg
-            ):
-                return err_body(
-                    "上游返回 404：API 地址可能不正确。讯飞 MaaS 请使用 base_url 根路径 "
-                    "`https://maas-coding-api.cn-huabei-1.xf-yun.com/v2`（不要手填 /chat/completions）。",
-                    status_code=502,
-                )
-            return err_body(raw_msg, status_code=502)
         except Exception as e:
+            handled = resolve_ai_test_connection_openai_error(
+                e,
+                request=request,
+                model=model,
+                api_base_url=api_base_url,
+                err_body=err_body,
+            )
+            if handled is not None:
+                return handled
             logger.exception(
                 "AI test connection unexpected exception. user_id=%s model=%s base_url=%s",
                 getattr(request.user, "id", None),
@@ -1254,7 +1215,6 @@ class AiVerifyConnectionAPIView(APIView):
 
     _VERIFY_MODEL = "glm-4.7-flash"
     _VERIFY_BASE = "https://open.bigmodel.cn/api/paas/v4"
-    _SYSTEM_PROMPT = "你是一个测试助手，请仅回复'连接成功'"
 
     def post(self, request):
         api_key = (request.data.get("api_key") or "").strip()
@@ -1287,7 +1247,7 @@ class AiVerifyConnectionAPIView(APIView):
             completion = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": self._SYSTEM_PROMPT},
+                    {"role": "system", "content": AI_VERIFY_CONNECTION_SYSTEM_PROMPT},
                     {"role": "user", "content": "测试连通性。"},
                 ],
                 max_tokens=60,
@@ -1295,39 +1255,16 @@ class AiVerifyConnectionAPIView(APIView):
             )
             choice = completion.choices[0].message
             reply = (getattr(choice, "content", None) or "").strip()
-        except AuthenticationError as e:
-            logger.exception(
-                "AI verify connection auth failed. user_id=%s model=%s base_url=%s",
-                getattr(request.user, "id", None),
-                model,
-                base_url,
-            )
-            return fail(f"API Key 无效或未授权：{e}")
-        except APITimeoutError:
-            logger.exception(
-                "AI verify connection timeout. user_id=%s model=%s base_url=%s",
-                getattr(request.user, "id", None),
-                model,
-                base_url,
-            )
-            return fail("请求智谱接口超时，请检查网络或稍后重试。", status_code=504)
-        except APIConnectionError as e:
-            logger.exception(
-                "AI verify connection upstream unreachable. user_id=%s model=%s base_url=%s",
-                getattr(request.user, "id", None),
-                model,
-                base_url,
-            )
-            return fail(f"无法连接智谱服务：{e}", status_code=502)
-        except APIError as e:
-            logger.exception(
-                "AI verify connection API error. user_id=%s model=%s base_url=%s",
-                getattr(request.user, "id", None),
-                model,
-                base_url,
-            )
-            return fail(getattr(e, "message", None) or str(e), status_code=502)
         except Exception as e:
+            handled = resolve_ai_verify_connection_openai_error(
+                e,
+                request=request,
+                model=model,
+                base_url=base_url,
+                fail=fail,
+            )
+            if handled is not None:
+                return handled
             logger.exception(
                 "AI verify connection unexpected exception. user_id=%s model=%s base_url=%s",
                 getattr(request.user, "id", None),
@@ -1630,129 +1567,6 @@ def _sse_event(obj: dict) -> bytes:
     return f"data: {payload}\n\n".encode("utf-8")
 
 
-_ZH_JSON_LANGUAGE_MANDATE = """
-══════════════════════════════════════════════════════
-【语言强制 · 必须遵守】
-你是一名专业软件测试工程师，根据用户需求生成测试用例。
-【输出形态 · 最高优先级】只输出「纯 JSON 数组」这一段文本本身：
-- 第一个字符必须是 [ ，最后一个字符必须是 ] ；
-- 严禁使用 ``` 或 ```json 等 Markdown 代码围栏；
-- 严禁在 JSON 前后输出任何解释、标题、注释或「以下是结果」类话术；
-- 严禁输出除该 JSON 数组以外的任意字符（含空行前的说明）。
-JSON 内所有**字符串取值**（caseName、precondition、steps、expectedResult、module_name 等字段的**值**）
-必须**全部使用简体中文**撰写；不要用英文撰写用例标题、步骤或预期（禁止整句英文描述）。
-JSON **键名**必须严格为下列 schema（camelCase / module_name），不得改为中文键名。
-允许保留必要的技术拉丁片段（例如 URL 路径、HTTP 方法字面值、错误码数字），但解释性文字一律用中文。
-
-[MANDATORY — English summary for the model]
-You are a professional software testing engineer. Output strictly a JSON array only.
-ALL human-readable string VALUES (caseName, precondition, steps, expectedResult, module_name, etc.)
-MUST be entirely in Simplified Chinese (简体中文). Do not use English for these values.
-JSON key names MUST remain exactly as specified below.
-══════════════════════════════════════════════════════
-"""
-
-_AI_GENERATE_SYSTEM_TEMPLATE = (
-    _ZH_JSON_LANGUAGE_MANDATE
-    + """You are an Expert Software Test Automation Engineer. Generate comprehensive, highly detailed, and strictly independent test cases based on [Current Module] and [Requirement Description]. All natural-language content you produce inside JSON MUST be in Simplified Chinese as mandated above.
-
-【STRICT CONSTRAINTS & RULES】
-
-1. Strict Module Isolation (Zero Leakage):
-   Focus EXCLUSIVELY on [Current Module]. If the module is «登录», do NOT generate cases for «注册» or unrelated menus. Preconditions must be written in Chinese (e.g. 「系统中已存在测试账号 admin，密码为 Abc!234」).
-
-2. Ultra-Granular Details (简体中文):
-   - 前置条件：具体、可执行。
-   - 测试数据：具体账号、密码、输入值等，避免抽象表述。
-   - 步骤：编号、可操作的界面或接口动作描述（中文）。
-   - 预期结果：同时写清前端表现与后端/系统状态（中文）。
-
-3. Deduplication & Similarity (CRITICAL):
-   - 用例之间不得语义高度重复；自相检查后删除冗余场景。
-
-4. Business module naming (CRITICAL for 导入):
-   - 每条用例的 module_name 必须表示「被测业务功能域」的简短中文名（例如：用户登录、订单支付、权限管理），应与用例场景、需求描述一致。
-   - 严禁使用「接口测试」「安全测试」「性能测试」「UI自动化」等**测试类型**或**菜单栏名称**充当 module_name；接口类与安全类用例若同属「登录」场景，应使用同一业务模块名（如「用户登录」）。
-
-5. Coverage:
-   - 恰好一条主流程正向用例 level P0；若干负向/边界 P1/P2；除非需求明确，少用 P3。
-
-6. RAG（当系统消息后文出现 Highly Relevant Existing Cases 时）：
-   - 若已有用例已完全覆盖需求：仅输出字面量 [ALL_COVERED]，勿输出 JSON。
-   - 否则仅输出填补缺口的新用例 JSON 数组。
-
-【INPUT CONTEXT】
-测试类型侧重点（用例内容须与此一致且为中文）：{test_type_focus}
-当前模块（module_name 取值须与之对齐，中文）: {module_name}
-需求描述（可能是中文）:
-{requirement_description}
-
-（可选）RAG：下文 Highly Relevant Existing Cases 为向量检索参考，用于去重与缺口分析，且其中片段若为英文仅供参考，你生成的新用例正文仍须中文。
-
-【OUTPUT FORMAT】
-仅输出合法 JSON 数组（纯文本，无任何 Markdown 包裹、无前后缀说明）。键名必须完全一致：
-[
-  {{
-    "caseName": "简明中文用例标题，概括本场景",
-    "level": "P0",
-    "precondition": "中文：详细前置条件",
-    "steps": "1. 第一步（中文）\\n2. 第二步（中文）",
-    "expectedResult": "中文：界面表现与后端状态的预期",
-    "module_name": "业务功能域中文名，须与场景一致（若上文「当前模块」为系统占位说明，则从需求与用例标题归纳，如用户登录、订单管理）；禁止填测试类型名"
-  }}
-]
-
-说明：导入接口需要 module_name 与系统匹配；服务端会做相似度去重（caseName+steps 等），请尽量减少冗余。
-再次强调：不要输出 ```json 或 ```，不要输出数组外的任何文字。
-
-规模：通常 1 条 P0 + 若干 P1/P2（合计约 5～12 条）；需求很小时至少 3 条且含必填 P0。"""
-)
-
-_PHASE1_INTENT_SYSTEM_PROMPT = """
-你是一名高级测试架构师。请根据用户一句话需求，推导最可能的业务模块并提炼关键测试点。
-你必须严格输出 JSON 对象，不得输出任何额外说明、Markdown 或代码块。
-输出格式必须为：
-{
-  "module_name": "中文模块名称",
-  "key_test_points": ["测试点1", "测试点2", "测试点3"]
-}
-要求：
-1) module_name 必须是简体中文，表示被测业务功能域，简短明确（例如：用户登录、支付中心、订单管理）；禁止用「接口测试」「安全测试」等类型名。
-2) key_test_points 必须为数组，元素为简体中文短句，建议 3~8 条。
-3) 禁止输出 JSON 以外内容。
-""".strip()
-
-_PHASE1_REPAIR_SYSTEM_PROMPT = """
-你是 JSON 修复助手。请将输入内容修复为严格 JSON 对象，且仅输出 JSON 本体。
-JSON 结构固定为：
-{
-  "module_name": "中文模块名称",
-  "key_test_points": ["测试点1", "测试点2"]
-}
-""".strip()
-
-_PHASE2_MULTI_CASE_MANDATE = """
-【Phase 2 强制生成规则（最高优先级）】
-你是一个高级测试工程师。你必须严格遵循用户的需求描述，生成一个包含多条用例的列表。
-禁止只生成正向用例，必须包含正向、异常、边界值等场景。
-
-输出必须是 JSON Array，至少 4 条（若需求明显复杂可更多），每个元素至少包含：
-[
-  {
-    "name": "用例名称",
-    "type": "正向/异常/边界",
-    "caseName": "与 name 语义一致的中文标题",
-    "level": "P0/P1/P2/P3",
-    "precondition": "前置条件",
-    "steps": "步骤",
-    "expectedResult": "预期结果",
-    "module_name": "模块名"
-  }
-]
-严禁返回单对象，严禁返回非数组，严禁数组为空。
-""".strip()
-
-
 def _build_ai_generate_system_prompt(
     module_name: str,
     requirement: str,
@@ -1990,33 +1804,51 @@ def _load_existing_case_context(module_id, test_type: str):
         existing_qs = existing_qs.filter(test_type=tt)
     if module_id:
         existing_qs = existing_qs.filter(module_id=module_id)
-    case_rows = list(existing_qs.values("id", "case_name")[:3000])
-    case_ids = [int(x.get("id")) for x in case_rows if x.get("id")]
-
-    steps_by_case: dict[int, str] = {}
-    if case_ids:
-        step_qs = (
-            TestCaseStep.objects.filter(testcase_id__in=case_ids, is_deleted=False)
-            .values("testcase_id", "step_desc", "expected_result")
-            .order_by("testcase_id", "step_number", "id")
-        )
-        for row in step_qs:
-            cid = int(row.get("testcase_id"))
-            if cid in steps_by_case:
-                continue
-            step_desc = str(row.get("step_desc") or "").strip()
-            expected = str(row.get("expected_result") or "").strip()
-            steps_by_case[cid] = f"{step_desc}\n{expected}".strip()
-
-    existing_rows = [
-        {
-            "case_name": str(x.get("case_name") or "").strip(),
-            "steps": steps_by_case.get(int(x.get("id")), ""),
-        }
-        for x in case_rows
-    ]
+    first_step_desc_sq = Subquery(
+        TestCaseStep.objects.filter(testcase_id=OuterRef("id"), is_deleted=False)
+        .order_by("step_number", "id")
+        .values("step_desc")[:1]
+    )
+    first_expected_sq = Subquery(
+        TestCaseStep.objects.filter(testcase_id=OuterRef("id"), is_deleted=False)
+        .order_by("step_number", "id")
+        .values("expected_result")[:1]
+    )
+    case_rows = list(
+        existing_qs.annotate(
+            _first_step_desc=first_step_desc_sq,
+            _first_expected=first_expected_sq,
+        ).values("case_name", "_first_step_desc", "_first_expected")[:3000]
+    )
+    existing_rows = []
+    for x in case_rows:
+        step_desc = str(x.get("_first_step_desc") or "").strip()
+        expected = str(x.get("_first_expected") or "").strip()
+        steps = f"{step_desc}\n{expected}".strip() if (step_desc or expected) else ""
+        existing_rows.append({"case_name": str(x.get("case_name") or "").strip(), "steps": steps})
     existing_titles = [x["case_name"] for x in existing_rows if x.get("case_name")]
     return existing_rows, existing_titles
+
+
+def _enqueue_celery_or_thread(*, celery_delay, thread_target, args: tuple, error_log_msg: str):
+    """
+    优先使用 Celery delay；不可用时降级线程执行。
+    返回: "celery" | "thread"
+    """
+    try:
+        celery_delay(*args)
+        return "celery"
+    except Exception:
+        import threading
+
+        def _wrapped():
+            try:
+                thread_target(*args)
+            except Exception:
+                logger.exception(error_log_msg)
+
+        threading.Thread(target=_wrapped, daemon=True).start()
+        return "thread"
 
 
 def _normalize_case_name_for_exact_dedup(name: str) -> str:
@@ -2080,18 +1912,41 @@ def _apply_dedup_pipeline(
     api_key: str,
     base_url: str,
     debug: bool = False,
+    mode: str = "drop",
 ):
     before_names = _collect_case_names(cases)
-    after_exact = _drop_cases_duplicated_with_existing_titles(cases, existing_titles)
+    mode = (mode or "drop").strip().lower()
+    after_exact = (
+        _drop_cases_duplicated_with_existing_titles(cases, existing_titles)
+        if mode == "drop"
+        else list(cases or [])
+    )
     after_exact_names = _collect_case_names(after_exact)
-    after_semantic = semantic_deduplicate_cases(
-        after_exact,
-        existing_rows,
-        api_key=api_key,
-        base_url=base_url,
+    after_semantic = (
+        semantic_deduplicate_cases(
+            after_exact,
+            existing_rows,
+            api_key=api_key,
+            base_url=base_url,
+        )
+        if mode == "drop"
+        else list(after_exact or [])
     )
     after_semantic_names = _collect_case_names(after_semantic)
-    if not debug:
+    highlight = mode == "highlight"
+    candidates = None
+    if highlight and after_semantic and existing_rows:
+        try:
+            from assistant.generated_case_dedup import string_similarity_candidates
+            from assistant.services.semantic_dedup import semantic_similarity_candidates
+
+            str_cands = string_similarity_candidates(after_semantic, existing_rows, top_k=3)
+            sem_cands = semantic_similarity_candidates(after_semantic, existing_rows, api_key=api_key, base_url=base_url, top_k=3)
+            candidates = {"string": str_cands, "semantic": sem_cands}
+        except Exception:
+            logger.exception("相似候选计算失败，已跳过")
+
+    if not debug and not highlight:
         return after_semantic, None
     report = {
         "input_count": len(cases),
@@ -2100,6 +1955,8 @@ def _apply_dedup_pipeline(
         "dropped_by_exact_title_dedup": _diff_dropped_names(before_names, after_exact_names),
         "dropped_by_semantic_dedup": _diff_dropped_names(after_exact_names, after_semantic_names),
     }
+    if highlight:
+        report["similar_candidates"] = candidates
     return after_semantic, report
 
 
@@ -2409,40 +2266,77 @@ class AiGenerateCasesAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _fail(msg: str, *, status_code=400, code: str = "BAD_REQUEST"):
+        return Response(
+            {
+                "status": "error",
+                "code": code,
+                "success": False,
+                "error": msg,
+                "cases": [],
+                "message": msg,
+            },
+            status=status_code,
+        )
+
+    @staticmethod
+    def _timeout_guard(started_at: float):
+        elapsed = time.monotonic() - started_at
+        if elapsed > AI_GENERATE_TOTAL_TIMEOUT_SECONDS:
+            return AiGenerateCasesAPIView._fail(
+                "大模型生成超时或格式错误",
+                status_code=500,
+                code="GENERATION_TIMEOUT",
+            )
+        return None
+
+    @staticmethod
+    def _run_phase2_parse(client, *, model_used: str, phase2_system_prompt: str, batch_user_prompt: str):
+        try:
+            try:
+                completion = client.chat.completions.create(
+                    model=model_used,
+                    messages=[
+                        {"role": "system", "content": phase2_system_prompt},
+                        {"role": "user", "content": batch_user_prompt},
+                    ],
+                    temperature=0.35,
+                    max_tokens=AI_GENERATE_CASES_MAX_TOKENS,
+                    timeout=AI_PHASE2_TIMEOUT_SECONDS,
+                    response_format={"type": "json_object"},
+                )
+            except Exception:
+                completion = client.chat.completions.create(
+                    model=model_used,
+                    messages=[
+                        {"role": "system", "content": phase2_system_prompt},
+                        {"role": "user", "content": batch_user_prompt},
+                    ],
+                    temperature=0.35,
+                    max_tokens=AI_GENERATE_CASES_MAX_TOKENS,
+                    timeout=AI_PHASE2_TIMEOUT_SECONDS,
+                )
+            raw = _sanitize_llm_json_text((completion.choices[0].message.content or "").strip())
+            try:
+                parsed = parse_batch_json_array(raw)
+            except Exception:
+                parsed = _parse_ai_cases_json(raw)
+            return raw, parsed
+        except Exception:
+            raise
+
     def post(self, request):
         started_at = time.monotonic()
 
-        def fail(msg: str, status_code=400, code: str = "BAD_REQUEST"):
-            return Response(
-                {
-                    "status": "error",
-                    "code": code,
-                    "success": False,
-                    "error": msg,
-                    "cases": [],
-                    "message": msg,
-                },
-                status=status_code,
-            )
-
-        def timeout_guard():
-            elapsed = time.monotonic() - started_at
-            if elapsed > AI_GENERATE_TOTAL_TIMEOUT_SECONDS:
-                return fail(
-                    "大模型生成超时或格式错误",
-                    status_code=500,
-                    code="GENERATION_TIMEOUT",
-                )
-            return None
-
         ctx, err = _prepare_ai_generate_context(request)
         if err:
-            return fail(err, status_code=400, code="INVALID_INPUT")
+            return self._fail(err, status_code=400, code="INVALID_INPUT")
 
         if not OPENAI_SDK_AVAILABLE:
-            return fail(_openai_missing_response_json(), status_code=503, code="SDK_NOT_AVAILABLE")
+            return self._fail(_openai_missing_response_json(), status_code=503, code="SDK_NOT_AVAILABLE")
 
-        guard_result = timeout_guard()
+        guard_result = self._timeout_guard(started_at)
         if guard_result is not None:
             return guard_result
 
@@ -2463,12 +2357,16 @@ class AiGenerateCasesAPIView(APIView):
         try:
             _debug_log_openai_target("ai_generate_cases_sync_sdk", model_used, api_base_url)
             client = OpenAI(api_key=api_key, base_url=api_base_url, timeout=120.0)
-            phase1 = _run_phase1_intent_analysis(
-                client,
-                model_used=model_used,
-                requirement=str(ctx.get("requirement") or ""),
-                fallback_module=str(ctx.get("module_name") or ""),
-            )
+            phase1_override = request.data.get("phase1_override") if isinstance(request.data, dict) else None
+            if isinstance(phase1_override, dict):
+                phase1 = phase1_override
+            else:
+                phase1 = _run_phase1_intent_analysis(
+                    client,
+                    model_used=model_used,
+                    requirement=str(ctx.get("requirement") or ""),
+                    fallback_module=str(ctx.get("module_name") or ""),
+                )
             phase1_module = str(phase1.get("module_name") or "").strip() or str(ctx.get("module_name") or "")
             phase1_require = _phase1_query_text(
                 requirement=str(ctx.get("requirement") or ""),
@@ -2477,7 +2375,7 @@ class AiGenerateCasesAPIView(APIView):
             )
             phase1_block = _phase1_analysis_block(phase1)
             domain_system_with_phase1 = domain_system + "\n\n" + phase1_block
-            guard_result = timeout_guard()
+            guard_result = self._timeout_guard(started_at)
             if guard_result is not None:
                 return guard_result
             if ctx.get("rag_enabled", True):
@@ -2520,39 +2418,15 @@ class AiGenerateCasesAPIView(APIView):
                 min_count=max(5, AI_GENERATE_MIN_CASES),
             )
             try:
-                try:
-                    completion = client.chat.completions.create(
-                        model=model_used,
-                        messages=[
-                            {"role": "system", "content": phase2_system_prompt},
-                            {"role": "user", "content": batch_user_prompt},
-                        ],
-                        temperature=0.35,
-                        max_tokens=AI_GENERATE_CASES_MAX_TOKENS,
-                        timeout=AI_PHASE2_TIMEOUT_SECONDS,
-                        response_format={"type": "json_object"},
-                    )
-                except Exception:
-                    # 兼容部分 OpenAI 兼容端不支持 response_format 的情况
-                    completion = client.chat.completions.create(
-                        model=model_used,
-                        messages=[
-                            {"role": "system", "content": phase2_system_prompt},
-                            {"role": "user", "content": batch_user_prompt},
-                        ],
-                        temperature=0.35,
-                        max_tokens=AI_GENERATE_CASES_MAX_TOKENS,
-                        timeout=AI_PHASE2_TIMEOUT_SECONDS,
-                    )
-                raw = _sanitize_llm_json_text((completion.choices[0].message.content or "").strip())
-                try:
-                    parsed = parse_batch_json_array(raw)
-                except Exception:
-                    # JSON Mode 兼容性不足时，回退到旧解析器，提升稳定性
-                    parsed = _parse_ai_cases_json(raw)
+                raw, parsed = self._run_phase2_parse(
+                    client,
+                    model_used=model_used,
+                    phase2_system_prompt=phase2_system_prompt,
+                    batch_user_prompt=batch_user_prompt,
+                )
                 if not parsed:
                     snippet = raw[:400] + ("…" if len(raw) > 400 else "")
-                    return fail(
+                    return self._fail(
                         f"大模型生成超时或格式错误：模型返回内容无法解析为 JSON 数组。片段：{snippet}",
                         status_code=400,
                         code="INVALID_JSON",
@@ -2569,6 +2443,7 @@ class AiGenerateCasesAPIView(APIView):
                         cases.append(norm)
 
                 cases = _deduplicate_cases_with_guard(cases, "生成结果")
+                dedup_mode = str(ctx.get("dedup_mode") or request.data.get("dedup_mode") or "drop")
                 cases, dedup_debug_report = _apply_dedup_pipeline(
                     cases=cases,
                     existing_titles=existing_titles,
@@ -2576,6 +2451,7 @@ class AiGenerateCasesAPIView(APIView):
                     api_key=api_key,
                     base_url=api_base_url,
                     debug=bool(ctx.get("dedup_debug")),
+                    mode=dedup_mode,
                 )
                 retry_round = 0
                 while len(cases) < AI_GENERATE_MIN_CASES and retry_round < AI_GENERATE_RETRY_ROUNDS:
@@ -2603,7 +2479,7 @@ class AiGenerateCasesAPIView(APIView):
                     backfill_api_request_fields_in_batch(cases)
 
                 if not cases:
-                    return fail(
+                    return self._fail(
                         "大模型生成超时或格式错误：解析后没有有效用例。",
                         status_code=400,
                         code="INVALID_CASES",
@@ -2616,7 +2492,7 @@ class AiGenerateCasesAPIView(APIView):
                     api_base_url,
                     module_id,
                 )
-                return fail("大模型生成超时或格式错误", status_code=500, code="PHASE2_TIMEOUT")
+                return self._fail("大模型生成超时或格式错误", status_code=500, code="PHASE2_TIMEOUT")
             except Exception as phase2_error:
                 logger.exception(
                     "AI generate cases phase2 failed. user_id=%s model=%s base_url=%s module_id=%s err=%s",
@@ -2626,48 +2502,18 @@ class AiGenerateCasesAPIView(APIView):
                     module_id,
                     phase2_error,
                 )
-                return fail("大模型生成超时或格式错误", status_code=500, code="PHASE2_FAILED")
-        except AuthenticationError as e:
-            logger.exception(
-                "AI generate cases auth failed. user_id=%s model=%s base_url=%s module_id=%s",
-                getattr(request.user, "id", None),
-                model_used,
-                api_base_url,
-                module_id,
-            )
-            return fail(f"API Key 无效：{e}", status_code=401, code="AUTH_ERROR")
-        except APITimeoutError:
-            logger.exception(
-                "AI generate cases timeout. user_id=%s model=%s base_url=%s module_id=%s",
-                getattr(request.user, "id", None),
-                model_used,
-                api_base_url,
-                module_id,
-            )
-            return fail("调用智谱接口超时，请稍后重试。", status_code=504, code="UPSTREAM_TIMEOUT")
-        except APIConnectionError as e:
-            logger.exception(
-                "AI generate cases upstream unreachable. user_id=%s model=%s base_url=%s module_id=%s",
-                getattr(request.user, "id", None),
-                model_used,
-                api_base_url,
-                module_id,
-            )
-            return fail(f"无法连接模型服务：{e}", status_code=502, code="UPSTREAM_UNREACHABLE")
-        except APIError as e:
-            logger.exception(
-                "AI generate cases API error. user_id=%s model=%s base_url=%s module_id=%s",
-                getattr(request.user, "id", None),
-                model_used,
-                api_base_url,
-                module_id,
-            )
-            return fail(
-                getattr(e, "message", None) or str(e),
-                status_code=502,
-                code="UPSTREAM_API_ERROR",
-            )
+                return self._fail("大模型生成超时或格式错误", status_code=500, code="PHASE2_FAILED")
         except Exception as e:
+            handled = resolve_ai_generate_cases_outer_openai_error(
+                e,
+                request=request,
+                model_used=model_used,
+                api_base_url=api_base_url,
+                module_id=module_id,
+                fail=fail,
+            )
+            if handled is not None:
+                return handled
             logger.exception(
                 "AI generate cases unexpected exception. user_id=%s model=%s base_url=%s module_id=%s",
                 getattr(request.user, "id", None),
@@ -2675,7 +2521,7 @@ class AiGenerateCasesAPIView(APIView):
                 api_base_url,
                 module_id,
             )
-            return fail(str(e), status_code=500, code="UNEXPECTED_ERROR")
+            return self._fail(str(e), status_code=500, code="UNEXPECTED_ERROR")
 
         if is_all_covered_output(raw):
             return Response(
@@ -2691,7 +2537,7 @@ class AiGenerateCasesAPIView(APIView):
                 status=200,
             )
 
-        guard_result = timeout_guard()
+        guard_result = self._timeout_guard(started_at)
         if guard_result is not None:
             return guard_result
 
@@ -2705,7 +2551,90 @@ class AiGenerateCasesAPIView(APIView):
         }
         if ctx.get("dedup_debug"):
             resp_payload["dedup_debug"] = dedup_debug_report
+        elif isinstance(dedup_debug_report, dict) and dedup_debug_report.get("similar_candidates"):
+            # highlight 模式：把相似候选直接回传给前端展示（不做过滤）
+            sim = dedup_debug_report.get("similar_candidates") or {}
+            str_cands = sim.get("string") if isinstance(sim, dict) else None
+            sem_cands = sim.get("semantic") if isinstance(sim, dict) else None
+            for i, row in enumerate(resp_payload["cases"]):
+                if not isinstance(row, dict):
+                    continue
+                row["similar_candidates"] = {
+                    "string": (
+                        str_cands[i]
+                        if isinstance(str_cands, list) and i < len(str_cands)
+                        else []
+                    ),
+                    "semantic": (
+                        sem_cands[i]
+                        if isinstance(sem_cands, list) and i < len(sem_cands)
+                        else []
+                    ),
+                }
         return Response(resp_payload, status=200)
+
+
+class AiPhase1PreviewAPIView(APIView):
+    """
+    POST /api/ai/phase1-preview/
+    仅执行 Phase1 意图分析，返回「推导模块」与「关键测试点」等，供前端确认后再正式生成。
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ctx, err = _prepare_ai_generate_context(request)
+        if err:
+            return Response({"success": False, "error": err, "message": err, "data": None}, status=400)
+        if not OPENAI_SDK_AVAILABLE:
+            msg = _openai_missing_response_json()
+            return Response({"success": False, "error": msg, "message": msg, "data": None}, status=503)
+
+        api_key = ctx["api_key"]
+        api_base_url = ctx["api_base_url"]
+        model_used = ctx["model_used"]
+        try:
+            _debug_log_openai_target("ai_phase1_preview_sdk", model_used, api_base_url)
+            client = OpenAI(api_key=api_key, base_url=api_base_url, timeout=60.0)
+            phase1 = _run_phase1_intent_analysis(
+                client,
+                model_used=model_used,
+                requirement=str(ctx.get("requirement") or ""),
+                fallback_module=str(ctx.get("module_name") or ""),
+            )
+        except Exception as e:
+            handled = resolve_ai_generate_cases_outer_openai_error(
+                e,
+                request=request,
+                model_used=model_used,
+                api_base_url=api_base_url,
+                module_id=ctx.get("module_id"),
+                fail=lambda m, status_code=400, code="PHASE1_FAILED": Response(
+                    {"success": False, "error": m, "message": m, "code": code, "data": None},
+                    status=status_code,
+                ),
+            )
+            if handled is not None:
+                return handled
+            return Response(
+                {"success": False, "error": str(e), "message": "Phase1 分析失败", "data": None},
+                status=500,
+            )
+
+        module_name = str(phase1.get("module_name") or "").strip() or "通用功能模块"
+        points_raw = phase1.get("key_test_points")
+        points = (
+            [str(x).strip() for x in points_raw if str(x).strip()]
+            if isinstance(points_raw, list)
+            else []
+        )
+        out = {
+            "module_name": module_name,
+            "key_test_points": points,
+            "raw": phase1,
+            "model": model_used,
+        }
+        return Response({"success": True, "message": "ok", "data": out}, status=200)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -2794,6 +2723,15 @@ class AiGenerateCasesStreamView(View):
         use_api = disp.should_enrich_api
         user_msg = disp.user_message
 
+        phase1_override = None
+        try:
+            if isinstance(getattr(drf_request, "data", None), dict):
+                p1o = drf_request.data.get("phase1_override")
+                if isinstance(p1o, dict):
+                    phase1_override = p1o
+        except Exception:
+            phase1_override = None
+
         def event_stream():
             # 首包立即下发，降低「首字等待」感知；不经过上游模型（本项目的 MIDDLEWARE 未启用 GZipMiddleware）。
             yield _sse_event(
@@ -2826,12 +2764,15 @@ class AiGenerateCasesStreamView(View):
                     "ai_generate_cases_stream_sdk_phase1", model_used, api_base_url
                 )
                 phase1_client = OpenAI(api_key=api_key, base_url=api_base_url, timeout=90.0)
-                phase1 = _run_phase1_intent_analysis(
-                    phase1_client,
-                    model_used=model_used,
-                    requirement=str(ctx.get("requirement") or ""),
-                    fallback_module=str(ctx.get("module_name") or ""),
-                )
+                if phase1_override is not None:
+                    phase1 = phase1_override
+                else:
+                    phase1 = _run_phase1_intent_analysis(
+                        phase1_client,
+                        model_used=model_used,
+                        requirement=str(ctx.get("requirement") or ""),
+                        fallback_module=str(ctx.get("module_name") or ""),
+                    )
                 phase1_module_name = str(phase1.get("module_name") or "").strip() or str(
                     ctx.get("module_name") or ""
                 )
@@ -3061,6 +3002,7 @@ class AiGenerateCasesStreamView(View):
                         cases.append(norm)
 
                 cases = _deduplicate_cases_with_guard(cases, "流式生成结果")
+                dedup_mode = str(ctx.get("dedup_mode") or drf_request.data.get("dedup_mode") or "drop") if isinstance(getattr(drf_request, "data", None), dict) else "drop"
                 cases, dedup_debug_report = _apply_dedup_pipeline(
                     cases=cases,
                     existing_titles=existing_titles,
@@ -3068,6 +3010,7 @@ class AiGenerateCasesStreamView(View):
                     api_key=api_key,
                     base_url=api_base_url,
                     debug=bool(ctx.get("dedup_debug")),
+                    mode=dedup_mode,
                 )
                 if use_api and cases:
                     renumber_api_business_ids(cases)

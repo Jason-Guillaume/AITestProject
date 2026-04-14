@@ -23,6 +23,8 @@ import logging
 import uuid
 import json
 import time as time_module
+import asyncio
+from asgiref.sync import sync_to_async
 
 logger = logging.getLogger(__name__)
 
@@ -51,14 +53,21 @@ class DashboardStreamView(View):
         except Token.DoesNotExist:
             return None
 
-    def get(self, request, *args, **kwargs):
-        user = self._resolve_user(request)
+    async def get(self, request, *args, **kwargs):
+        """
+        重要：SSE 是长连接；在 ASGI 下若用同步 view + time.sleep 会占用线程池，
+        当连接数变多时可能导致其它 API（如删除/保存）被“饿死”出现超时/异常。
+
+        这里改为 async + asyncio.sleep，避免占用同步线程池。
+        """
+
+        user = await sync_to_async(self._resolve_user)(request)
         if not user:
             return JsonResponse({"detail": "认证失败"}, status=401)
 
         project_id = request.GET.get("project_id")
 
-        def event_stream():
+        async def event_stream():
             yield "retry: 3000\n\n"
             while True:
                 payload = {
@@ -67,7 +76,7 @@ class DashboardStreamView(View):
                     "project_id": project_id,
                 }
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-                time_module.sleep(3)
+                await asyncio.sleep(3)
 
         response = StreamingHttpResponse(
             streaming_content=event_stream(),
@@ -117,20 +126,11 @@ class PerfTaskViewSet(BaseModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        for _ in range(5):
-            last = PerfTask.objects.order_by("-id").first()
-            next_num = 1 if not last else last.id + 1
-            task_id = f"PT-{next_num:04d}"
-            try:
-                if user and user.is_authenticated:
-                    serializer.save(task_id=task_id, creator=user)
-                else:
-                    serializer.save(task_id=task_id)
-                return
-            except IntegrityError:
-                # 并发下 task_id 可能冲突，重试重新分配。
-                continue
-        raise IntegrityError("性能任务编号生成冲突，请重试")
+        task_id = f"PT-{uuid.uuid4().hex[:8].upper()}"
+        if user and user.is_authenticated:
+            serializer.save(task_id=task_id, creator=user)
+        else:
+            serializer.save(task_id=task_id)
 
     @action(methods=["post"], detail=True, url_path="run")
     def run(self, request, pk=None, task_id=None):
@@ -206,21 +206,72 @@ class DashboardSummaryAPIView(APIView):
         from testcase.models import TestCase
         from defect.models import TestDefect
 
+        project_id = (request.query_params.get("project_id") or "").strip()
+        user = getattr(request, "user", None)
+        is_admin = bool(
+            user
+            and getattr(user, "is_authenticated", False)
+            and (getattr(user, "is_superuser", False) or getattr(user, "is_staff", False) or bool(getattr(user, "is_system_admin", False)))
+        )
+
+        def _case_scope_qs():
+            qs = TestCase.objects.filter(is_deleted=False)
+            if project_id:
+                try:
+                    pid = int(project_id)
+                except (TypeError, ValueError):
+                    return qs.none()
+                return qs.filter(module__project_id=pid)
+            if user and getattr(user, "is_authenticated", False) and not is_admin:
+                return qs.filter(Q(module__project__members=user) | Q(creator=user)).distinct()
+            return qs
+
+        def _defect_scope_qs():
+            qs = TestDefect.objects.filter(is_deleted=False)
+            if project_id:
+                try:
+                    pid = int(project_id)
+                except (TypeError, ValueError):
+                    return qs.none()
+                # 缺陷模型不一定有 project 字段：优先走常见链路（用例/模块/项目）
+                if hasattr(TestDefect, "project_id"):
+                    return qs.filter(project_id=pid)
+                if hasattr(TestDefect, "testcase_id"):
+                    return qs.filter(testcase__module__project_id=pid)
+                if hasattr(TestDefect, "test_case_id"):
+                    return qs.filter(test_case__module__project_id=pid)
+                return qs
+            if user and getattr(user, "is_authenticated", False) and not is_admin:
+                if hasattr(TestDefect, "creator_id"):
+                    return qs.filter(Q(creator=user) | Q(testcase__module__project__members=user) | Q(test_case__module__project__members=user)).distinct()
+            return qs
+
         # --------------------------
         # 统计卡片
         # --------------------------
-        total_cases = TestCase.objects.filter(is_deleted=False).count()
+        total_cases = _case_scope_qs().count()
 
         # 今日“执行用例”近似：今日生成的测试报告数量
         today = timezone.localdate()
         start_today = timezone.make_aware(datetime.combine(today, time.min))
         end_today = start_today + timedelta(days=1)
-        today_reports = TestReport.objects.filter(
+        today_reports_qs = TestReport.objects.filter(
             is_deleted=False, create_time__gte=start_today, create_time__lt=end_today
-        ).count()
+        )
+        if project_id:
+            try:
+                pid = int(project_id)
+            except (TypeError, ValueError):
+                pid = None
+            if pid is not None:
+                if hasattr(TestReport, "project_id"):
+                    today_reports_qs = today_reports_qs.filter(project_id=pid)
+                else:
+                    today_reports_qs = today_reports_qs.filter(plan__version__project_id=pid)
+        today_reports = today_reports_qs.count()
 
         # 未解决缺陷：状态非“已关闭”(4)
-        unresolved_defects = TestDefect.objects.filter(is_deleted=False).exclude(status=4).count()
+        unresolved_defects = _defect_scope_qs().exclude(status=4).count()
 
         completed_plans = TestPlan.objects.filter(is_deleted=False, plan_status=3)
         if completed_plans.exists():
@@ -232,30 +283,43 @@ class DashboardSummaryAPIView(APIView):
         yesterday = today - timedelta(days=1)
         start_yesterday = timezone.make_aware(datetime.combine(yesterday, time.min))
         end_yesterday = start_yesterday + timedelta(days=1)
-        yesterday_reports = TestReport.objects.filter(
+        yesterday_reports_qs = TestReport.objects.filter(
             is_deleted=False, create_time__gte=start_yesterday, create_time__lt=end_yesterday
-        ).count()
-        yesterday_unresolved_new = TestDefect.objects.filter(
-            is_deleted=False
-        ).exclude(status=4).filter(
-            create_time__gte=start_yesterday, create_time__lt=end_yesterday
-        ).count()
+        )
+        if project_id:
+            try:
+                pid = int(project_id)
+            except (TypeError, ValueError):
+                pid = None
+            if pid is not None:
+                if hasattr(TestReport, "project_id"):
+                    yesterday_reports_qs = yesterday_reports_qs.filter(project_id=pid)
+                else:
+                    yesterday_reports_qs = yesterday_reports_qs.filter(plan__version__project_id=pid)
+        yesterday_reports = yesterday_reports_qs.count()
+        yesterday_unresolved_new = (
+            _defect_scope_qs()
+            .exclude(status=4)
+            .filter(create_time__gte=start_yesterday, create_time__lt=end_yesterday)
+            .count()
+        )
 
         # 总用例：对比“昨日新增用例数”
-        yesterday_new_cases = TestCase.objects.filter(
-            is_deleted=False, create_time__gte=start_yesterday, create_time__lt=end_yesterday
+        yesterday_new_cases = _case_scope_qs().filter(
+            create_time__gte=start_yesterday, create_time__lt=end_yesterday
         ).count()
-        today_new_cases = TestCase.objects.filter(
-            is_deleted=False, create_time__gte=start_today, create_time__lt=end_today
+        today_new_cases = _case_scope_qs().filter(
+            create_time__gte=start_today, create_time__lt=end_today
         ).count()
 
         total_cases_delta = today_new_cases - yesterday_new_cases
         today_reports_delta = today_reports - yesterday_reports
-        today_unresolved_new = TestDefect.objects.filter(
-            is_deleted=False
-        ).exclude(status=4).filter(
-            create_time__gte=start_today, create_time__lt=end_today
-        ).count()
+        today_unresolved_new = (
+            _defect_scope_qs()
+            .exclude(status=4)
+            .filter(create_time__gte=start_today, create_time__lt=end_today)
+            .count()
+        )
         unresolved_defects_delta = today_unresolved_new - yesterday_unresolved_new
 
         # --------------------------
@@ -421,7 +485,7 @@ class QualityDashboardView(APIView):
 
     def get(self, request, *args, **kwargs):
         project_id = request.query_params.get("project_id")
-        time_range = "30d"
+        time_range = (request.query_params.get("time_range") or "30d").strip().lower()
         start_date, end_date, _, _ = self._resolve_dates(time_range)
         pid = None
         if project_id not in (None, ""):
@@ -432,7 +496,7 @@ class QualityDashboardView(APIView):
                     {"msg": "project_id 必须为整数"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-        cache_key = f"quality_dashboard_metric:{pid or 'all'}:{start_date.isoformat()}:{end_date.isoformat()}"
+        cache_key = f"quality_dashboard_metric:{pid if pid is not None else 'null'}:{start_date.isoformat()}:{end_date.isoformat()}:{time_range}"
         cached = cache.get(cache_key)
         if cached is not None:
             return Response(cached)
@@ -452,7 +516,7 @@ class QualityDashboardView(APIView):
             metric_date__gte=start_date,
             metric_date__lte=end_date,
         )
-        metrics_qs = metrics_qs.filter(dimension__project_id=(pid if pid is not None else "all"))
+        metrics_qs = metrics_qs.filter(dimension__project_id=(pid if pid is not None else None))
 
         metric_map = {
             TestQualityMetric.METRIC_PASS_RATE: {},
@@ -553,7 +617,7 @@ class QualityDashboardView(APIView):
                 },
             },
         }
-        cache.set(cache_key, payload, timeout=180)
+        cache.set(cache_key, payload, timeout=60)
         return Response(payload)
 
 

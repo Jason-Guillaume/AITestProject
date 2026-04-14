@@ -1,7 +1,8 @@
 import base64
-import random
+import secrets
 import string
 import uuid
+import re
 
 from rest_framework.authtoken.models import Token
 from django.shortcuts import render
@@ -32,12 +33,28 @@ from user.change_request_actions import approve_change_request, reject_change_re
 # Create your views here.
 
 class UserViewSet(BaseModelViewSet):
-    queryset = User.objects.all()
+    queryset = User.objects.filter(is_deleted=False)
     serializer_class = UserSerializer
 
     def get_permissions(self):
-        perms = super().get_permissions()
-        return [*perms, IsSystemAdmin()]
+        if self.action in ["create", "destroy"]:
+            return [IsSystemAdmin()]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = getattr(self.request, "user", None)
+        if not user or not user.is_authenticated:
+            return qs.none()
+        if bool(getattr(user, "is_system_admin", False)):
+            return qs.order_by("-id")
+        # 普通用户：仅可见同项目成员 + 自己（用于成员选择）
+        try:
+            my_projects = user.projects.all()
+            qs = qs.filter(Q(projects__in=my_projects) | Q(pk=user.pk)).distinct()
+        except Exception:
+            qs = qs.filter(pk=user.pk)
+        return qs.order_by("id")
 
 
 class SystemPagination(PageNumberPagination):
@@ -60,7 +77,7 @@ class OrganizationViewSet(BaseModelViewSet):
         name = self.request.query_params.get("name")
         if name:
             qs = qs.filter(org_name__icontains=name)
-        return qs.order_by("-create_time")
+        return qs.prefetch_related("members").order_by("-create_time")
 
 
 class SystemMessageSettingViewSet(BaseModelViewSet):
@@ -70,11 +87,25 @@ class SystemMessageSettingViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        user = getattr(self.request, "user", None)
+        if not user or not user.is_authenticated:
+            return qs.none()
+        qs = qs.filter(recipient=user)
         # 允许只取最近一条设置（用于前端编辑）
         latest = self.request.query_params.get("latest")
         if latest == "1":
             return qs.order_by("-create_time")[:1]
         return qs.order_by("-create_time")
+
+    def perform_create(self, serializer):
+        user = getattr(self.request, "user", None)
+        if not user or not user.is_authenticated:
+            raise ValidationError({"detail": "未登录"})
+        instance, _ = SystemMessageSetting.objects.update_or_create(
+            recipient=user,
+            defaults=serializer.validated_data,
+        )
+        serializer.instance = instance
 
 
 class RoleViewSet(viewsets.ModelViewSet):
@@ -98,6 +129,12 @@ class CaptchaAPIView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    def get_client_ip(self, request):
+        xff = request.META.get("HTTP_X_FORWARDED_FOR")
+        if xff:
+            return xff.split(",")[0].strip()
+        return (request.META.get("REMOTE_ADDR") or "").strip() or "unknown"
+
     def get(self, request, *args, **kwargs):
         try:
             from captcha.image import ImageCaptcha
@@ -111,9 +148,21 @@ class CaptchaAPIView(APIView):
                 status=500,
             )
 
-        # 1.生产四位随机字符
+        # IP 频率限制（每分钟最多 10 次）
+        ip = self.get_client_ip(request)
+        limit_key = f"captcha_limit_{ip}"
+        cur = cache.get(limit_key, 0)
+        try:
+            cur = int(cur)
+        except (TypeError, ValueError):
+            cur = 0
+        if cur >= 10:
+            return Response({"code": 429, "msg": "请求过于频繁", "data": None}, status=429)
+        cache.set(limit_key, cur + 1, timeout=60)
+
+        # 1.生产四位随机字符（使用 secrets）
         chars = string.ascii_uppercase + string.digits
-        code = "".join(random.choices(chars, k=4))
+        code = "".join(secrets.choice(chars) for _ in range(4))
 
         # 2.生成唯一标识
         captcha_uuid = str(uuid.uuid4())
@@ -258,6 +307,14 @@ class ChangePasswordAPIView(APIView):
         old_password = request.data.get("old_password") or ""
         new_password = request.data.get("new_password") or ""
         confirm_password = request.data.get("confirm_password") or ""
+        if len(new_password) < 8:
+            return Response({"code": 400, "msg": "密码长度至少 8 位", "data": None}, status=400)
+        if not re.search(r"[A-Z]", new_password):
+            return Response({"code": 400, "msg": "密码需包含大写字母", "data": None}, status=400)
+        if not re.search(r"[a-z]", new_password):
+            return Response({"code": 400, "msg": "密码需包含小写字母", "data": None}, status=400)
+        if not re.search(r"\d", new_password):
+            return Response({"code": 400, "msg": "密码需包含数字", "data": None}, status=400)
 
         if not old_password:
             return Response(
@@ -458,7 +515,9 @@ class AdminChangeRequestApproveAPIView(APIView):
                 status=404,
             )
         try:
-            approve_change_request(cr)
+            approve_change_request(
+                cr, approver=request.user if request.user.is_authenticated else None
+            )
         except ValueError as e:
             return Response(
                 {"code": 400, "msg": str(e), "data": None},
@@ -487,7 +546,9 @@ class AdminChangeRequestRejectAPIView(APIView):
                 status=404,
             )
         try:
-            reject_change_request(cr)
+            reject_change_request(
+                cr, approver=request.user if request.user.is_authenticated else None
+            )
         except ValueError as e:
             return Response(
                 {"code": 400, "msg": str(e), "data": None},
@@ -519,9 +580,13 @@ class AdminUserChangeRequestDecisionAPIView(APIView):
 
         try:
             if decision == "reject":
-                reject_change_request(cr)
+                reject_change_request(
+                    cr, approver=request.user if request.user.is_authenticated else None
+                )
             else:
-                approve_change_request(cr)
+                approve_change_request(
+                    cr, approver=request.user if request.user.is_authenticated else None
+                )
         except ValueError as e:
             return Response(
                 {"code": 400, "msg": str(e), "data": None},

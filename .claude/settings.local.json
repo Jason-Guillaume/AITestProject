@@ -19,7 +19,8 @@
       "Bash(npm run:*)",
       "Bash(pip install:*)",
       "Bash(python manage.py show_migrations)",
-      "Bash(python manage.py showmigrations)"
+      "Bash(python manage.py showmigrations)",
+      "Bash(mkdir server_logs:*)"
     ]
   }
 }

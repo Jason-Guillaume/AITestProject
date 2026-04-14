@@ -77,6 +77,11 @@ const routes = [
       { path: "defect/release/:id", component: () => import("@/views/defect/ReleasePlanDetail.vue") },
 
       { path: "ai-assistant", component: () => import("@/views/AiAssistant.vue") },
+      {
+        path: "server-logs",
+        name: "ServerLogs",
+        component: () => import("@/views/server_logs/index.vue"),
+      },
 
       // system / knowledge / help 占位
       { path: "system/message", component: () => import("@/views/system/MessageSetting.vue") },

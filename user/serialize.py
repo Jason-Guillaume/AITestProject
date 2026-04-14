@@ -1,5 +1,3 @@
-import hashlib
-
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.core.cache import cache
@@ -49,6 +47,8 @@ class UserRegisterSerializer(serializers.Serializer):
     """
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(max_length=128)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone_number = serializers.CharField(max_length=32, required=False, allow_blank=True)
     captcha_code = serializers.CharField(max_length=4, write_only=True, help_text="用户输入的验证码")
     captcha_uuid = serializers.CharField(write_only=True, help_text="获取验证码时返回的UUID")
 
@@ -76,6 +76,16 @@ class UserRegisterSerializer(serializers.Serializer):
         attrs.pop('captcha_code')
         attrs.pop('captcha_uuid')
 
+        email = (attrs.get("email") or "").strip()
+        phone = (attrs.get("phone_number") or "").strip()
+        if email:
+            if User.objects.filter(email=email).exists():
+                raise serializers.ValidationError({"email": "邮箱已被注册"})
+            attrs["email"] = email
+        if phone:
+            if User.objects.filter(phone_number=phone).exists():
+                raise serializers.ValidationError({"phone_number": "手机号已被注册"})
+            attrs["phone_number"] = phone
         return attrs
 
     def create(self, validated_data):
@@ -87,32 +97,11 @@ class UserRegisterSerializer(serializers.Serializer):
         user = User.objects.create_user(
             username=validated_data['username'],
             password=validated_data['password'],
-            real_name=validated_data.get('real_name', '')
+            real_name=validated_data.get('real_name', ''),
+            email=validated_data.get("email", "") or "",
+            phone_number=validated_data.get("phone_number", "") or "",
         )
         return user
-
-
-def _is_hex_string(s, length=None):
-    if not s or not isinstance(s, str):
-        return False
-    if length is not None and len(s) != length:
-        return False
-    try:
-        int(s, 16)
-    except ValueError:
-        return False
-    return all(c in "0123456789abcdefABCDEF" for c in s)
-
-
-def _django_password_field_looks_hashed(encoded):
-    """Django 存储格式通常含算法前缀，如 pbkdf2_sha256$"""
-    return isinstance(encoded, str) and "$" in encoded and len(encoded) > 32
-
-
-def _upgrade_password(user, raw_for_set_password):
-    """将密码升级为 Django 默认哈希（raw_for_set_password 为后续登录时提交的字符串）。"""
-    user.set_password(raw_for_set_password)
-    user.save(update_fields=["password"])
 
 
 class UserLoginSerializer(serializers.Serializer):
@@ -130,7 +119,6 @@ class UserLoginSerializer(serializers.Serializer):
         if not username:
             raise serializers.ValidationError({"detail": "请输入用户名"})
 
-        # 标准：数据库中为 Django 哈希，前端传明文
         user = authenticate(username=username, password=password)
         if user:
             if getattr(user, "is_deleted", False):
@@ -139,55 +127,6 @@ class UserLoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"detail": "该账号已被禁用"})
             attrs["user"] = user
             return attrs
-
-        try:
-            user_obj = User.objects.get(username=username)
-        except User.DoesNotExist:
-            raise serializers.ValidationError({"detail": "账号或密码错误，请重试"})
-
-        if getattr(user_obj, "is_deleted", False):
-            raise serializers.ValidationError({"detail": "账号不可用"})
-        if not user_obj.is_active:
-            raise serializers.ValidationError({"detail": "该账号已被禁用"})
-
-        stored = user_obj.password or ""
-
-        # --- 兼容：库中存的是 MD5(明文) 十六进制，前端仍传明文 ---
-        if getattr(settings, "LEGACY_LOGIN_MD5_HEX", False) and _is_hex_string(
-            stored, length=32
-        ):
-            if hashlib.md5(password.encode("utf-8")).hexdigest().lower() == stored.lower():
-                _upgrade_password(user_obj, password)
-                attrs["user"] = user_obj
-                return attrs
-
-        # --- 兼容：库中存的是 SHA256(明文) 十六进制，前端仍传明文 ---
-        if getattr(settings, "LEGACY_LOGIN_SHA256_HEX", False) and _is_hex_string(
-            stored, length=64
-        ):
-            if (
-                hashlib.sha256(password.encode("utf-8")).hexdigest().lower()
-                == stored.lower()
-            ):
-                _upgrade_password(user_obj, password)
-                attrs["user"] = user_obj
-                return attrs
-
-        # --- 兼容：库中存的是一段 MD5 十六进制，前端传的 password 也是同一段（未做 Django 哈希）---
-        if getattr(settings, "LEGACY_LOGIN_BOTH_SIDES_MD5_HEX", False):
-            if _is_hex_string(password, length=32) and _is_hex_string(stored, length=32):
-                if password.lower() == stored.lower():
-                    _upgrade_password(user_obj, password)
-                    attrs["user"] = user_obj
-                    return attrs
-
-        # --- 兼容：库中密码字段为明文（仅迁库/测试，极不安全）---
-        if getattr(settings, "LEGACY_LOGIN_PLAINTEXT", False):
-            if not _django_password_field_looks_hashed(stored) and stored == password:
-                _upgrade_password(user_obj, password)
-                attrs["user"] = user_obj
-                return attrs
-
         raise serializers.ValidationError({"detail": "账号或密码错误，请重试"})
 
 

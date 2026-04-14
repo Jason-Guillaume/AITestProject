@@ -34,13 +34,13 @@
   - `projects/tasks/releases`（DRF ViewSet 标准 CRUD）
 
 - `api/testcase/`
-  - `cases/modules/approachs/steps/designs`（DRF ViewSet 标准 CRUD）
+  - `cases/modules/approaches/steps/designs`（DRF ViewSet 标准 CRUD）
   - `POST /cases/batch-delete/`
   - `POST /cases/batch-execute/`
   - `POST /cases/{id}/execute-api/`
-  - `GET /approachs/{id}/images/`
-  - `POST /approachs/{id}/images/upload/`
-  - `DELETE /approachs/{id}/images/{image_id}/`
+  - `GET /approaches/{id}/images/`
+  - `POST /approaches/{id}/images/upload/`
+  - `DELETE /approaches/{id}/images/{image_id}/`
 
 - `api/execution/`
   - `plans/reports/tasks`（DRF ViewSet 标准 CRUD）

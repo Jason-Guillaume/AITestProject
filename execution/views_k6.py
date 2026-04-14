@@ -4,8 +4,6 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-import threading
-
 from execution.models import K6LoadTestSession
 from execution.serialize import K6LoadTestSessionCreateSerializer, K6LoadTestSessionDetailSerializer
 
@@ -15,11 +13,7 @@ logger = logging.getLogger(__name__)
 def _enqueue_k6_task(session_pk: int) -> None:
     from execution.tasks_k6 import run_k6_load_test
 
-    delay = getattr(run_k6_load_test, "delay", None)
-    if callable(delay):
-        delay(session_pk)
-        return
-    threading.Thread(target=lambda: run_k6_load_test(session_pk), daemon=True).start()
+    run_k6_load_test.delay(session_pk)
 
 
 class K6LoadTestSessionViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):

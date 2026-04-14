@@ -13,7 +13,7 @@ router.register(r'cases', TestCaseViewSet)
 router.register(r'modules', TestModuleViewSet)
 router.register(r'environments', TestEnvironmentViewSet)
 router.register(r'environment-variables', EnvironmentVariableViewSet)
-router.register(r'approachs', TestApproachViewSet)
+router.register(r"approaches", TestApproachViewSet)
 router.register(r'steps', TestCaseStepViewSet)
 router.register(r'designs', TestDesignViewSet)
 

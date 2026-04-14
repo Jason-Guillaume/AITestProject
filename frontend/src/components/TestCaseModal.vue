@@ -153,6 +153,13 @@
 
           <div class="ai-gen-actions">
             <el-button
+              :loading="aiPhase1Editing"
+              :disabled="aiGenerating || aiPhase1Editing"
+              @click="runAiPhase1Preview"
+            >
+              {{ aiPhase1Editing ? 'Phase1 分析中…' : 'Phase1 预览' }}
+            </el-button>
+            <el-button
               type="primary"
               :loading="aiGenerating"
               :disabled="aiGenerating"
@@ -179,6 +186,17 @@
             {{ p }}
           </li>
         </ul>
+        <div v-if="aiPhase1Override" class="ai-gen-phase1-edit">
+          <div class="ai-gen-label ai-gen-label--sub">可编辑（用于本次生成）</div>
+          <el-input v-model="aiPhase1Override.module_name" placeholder="模块名" :disabled="aiGenerating" />
+          <el-input
+            v-model="aiPhase1OverridePointsText"
+            type="textarea"
+            :rows="4"
+            :disabled="aiGenerating"
+            placeholder="每行一个测试点（将覆盖 Phase1 推导结果）"
+          />
+        </div>
       </div>
 
       <div v-if="aiGenerating || aiStreamText" class="ai-gen-stream-block">
@@ -225,6 +243,20 @@
             show-overflow-tooltip
           />
           <el-table-column prop="level" label="等级" width="64" align="center" />
+          <el-table-column label="相似提示" width="84" align="center">
+            <template #default="{ row }">
+              <el-tag
+                v-if="Array.isArray(row?.similar_candidates?.semantic) && row.similar_candidates.semantic.length"
+                size="small"
+                type="warning"
+                style="cursor: pointer"
+                @click="openSimilarDialog(row)"
+              >
+                相似
+              </el-tag>
+              <span v-else>—</span>
+            </template>
+          </el-table-column>
           <el-table-column label="目标模块" min-width="100" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               {{ (row.module_name || '').trim() || '—' }}
@@ -248,6 +280,57 @@
       </el-button>
     </template>
   </el-dialog>
+
+  <el-dialog v-model="showSimilarDialog" title="相似用例对比" width="720px">
+    <div v-if="!activeSimilarRow" style="color: var(--el-text-color-secondary)">
+      未选择用例
+    </div>
+    <template v-else>
+      <div class="ai-sim-block">
+        <div class="ai-gen-label">当前生成用例</div>
+        <div class="ai-sim-current-title">{{ activeSimilarRow.case_name || '—' }}</div>
+        <pre class="ai-sim-current-steps">{{ String(activeSimilarRow.steps || '').slice(0, 600) }}</pre>
+      </div>
+
+      <div class="ai-sim-block">
+        <div class="ai-gen-label">语义相似候选（Top）</div>
+        <el-table :data="semanticSimilarRows" size="small" border>
+          <el-table-column label="分数" width="80" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" type="success">{{ Number(row.score || 0).toFixed(3) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="case_name" label="标题" min-width="160" show-overflow-tooltip />
+          <el-table-column label="步骤摘要" min-width="240" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ String(row.steps || '').slice(0, 140) }}
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <div class="ai-sim-block">
+        <div class="ai-gen-label">字符串相似候选（Top）</div>
+        <el-table :data="stringSimilarRows" size="small" border>
+          <el-table-column label="分数" width="80" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" type="info">{{ Number(row.score || 0).toFixed(3) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="case_name" label="标题" min-width="160" show-overflow-tooltip />
+          <el-table-column label="步骤摘要" min-width="240" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ String(row.steps || '').slice(0, 140) }}
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </template>
+
+    <template #footer>
+      <el-button @click="showSimilarDialog = false">关闭</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -263,6 +346,7 @@ import {
   mergeTestTypePromptWithRequirement,
 } from '@/utils/aiTestTypePrompts'
 import { extractBusinessModuleNameFromRequirement } from '@/utils/extractBusinessModuleFromRequirement'
+import { previewAiPhase1Api } from '@/api/assistant'
 
 const AI_ASSISTANT_MODEL_ROUTE = '/ai-assistant?tab=model'
 
@@ -395,8 +479,28 @@ const aiPreviewTableRef = ref()
 const aiSelectedPreview = ref<Record<string, unknown>[]>([])
 const aiLoadingHint = ref('')
 const aiPhase1Analysis = ref<{ module_name: string; key_test_points: string[] } | null>(null)
+const aiPhase1Override = ref<{ module_name: string; key_test_points: string[] } | null>(null)
+const aiPhase1OverridePointsText = ref('')
+const aiPhase1Editing = ref(false)
 let aiLoadingTimer1: ReturnType<typeof setTimeout> | null = null
 let aiLoadingTimer2: ReturnType<typeof setTimeout> | null = null
+
+const showSimilarDialog = ref(false)
+const activeSimilarRow = ref<Record<string, unknown> | null>(null)
+
+const semanticSimilarRows = computed(() => {
+  const row = activeSimilarRow.value || {}
+  const c = row?.similar_candidates
+  const list = Array.isArray((c as any)?.semantic) ? (c as any).semantic : []
+  return list
+})
+
+const stringSimilarRows = computed(() => {
+  const row = activeSimilarRow.value || {}
+  const c = row?.similar_candidates
+  const list = Array.isArray((c as any)?.string) ? (c as any).string : []
+  return list
+})
 
 const aiGenEffectiveModuleId = computed(() => {
   const m = aiImportModule.value
@@ -572,6 +676,11 @@ function onAiPreviewSelectionChange(rows: Record<string, unknown>[]) {
   aiSelectedPreview.value = rows || []
 }
 
+function openSimilarDialog(row: Record<string, unknown>) {
+  activeSimilarRow.value = row || null
+  showSimilarDialog.value = true
+}
+
 function normalizePhase1Analysis(input: unknown) {
   if (!input || typeof input !== 'object') return null
   const obj = input as { module_name?: unknown; key_test_points?: unknown }
@@ -599,6 +708,16 @@ async function runAiGenerate() {
     ext_config,
     requirement: promptTextMerged,
     testType: effectiveType,
+    dedup_mode: 'highlight',
+  }
+  if (aiPhase1Override.value) {
+    payload.phase1_override = {
+      module_name: aiPhase1Override.value.module_name,
+      key_test_points: aiPhase1OverridePointsText.value
+        .split('\n')
+        .map((x) => x.trim())
+        .filter(Boolean),
+    }
   }
   if (spec && effectiveType === 'api') {
     payload.api_spec = spec
@@ -616,6 +735,9 @@ async function runAiGenerate() {
   aiSelectedPreview.value = []
   aiStreamText.value = ''
   aiPhase1Analysis.value = null
+  aiPhase1Override.value = null
+  aiPhase1OverridePointsText.value = ''
+  aiPhase1Editing.value = false
   let finished = false
   const token = localStorage.getItem('token')
   try {
@@ -804,6 +926,47 @@ async function runAiGenerate() {
   } finally {
     aiGenerating.value = false
     stopAiLoadingHints()
+  }
+}
+
+async function runAiPhase1Preview() {
+  if (!hasAiGenerateAnyInput()) {
+    ElMessage.warning('请先填写需求描述（或补充字段）')
+    return
+  }
+  const effectiveType = effectiveTestType.value
+  const req = (aiRequirement.value || '').trim()
+  const spec = (aiApiSpec.value || '').trim()
+  const promptTextMerged = req ? mergeTestTypePromptWithRequirement(effectiveType, req) : ''
+  const ext_config = buildAiExtConfig()
+  const payload: Record<string, unknown> = {
+    test_type: effectiveType,
+    prompt_text: promptTextMerged,
+    ext_config,
+    requirement: promptTextMerged,
+    testType: effectiveType,
+  }
+  if (spec && effectiveType === 'api') payload.api_spec = spec
+  let ragMid = aiImportModule.value
+  if (ragMid == null || ragMid === '') ragMid = props.selectedModuleId as number | null
+  if (ragMid != null && ragMid !== '') payload.module_id = ragMid
+  aiPhase1Editing.value = true
+  try {
+    const res = await previewAiPhase1Api(payload)
+    const d = res?.data?.data || res?.data || {}
+    const norm = normalizePhase1Analysis(d)
+    if (!norm) {
+      ElMessage.warning('Phase1 结果为空，请重试')
+      return
+    }
+    aiPhase1Analysis.value = norm
+    aiPhase1Override.value = { ...norm, key_test_points: [...(norm.key_test_points || [])] }
+    aiPhase1OverridePointsText.value = (norm.key_test_points || []).join('\n')
+    ElMessage.success('已获取 Phase1 预览结果，可编辑后再生成')
+  } catch (e: any) {
+    ElMessage.error(e?.message || 'Phase1 预览失败')
+  } finally {
+    aiPhase1Editing.value = false
   }
 }
 
@@ -1151,6 +1314,27 @@ onBeforeUnmount(() => {
 }
 .ai-gen-phase1-points li + li {
   margin-top: 2px;
+}
+
+.ai-sim-block {
+  margin-top: 12px;
+}
+.ai-sim-current-title {
+  font-weight: 600;
+  margin: 6px 0;
+}
+.ai-sim-current-steps {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: auto;
+  background: rgba(6, 10, 20, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px;
+  border-radius: 8px;
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 12px;
+  line-height: 1.55;
 }
 .ai-gen-stream-pre {
   margin: 0;

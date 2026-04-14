@@ -11,6 +11,7 @@ from testcase.services.case_subtypes import (
     split_typed_payload_update,
     sync_typed_children,
 )
+from testcase.services.api_execution import normalize_api_body
 
 
 class ApiBodyField(serializers.JSONField):
@@ -207,6 +208,9 @@ class TestCaseSerializer(BaseModelSerializers):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         inject_typed_read_representation(instance, data)
+        if (instance.test_type or "").strip() == TEST_CASE_TYPE_API:
+            nb = normalize_api_body(data.get("api_body"))
+            data["api_body"] = {} if nb is None else nb
         return data
 
     def create(self, validated_data):

@@ -42,6 +42,7 @@ class SystemMessageAdmin(admin.ModelAdmin):
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
     list_display = ("id", "org_name", "create_time")
+    filter_horizontal = ("members",)
 
 
 @admin.register(SystemMessageSetting)

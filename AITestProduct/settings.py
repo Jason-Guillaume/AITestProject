@@ -33,7 +33,9 @@ SECRET_KEY = "django-insecure-oc-#_d1n+y92e3n3y-agvr4l4t20ehs=i+d6vpwho^9_k%-lgv
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# 逗号分隔；不设时 DEBUG 下 Django 仅允许 localhost / 127.0.0.1（局域网 IP 直连后端会 DisallowedHost）。
+_allowed = os.environ.get("DJANGO_ALLOWED_HOSTS", "").strip()
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()] if _allowed else []
 
 
 # Application definition
@@ -61,6 +63,7 @@ INSTALLED_APPS = _INSTALLED_PREFIX + [
     "defect.apps.DefectConfig",
     "common.apps.CommonConfig",
     "assistant.apps.AssistantConfig",
+    "server_logs.apps.ServerLogsConfig",
 ]
 if _app_installed("django_celery_results"):
     INSTALLED_APPS.append("django_celery_results")
@@ -124,6 +127,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    # ScopedRateThrottle 的配额（仅对声明了 throttle_scope 的视图生效）
+    "DEFAULT_THROTTLE_RATES": {
+        "server_logs_analyze": os.environ.get("SERVER_LOGS_ANALYZE_THROTTLE", "40/hour"),
+    },
 }
 
 # ----------------------------
@@ -135,21 +142,6 @@ _redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
 _redis_port = int(os.environ.get("REDIS_PORT", "6379"))
 _use_redis_cache = os.environ.get("USE_REDIS_CACHE", "1") == "1"
 
-# Django Channels（须在 _redis_host / _redis_port 定义之后，避免 NameError）
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [
-                (
-                    os.environ.get("CHANNEL_REDIS_HOST", _redis_host),
-                    int(os.environ.get("CHANNEL_REDIS_PORT", str(_redis_port))),
-                )
-            ],
-        },
-    },
-}
-
 
 def _redis_is_available(host: str, port: int, timeout: float = 0.3) -> bool:
     try:
@@ -157,6 +149,27 @@ def _redis_is_available(host: str, port: int, timeout: float = 0.3) -> bool:
             return True
     except OSError:
         return False
+
+
+_channel_redis_host = os.environ.get("CHANNEL_REDIS_HOST", _redis_host)
+_channel_redis_port = int(os.environ.get("CHANNEL_REDIS_PORT", str(_redis_port)))
+
+# Channels：与缓存一致，Redis 不可用时降级内存层（单机开发可用；多进程/生产请启动 Redis）。
+if _redis_is_available(_channel_redis_host, _channel_redis_port):
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [(_channel_redis_host, _channel_redis_port)],
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 
 
 if _use_redis_cache and _redis_is_available(_redis_host, _redis_port):
@@ -290,7 +303,13 @@ if _db_password:
 _default_mysql_broker = (
     f"sqla+mysql+pymysql://{_auth_part}@{_db_host}:{_db_port}/{_db_name}"
 )
-CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", _default_mysql_broker)
+# 优先使用 Redis（更常见、更轻量的 broker）；Redis 不可用则回退 MySQL broker。
+_default_redis_broker = f"redis://{_redis_host}:{_redis_port}/1"
+if _redis_is_available(_redis_host, _redis_port):
+    _default_broker = _default_redis_broker
+else:
+    _default_broker = _default_mysql_broker
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", _default_broker)
 # 若安装了 django-celery-results，则统一使用 django-db 作为结果后端。
 CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "django-db")
 CELERY_TASK_SERIALIZER = "json"
@@ -325,4 +344,20 @@ AI_CASE_SEMANTIC_DUP_THRESHOLD = float(
     os.environ.get("AI_CASE_SEMANTIC_DUP_THRESHOLD", "0.85")
 )
 
+# ---------------------------------------------------------------------------
+# 服务器日志模块（SSH / Loki）
+# ---------------------------------------------------------------------------
+# 独立 Fernet 密钥（url-safe base64 44 字符）；不设置则从 SECRET_KEY 派生（仅建议开发环境）。
+SERVER_LOGS_FERNET_KEY = os.environ.get("SERVER_LOGS_FERNET_KEY", "")
+# Grafana Loki 根地址（如 https://loki.example.com），留空则历史检索接口返回未启用。
+SERVER_LOGS_LOKI_BASE = os.environ.get("SERVER_LOGS_LOKI_BASE", "")
+# Elasticsearch：server_logs 实时写入与历史检索。生产务必用环境变量覆盖 URL 与密码。
+ELASTICSEARCH_URL = os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
+ELASTICSEARCH_USER = os.environ.get("ELASTICSEARCH_USER", "elastic")
+ELASTICSEARCH_PASSWORD = os.environ.get("ELASTICSEARCH_PASSWORD", "sH63gtmA*bU9P-5HBpEd")
+_es_verify = os.environ.get("ELASTICSEARCH_VERIFY_CERTS", "").strip().lower()
+ELASTICSEARCH_VERIFY_CERTS = _es_verify in ("1", "true", "yes")
+ELASTICSEARCH_REQUEST_TIMEOUT = int(os.environ.get("ELASTICSEARCH_REQUEST_TIMEOUT", "5"))
+# 读写别名（与 ILM rollover 一致）；若自建集群改了别名，需同步改此项与模板中的物理索引前缀。
+SERVER_LOGS_ES_INDEX = os.environ.get("SERVER_LOGS_ES_INDEX", "server-logs")
 

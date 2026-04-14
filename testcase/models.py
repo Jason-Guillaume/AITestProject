@@ -12,6 +12,10 @@ from common.models import BaseModel
 logger = logging.getLogger(__name__)
 
 
+class EnvironmentVariableDecryptionError(Exception):
+    """敏感环境变量解密失败（密钥轮换、密文损坏等），由调用方决定如何提示或降级。"""
+
+
 def _build_env_cipher() -> Fernet:
     """
     构建环境变量加解密器：
@@ -253,7 +257,12 @@ class EnvironmentVariable(BaseModel):
         return f"{cls.ENV_VALUE_PREFIX}{token}"
 
     @classmethod
-    def decrypt_text(cls, encrypted_text: str) -> str:
+    def decrypt_text(cls, encrypted_text: str, *, errors: str = "ignore") -> str:
+        """
+        errors:
+        - ignore: 解密失败时记录日志并返回空串（兼容旧行为）
+        - raise: 解密失败抛出 EnvironmentVariableDecryptionError
+        """
         if not encrypted_text:
             return ""
         if not encrypted_text.startswith(cls.ENV_VALUE_PREFIX):
@@ -263,16 +272,24 @@ class EnvironmentVariable(BaseModel):
             return _ENV_CIPHER.decrypt(token.encode("utf-8")).decode("utf-8")
         except InvalidToken:
             logger.exception("环境变量解密失败：token 非法")
+            if errors == "raise":
+                raise EnvironmentVariableDecryptionError(
+                    "环境变量解密失败：密文无效或密钥不匹配"
+                ) from None
             return ""
         except Exception:
             logger.exception("环境变量解密失败：未知异常")
+            if errors == "raise":
+                raise EnvironmentVariableDecryptionError(
+                    "环境变量解密失败：未知错误"
+                ) from None
             return ""
 
     def get_decrypted_value(self) -> str:
-        """返回可用于运行态注入的明文值。"""
+        """返回可用于运行态注入的明文值；敏感变量解密失败时抛出 EnvironmentVariableDecryptionError。"""
         if not self.is_secret:
             return self.value or ""
-        return self.decrypt_text(self.value or "")
+        return self.decrypt_text(self.value or "", errors="raise")
 
     def save(self, *args, **kwargs):
         """
@@ -360,15 +377,23 @@ class TestCase(BaseModel):
     def save(self, *args, **kwargs):
         if self.pk is None and self.case_number is None:
             with transaction.atomic():
-                # 编号按测试类型独立递增，不再按模块拆分。
+                # 编号按测试类型独立递增；用 all_objects 取 Max，避免与回收站中仍占用的编号冲突。
                 scope = {"test_type": self.test_type}
-                scoped_qs = TestCase.objects.select_for_update().filter(**scope)
+                scoped_qs = TestCase.all_objects.select_for_update().filter(**scope)
                 max_case_number = scoped_qs.aggregate(max_case_number=Max("case_number"))[
                     "max_case_number"
                 ]
                 self.case_number = (max_case_number or 0) + 1
                 return super().save(*args, **kwargs)
         return super().save(*args, **kwargs)
+
+    def _get_subtype_snapshot_data(self) -> dict:
+        """子类重写：纳入版本快照的 subtype 段。"""
+        return {}
+
+    def _apply_subtype_snapshot(self, subtype: dict) -> None:
+        """子类重写：从快照 subtype 回填子表字段。"""
+        pass
 
     @property
     def type_sequence(self):
@@ -409,37 +434,7 @@ class TestCase(BaseModel):
         """
         生成用例当前完整快照，供版本回溯使用。
         """
-        subtype_data = {}
-        if self.test_type == TEST_CASE_TYPE_API and hasattr(self, "apitestcase"):
-            subtype_data = {
-                "api_url": self.apitestcase.api_url,
-                "api_method": self.apitestcase.api_method,
-                "api_headers": self.apitestcase.api_headers,
-                "api_body": self.apitestcase.api_body,
-                "api_expected_status": self.apitestcase.api_expected_status,
-                "api_source_curl": getattr(
-                    self.apitestcase, "api_source_curl", ""
-                )
-                or "",
-            }
-        elif self.test_type == TEST_CASE_TYPE_PERFORMANCE and hasattr(self, "perftestcase"):
-            subtype_data = {
-                "concurrency": self.perftestcase.concurrency,
-                "duration_seconds": self.perftestcase.duration_seconds,
-                "target_rps": self.perftestcase.target_rps,
-            }
-        elif self.test_type == TEST_CASE_TYPE_SECURITY and hasattr(self, "securitytestcase"):
-            subtype_data = {
-                "attack_surface": self.securitytestcase.attack_surface,
-                "tool_preset": self.securitytestcase.tool_preset,
-                "risk_level": self.securitytestcase.risk_level,
-            }
-        elif self.test_type == TEST_CASE_TYPE_UI_AUTOMATION and hasattr(self, "uitestcase"):
-            subtype_data = {
-                "app_under_test": self.uitestcase.app_under_test,
-                "primary_locator": self.uitestcase.primary_locator,
-                "automation_framework": self.uitestcase.automation_framework,
-            }
+        subtype_data = self._get_subtype_snapshot_data()
 
         steps = [
             {
@@ -494,33 +489,7 @@ class TestCase(BaseModel):
             ]
         )
 
-        if self.test_type == TEST_CASE_TYPE_API and hasattr(self, "apitestcase"):
-            ap = self.apitestcase
-            ap.api_url = subtype.get("api_url", ap.api_url)
-            ap.api_method = subtype.get("api_method", ap.api_method)
-            ap.api_headers = subtype.get("api_headers", ap.api_headers)
-            ap.api_body = subtype.get("api_body", ap.api_body)
-            ap.api_expected_status = subtype.get("api_expected_status", ap.api_expected_status)
-            ap.api_source_curl = subtype.get("api_source_curl", ap.api_source_curl)
-            ap.save()
-        elif self.test_type == TEST_CASE_TYPE_PERFORMANCE and hasattr(self, "perftestcase"):
-            pf = self.perftestcase
-            pf.concurrency = int(subtype.get("concurrency", pf.concurrency))
-            pf.duration_seconds = int(subtype.get("duration_seconds", pf.duration_seconds))
-            pf.target_rps = subtype.get("target_rps", pf.target_rps)
-            pf.save()
-        elif self.test_type == TEST_CASE_TYPE_SECURITY and hasattr(self, "securitytestcase"):
-            sec = self.securitytestcase
-            sec.attack_surface = subtype.get("attack_surface", sec.attack_surface)
-            sec.tool_preset = subtype.get("tool_preset", sec.tool_preset)
-            sec.risk_level = subtype.get("risk_level", sec.risk_level)
-            sec.save()
-        elif self.test_type == TEST_CASE_TYPE_UI_AUTOMATION and hasattr(self, "uitestcase"):
-            ui = self.uitestcase
-            ui.app_under_test = subtype.get("app_under_test", ui.app_under_test)
-            ui.primary_locator = subtype.get("primary_locator", ui.primary_locator)
-            ui.automation_framework = subtype.get("automation_framework", ui.automation_framework)
-            ui.save()
+        self._apply_subtype_snapshot(subtype)
 
         # 使用“软重建”步骤：旧步骤置删，新步骤按快照插入。
         self.steps.filter(is_deleted=False).update(is_deleted=True)
@@ -624,6 +593,25 @@ class ApiTestCase(TestCase):
         help_text="生成或「从 cURL 填充」时保存的原始命令；执行前可据此还原请求",
     )
 
+    def _get_subtype_snapshot_data(self) -> dict:
+        return {
+            "api_url": self.api_url,
+            "api_method": self.api_method,
+            "api_headers": self.api_headers,
+            "api_body": self.api_body,
+            "api_expected_status": self.api_expected_status,
+            "api_source_curl": getattr(self, "api_source_curl", "") or "",
+        }
+
+    def _apply_subtype_snapshot(self, subtype: dict) -> None:
+        self.api_url = subtype.get("api_url", self.api_url)
+        self.api_method = subtype.get("api_method", self.api_method)
+        self.api_headers = subtype.get("api_headers", self.api_headers)
+        self.api_body = subtype.get("api_body", self.api_body)
+        self.api_expected_status = subtype.get("api_expected_status", self.api_expected_status)
+        self.api_source_curl = subtype.get("api_source_curl", self.api_source_curl)
+        self.save()
+
     class Meta:
         db_table = "testcase_apitestcase"
 
@@ -638,6 +626,19 @@ class PerfTestCase(TestCase):
         blank=True,
         verbose_name="目标 RPS",
     )
+
+    def _get_subtype_snapshot_data(self) -> dict:
+        return {
+            "concurrency": self.concurrency,
+            "duration_seconds": self.duration_seconds,
+            "target_rps": self.target_rps,
+        }
+
+    def _apply_subtype_snapshot(self, subtype: dict) -> None:
+        self.concurrency = int(subtype.get("concurrency", self.concurrency))
+        self.duration_seconds = int(subtype.get("duration_seconds", self.duration_seconds))
+        self.target_rps = subtype.get("target_rps", self.target_rps)
+        self.save()
 
     class Meta:
         db_table = "testcase_perftestcase"
@@ -666,6 +667,19 @@ class SecurityTestCase(TestCase):
         verbose_name="风险等级",
     )
 
+    def _get_subtype_snapshot_data(self) -> dict:
+        return {
+            "attack_surface": self.attack_surface,
+            "tool_preset": self.tool_preset,
+            "risk_level": self.risk_level,
+        }
+
+    def _apply_subtype_snapshot(self, subtype: dict) -> None:
+        self.attack_surface = subtype.get("attack_surface", self.attack_surface)
+        self.tool_preset = subtype.get("tool_preset", self.tool_preset)
+        self.risk_level = subtype.get("risk_level", self.risk_level)
+        self.save()
+
     class Meta:
         db_table = "testcase_securitytestcase"
 
@@ -682,6 +696,21 @@ class UITestCase(TestCase):
     automation_framework = models.CharField(
         max_length=64, blank=True, default="", verbose_name="自动化框架"
     )
+
+    def _get_subtype_snapshot_data(self) -> dict:
+        return {
+            "app_under_test": self.app_under_test,
+            "primary_locator": self.primary_locator,
+            "automation_framework": self.automation_framework,
+        }
+
+    def _apply_subtype_snapshot(self, subtype: dict) -> None:
+        self.app_under_test = subtype.get("app_under_test", self.app_under_test)
+        self.primary_locator = subtype.get("primary_locator", self.primary_locator)
+        self.automation_framework = subtype.get(
+            "automation_framework", self.automation_framework
+        )
+        self.save()
 
     class Meta:
         db_table = "testcase_uitestcase"

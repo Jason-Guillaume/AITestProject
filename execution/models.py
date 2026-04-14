@@ -91,6 +91,15 @@ class TestReport(BaseModel):
         verbose_name="响应快照",
         help_text="服务端返回原始数据摘要",
     )
+    project = models.ForeignKey(
+        "project.TestProject",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="test_reports",
+        verbose_name="关联项目(冗余)",
+        help_text="用于数据权限与查询加速；值来自 plan.version.project",
+    )
 
     class Meta:
         db_table = "test_report"
@@ -341,6 +350,15 @@ class ExecutionTask(BaseModel):
     )
     error_message = models.TextField(blank=True, default="", verbose_name="错误信息")
     report = models.JSONField(default=dict, blank=True, verbose_name="执行报告")
+    project = models.ForeignKey(
+        "project.TestProject",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="execution_tasks",
+        verbose_name="关联项目(冗余)",
+        help_text="用于数据权限控制；独立任务可为空或由创建时指定",
+    )
 
     class Meta:
         db_table = "execution_task"

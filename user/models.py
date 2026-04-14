@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.db import models
 
@@ -86,6 +87,15 @@ class UserChangeRequest(models.Model):
         db_index=True,
         verbose_name="状态",
     )
+    approver = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_change_requests",
+        verbose_name="审批人",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True, verbose_name="审批时间")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
@@ -144,6 +154,14 @@ class AIModelConfig(models.Model):
     平台级唯一 AI 接入配置（数据库中至多保留一条业务记录，删除后可重新保存）。
     """
 
+    project = models.ForeignKey(
+        "project.TestProject",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="ai_configs",
+        verbose_name="所属项目",
+    )
     model_type = models.CharField(max_length=64, verbose_name="模型标识")
     api_key = models.TextField(verbose_name="API Key")
     base_url = models.CharField(
@@ -158,6 +176,12 @@ class AIModelConfig(models.Model):
     class Meta:
         db_table = "sys_ai_model_config"
         verbose_name = "AI 模型配置"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "model_type"],
+                name="uniq_ai_model_config_per_project_model",
+            )
+        ]
 
     def __str__(self):
         return self.model_type
@@ -170,6 +194,19 @@ class Organization(BaseModel):
 
     org_name = models.CharField(max_length=255, verbose_name="组织名称")
     description = models.TextField(null=True, blank=True, verbose_name="描述")
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="organization_memberships",
+        verbose_name="组织成员",
+        help_text="加入成员后，可共享绑定到本组织的「服务器日志」等资源配置。",
+    )
+    projects = models.ManyToManyField(
+        "project.TestProject",
+        blank=True,
+        related_name="organizations",
+        verbose_name="关联项目",
+    )
 
     class Meta:
         db_table = "sys_org"
@@ -181,6 +218,14 @@ class SystemMessageSetting(BaseModel):
     消息设置（用于“系统管理-消息设置”页面）
     """
 
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="message_settings",
+        verbose_name="所属用户",
+    )
     in_app_enabled = models.BooleanField(default=True, verbose_name="站内消息")
     email_enabled = models.BooleanField(default=False, verbose_name="邮件通知")
     sms_enabled = models.BooleanField(default=False, verbose_name="短信通知")
@@ -192,3 +237,9 @@ class SystemMessageSetting(BaseModel):
     class Meta:
         db_table = "sys_message_setting"
         verbose_name = "消息设置"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["recipient"],
+                name="unique_user_message_setting",
+            )
+        ]

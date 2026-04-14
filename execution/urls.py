@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from django.urls import path
 
 from execution.views import *
+from execution.views_k6 import K6LoadTestSessionViewSet
 
 # 1. 实例化路由器
 router = DefaultRouter()
@@ -15,6 +16,7 @@ router.register(r'reports', TestReportViewSet)
 router.register(r'tasks', PerfTaskViewSet)
 router.register(r'scheduled-tasks', ScheduledTaskViewSet)
 router.register(r'scheduled-task-logs', ScheduledTaskLogViewSet)
+router.register(r'k6-sessions', K6LoadTestSessionViewSet)
 
 # 3. 暴露路由
 urlpatterns = router.urls + [

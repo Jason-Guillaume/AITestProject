@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import UniqueConstraint
 from common.models import BaseModel
 
 
@@ -40,6 +41,16 @@ class TestDefect(BaseModel):
         verbose_name="所属模块",
     )
     defect_content = models.TextField(null=True, blank=True, verbose_name="缺陷内容")
+    reproduction_steps = models.JSONField(default=list, blank=True, verbose_name="复现步骤")
+    attachments = models.JSONField(default=list, blank=True, verbose_name="附件列表")
+    environment = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="发生环境"
+    )
 
     class Meta:
         db_table = "test_defect"
+        constraints = [
+            UniqueConstraint(
+                fields=["defect_no", "is_deleted"], name="uniq_test_defect_no_is_deleted"
+            )
+        ]

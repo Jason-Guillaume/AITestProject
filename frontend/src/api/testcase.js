@@ -1,22 +1,22 @@
 import request from "@/utils/request";
 
-export const getApproachsApi = (params) => request.get("/testcase/approachs/", { params });
-export const createApproachApi = (data) => request.post("/testcase/approachs/", data);
-export const updateApproachApi = (id, data) => request.patch(`/testcase/approachs/${id}/`, data);
-export const deleteApproachApi = (id) => request.delete(`/testcase/approachs/${id}/`);
+export const getApproachsApi = (params) => request.get("/testcase/approaches/", { params });
+export const createApproachApi = (data) => request.post("/testcase/approaches/", data);
+export const updateApproachApi = (id, data) => request.patch(`/testcase/approaches/${id}/`, data);
+export const deleteApproachApi = (id) => request.delete(`/testcase/approaches/${id}/`);
 
 // 方案图片
 export const getApproachImagesApi = (id) =>
-  request.get(`/testcase/approachs/${id}/images/`);
+  request.get(`/testcase/approaches/${id}/images/`);
 
 // files: File[]，字段名建议为 images（multipart）
 export const uploadApproachImagesApi = (id, formData) =>
-  request.post(`/testcase/approachs/${id}/images/upload/`, formData, {
+  request.post(`/testcase/approaches/${id}/images/upload/`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
 
 export const deleteApproachImageApi = (approachId, imageId) =>
-  request.delete(`/testcase/approachs/${approachId}/images/${imageId}/`);
+  request.delete(`/testcase/approaches/${approachId}/images/${imageId}/`);
 
 export const getDesignsApi = (params) => request.get("/testcase/designs/", { params });
 export const createDesignApi = (data) => request.post("/testcase/designs/", data);

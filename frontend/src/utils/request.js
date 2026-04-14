@@ -41,14 +41,33 @@ request.interceptors.response.use(
     return response;
   },
   (error) => {
+    // Axios 超时：error.response 可能为空，先单独处理以给出更明确的提示
+    if (
+      error?.code === "ECONNABORTED" ||
+      String(error?.message || "").toLowerCase().includes("timeout")
+    ) {
+      const method = String(error?.config?.method || "GET").toUpperCase();
+      const url = error?.config?.url || "";
+      const msg = `请求超时（60s）：${method} ${url}`;
+      ElMessage.error(msg);
+      notifyBackendHealth("unhealthy", msg);
+      return Promise.reject(error);
+    }
+
     const status = error?.response?.status;
     const contentType = String(error?.response?.headers?.["content-type"] || "").toLowerCase();
     const rawData = error?.response?.data;
-    const dataMsg =
+    let dataMsg =
       rawData?.message ||
       rawData?.msg ||
       rawData?.error ||
       (typeof rawData === "string" ? rawData : "");
+    if (!dataMsg && rawData?.detail != null) {
+      dataMsg =
+        typeof rawData.detail === "string"
+          ? rawData.detail
+          : JSON.stringify(rawData.detail);
+    }
 
     // 后端返回 HTML 错误页（常见于 Django debug/500），给出可读错误提示。
     if (status >= 500 && (contentType.includes("text/html") || /^<html/i.test(String(rawData || "")))) {

@@ -279,12 +279,23 @@ class TestCaseViewSet(BaseModelViewSet):
         if test_type and test_type in allowed:
             qs = qs.filter(test_type=test_type)
 
-        qs = qs.select_related(
-            "apitestcase",
-            "perftestcase",
-            "securitytestcase",
-            "uitestcase",
-        )
+        _subtype_rel = {
+            TEST_CASE_TYPE_API: ("apitestcase",),
+            TEST_CASE_TYPE_PERFORMANCE: ("perftestcase",),
+            TEST_CASE_TYPE_SECURITY: ("securitytestcase",),
+            TEST_CASE_TYPE_UI_AUTOMATION: ("uitestcase",),
+        }
+        if test_type == TEST_CASE_TYPE_FUNCTIONAL:
+            pass
+        elif test_type in _subtype_rel:
+            qs = qs.select_related(*_subtype_rel[test_type])
+        else:
+            qs = qs.select_related(
+                "apitestcase",
+                "perftestcase",
+                "securitytestcase",
+                "uitestcase",
+            )
         if recycle_mode:
             return qs.order_by("-deleted_at", "-id")
         return qs.order_by("-id")

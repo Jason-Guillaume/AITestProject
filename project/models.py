@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models import Q
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from common.models import BaseModel
 
@@ -46,6 +48,40 @@ class TestProject(BaseModel):
         db_table = "test_project"
         verbose_name = "项目管理"
 
+    def clean(self):
+        if self.parent_id is None:
+            return
+        if self.pk and self.parent_id == self.pk:
+            raise ValidationError("项目不能将自己设为父项目")
+
+        # 检查循环引用：沿 parent 链向上追溯
+        seen = {self.pk} if self.pk else set()
+        p = self.parent
+        while p is not None:
+            if p.pk in seen:
+                raise ValidationError("项目不能形成循环引用")
+            seen.add(p.pk)
+            p = p.parent
+
+    def update_progress(self, save: bool = True) -> int:
+        """
+        根据该项目下关联测试计划完成率自动计算进度。
+        口径：project → release plans → execution.TestPlan(plan_status=3) 完成数 / 总数。
+        """
+        from execution.models import TestPlan
+
+        plan_qs = TestPlan.objects.filter(version__project=self, is_deleted=False)
+        total = plan_qs.count()
+        progress = 0
+        if total > 0:
+            completed = plan_qs.filter(plan_status=3).count()
+            progress = int((completed / total) * 100)
+
+        self.progress = progress
+        if save:
+            self.save(update_fields=["progress", "update_time"])
+        return progress
+
 
 class TestTask(BaseModel):
     task_title = models.CharField(max_length=255, verbose_name="任务标题")
@@ -88,9 +124,47 @@ class ReleasePlan(BaseModel):
         "testcase.TestCase",
         related_name="release_plans",
         blank=True,
+        through="ReleasePlanTestCase",
         verbose_name="关联测试用例",
     )
 
     class Meta:
         db_table = "release_plan"
         verbose_name = "发布计划"
+        constraints = [
+            # 兼容 MySQL：用 is_deleted 参与唯一性，达到“仅对未删除记录唯一”的效果
+            models.UniqueConstraint(
+                fields=["project", "version_no", "is_deleted"],
+                name="uniq_releaseplan_version_per_project_deletedflag",
+            )
+        ]
+
+
+class ReleasePlanTestCase(models.Model):
+    """
+    ReleasePlan 与 TestCase 的关联中间表，用于控制关联关系的软删除。
+    """
+
+    release_plan = models.ForeignKey(
+        ReleasePlan,
+        on_delete=models.CASCADE,
+        related_name="release_plan_test_cases",
+    )
+    test_case = models.ForeignKey(
+        "testcase.TestCase",
+        on_delete=models.CASCADE,
+        related_name="release_plan_test_cases",
+    )
+    create_time = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    update_time = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    is_deleted = models.BooleanField(default=False, verbose_name="是否已删除")
+
+    class Meta:
+        db_table = "release_plan_test_case"
+        constraints = [
+            # 兼容 MySQL：用 is_deleted 参与唯一性，达到“仅对未删除记录唯一”的效果
+            models.UniqueConstraint(
+                fields=["release_plan", "test_case", "is_deleted"],
+                name="uniq_releaseplan_testcase_deletedflag",
+            ),
+        ]

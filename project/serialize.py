@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from project.models import *
 from common.serialize import BaseModelSerializers
+from user.models import User
 
 
 class _EmptyAsNullPrimaryKeyRelatedField(serializers.PrimaryKeyRelatedField):
@@ -31,13 +32,13 @@ class TestProjectSerializer(BaseModelSerializers):
         allow_null=True,
     )
     parent = _EmptyAsNullPrimaryKeyRelatedField(
-        queryset=TestProject.objects.all(),
+        queryset=TestProject.objects.filter(is_deleted=False),
         allow_null=True,
         required=False,
     )
     members = serializers.PrimaryKeyRelatedField(
         many=True,
-        queryset=get_user_model().objects.all(),
+        queryset=User.objects.filter(is_deleted=False),
         required=False,
         allow_empty=True,
     )
@@ -92,9 +93,37 @@ class TestProjectSerializer(BaseModelSerializers):
             raise serializers.ValidationError("封面图仅支持 jpg/jpeg/png/webp/gif")
         return value
 
+    def validate_parent(self, value):
+        """
+        防止 parent 自引用/循环引用。
+        """
+        if value is None:
+            return value
+
+        # 更新时 self.instance 可能存在；创建时 instance 为 None
+        current_id = getattr(self.instance, "id", None)
+        if current_id and value.id == current_id:
+            raise serializers.ValidationError("项目不能将自己设为父项目")
+
+        # 循环检查：沿 parent 链向上追溯
+        seen = {current_id} if current_id else set()
+        p = value
+        while p is not None:
+            if p.id in seen:
+                raise serializers.ValidationError("项目不能形成循环引用")
+            seen.add(p.id)
+            p = p.parent
+        return value
+
 
 class TestTaskSerializer(BaseModelSerializers):
     creator_name = serializers.CharField(source="creator.real_name", read_only=True)
+    assignee_name = serializers.CharField(source="assignee.real_name", read_only=True)
+
+    assignee = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(is_deleted=False),
+        required=True,
+    )
 
     class Meta:
         model = TestTask

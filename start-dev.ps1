@@ -44,6 +44,44 @@ function Stop-StaleRunserverProcesses {
     }
 }
 
+# 若端口 8000 已被本项目残留进程占用（或假死），额外按端口清理一次，避免“端口在但请求超时”。
+function Stop-StalePort8000Processes {
+    Write-Host "`n[预处理] 检查并清理占用 8000 端口的残留进程..." -ForegroundColor Yellow
+    try {
+        $lines = netstat -ano | Select-String "127.0.0.1:8000\s+.*LISTENING\s+(\d+)" -AllMatches
+    } catch {
+        Write-Host "无法读取端口占用信息（netstat 失败），跳过端口清理。" -ForegroundColor DarkGray
+        return
+    }
+    if (-not $lines) {
+        Write-Host "8000 端口未被占用。" -ForegroundColor DarkGray
+        return
+    }
+    $pids = @()
+    foreach ($m in $lines.Matches) {
+        $pids += [int]$m.Groups[1].Value
+    }
+    $pids = $pids | Sort-Object -Unique
+    foreach ($pid in $pids) {
+        try {
+            $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$pid"
+        } catch {
+            continue
+        }
+        $cmd = ($proc.CommandLine -as [string])
+        if ($cmd -and $cmd -match [Regex]::Escape($PSScriptRoot) -and $cmd -match "manage\.py\s+runserver") {
+            try {
+                Stop-Process -Id $pid -Force
+                Write-Host ("已结束占用 8000 的 runserver 进程 PID={0}" -f $pid) -ForegroundColor DarkGray
+            } catch {
+                Write-Host ("结束 PID={0} 失败: {1}" -f $pid, $_.Exception.Message) -ForegroundColor Red
+            }
+        } else {
+            Write-Host ("8000 端口被 PID={0} 占用，但不属于当前项目 runserver，未自动结束。" -f $pid) -ForegroundColor DarkGray
+        }
+    }
+}
+
 # 1) 基础依赖（可重复执行，已安装会自动跳过）
 Run-Step "安装 Celery-MySQL 关键依赖" "& '$PyExe' -m pip install sqlalchemy pymysql django-celery-results"
 
@@ -55,6 +93,7 @@ Run-Step "执行 Django 自检" "& '$PyExe' manage.py check"
 
 # 4) 清理残留 runserver 进程，避免端口占用
 Stop-StaleRunserverProcesses
+Stop-StalePort8000Processes
 
 # 5) 启动服务（新开两个窗口，分别跑 Django 与 Celery Worker）
 Write-Host "`n[启动] 拉起 Django 与 Celery Worker..." -ForegroundColor Green

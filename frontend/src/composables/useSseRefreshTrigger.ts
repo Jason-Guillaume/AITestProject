@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted } from "vue";
+import { onActivated, onBeforeUnmount, onDeactivated, onMounted } from "vue";
 
 interface UseSseRefreshTriggerOptions {
   buildUrl: () => string;
@@ -93,6 +93,17 @@ export function useSseRefreshTrigger(
       window.addEventListener(eventName, handleContextChanged);
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
+  });
+
+  // 兼容 keep-alive：组件被缓存时不会触发 unmount，需要在失活时主动断开长连接
+  onDeactivated(() => {
+    closeSource();
+    clearReconnectTimer();
+  });
+
+  onActivated(() => {
+    if (stopped) return;
+    connect();
   });
 
   onBeforeUnmount(() => {
