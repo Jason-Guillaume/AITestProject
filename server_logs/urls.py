@@ -26,7 +26,11 @@ urlpatterns = router.urls + [
         name="server-logs-analyze-with-context",
     ),
     path("search/", LogHistorySearchAPIView.as_view(), name="server-logs-search"),
-    path("agg/error-trend/", LogErrorTrendAPIView.as_view(), name="server-logs-error-trend"),
+    path(
+        "agg/error-trend/",
+        LogErrorTrendAPIView.as_view(),
+        name="server-logs-error-trend",
+    ),
     path(
         "organization-choices/",
         LogServerOrganizationChoicesAPIView.as_view(),

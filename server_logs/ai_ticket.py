@@ -11,7 +11,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_JSON_FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE | re.MULTILINE)
+_JSON_FENCE = re.compile(
+    r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE | re.MULTILINE
+)
 
 
 def _strip_code_fences(raw: str) -> str:
@@ -64,7 +66,9 @@ def analyze_log_ticket_draft(
     if not key:
         return None, "未配置 AI：请在系统管理保存模型配置，或在请求中传入 api_key。"
 
-    model, base = _resolve_openai_target(model or "glm-4.7-flash", base or ZHIPU_DEFAULT_API_BASE)
+    model, base = _resolve_openai_target(
+        model or "glm-4.7-flash", base or ZHIPU_DEFAULT_API_BASE
+    )
     base = _normalize_openai_sdk_base_url(base, model).rstrip("/")
 
     ctx = "\n".join([ln for ln in (context_lines or []) if (ln or "").strip()])
@@ -96,7 +100,11 @@ def analyze_log_ticket_draft(
         "严禁编造日志中不存在的信息；不确定的内容写入 environment_notes 并标明不确定。"
         + schema_hint
     )
-    user_content = "请根据以下日志材料生成工单草稿 JSON：\n\n```text\n" + combined.strip() + "\n```"
+    user_content = (
+        "请根据以下日志材料生成工单草稿 JSON：\n\n```text\n"
+        + combined.strip()
+        + "\n```"
+    )
 
     try:
         client = OpenAI(api_key=key, base_url=base, timeout=120.0)
@@ -159,7 +167,9 @@ def _validate_ticket_draft(data: dict[str, Any]) -> str | None:
     data["severity"] = sev_i
     data["priority"] = pri_i
     if isinstance(steps, list):
-        data["reproduction_steps"] = [str(x).strip() for x in steps if str(x).strip()][:30]
+        data["reproduction_steps"] = [str(x).strip() for x in steps if str(x).strip()][
+            :30
+        ]
     env = data.get("environment_notes")
     if env is not None and not isinstance(env, str):
         return "environment_notes 必须为字符串。"

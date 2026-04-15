@@ -39,6 +39,13 @@
 
     <div class="server-logs-page__main">
       <template v-if="selected">
+        <el-alert
+          v-if="streaming && activeHost && activeHost.id !== selected.id"
+          type="warning"
+          show-icon
+          class="server-logs-page__switch-alert"
+          :title="`当前正在实时连接：${activeHost.name || activeHost.host}；已选中：${selected.name || selected.host}。点击“连接实时日志”将提示是否切换连接。`"
+        />
         <div class="server-logs-page__controls">
           <el-input
             v-model="logPath"
@@ -52,11 +59,7 @@
           <el-button v-else type="danger" plain @click="stopStream">断开</el-button>
           <el-button class="server-logs-page__ghost" @click="openEdit">编辑主机</el-button>
         </div>
-        <LogTerminal
-          :server-id="selected.id"
-          :log-path="logPath || selected.default_log_path"
-          :streaming="streaming"
-        />
+        <LogTerminal :server-id="currentHost?.id" :log-path="logPath || currentHost?.default_log_path" :streaming="streaming" />
         <div class="server-logs-page__search">
           <el-input
             v-model="searchQ"
@@ -79,6 +82,13 @@
           <div class="server-logs-page__trend-title">关键字趋势（默认 ERROR，最近 60 分钟）</div>
           <div ref="trendChartEl" class="server-logs-page__trend-chart" />
         </div>
+        <el-alert
+          v-else-if="trendHint"
+          :title="trendHint"
+          type="info"
+          show-icon
+          class="server-logs-page__search-alert"
+        />
         <pre v-if="searchLines.length" class="server-logs-page__search-pre">{{ searchLines.join("\n") }}</pre>
 
         <el-collapse v-model="auditCollapse" class="server-logs-page__audit">
@@ -151,7 +161,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="默认路径">
-          <el-input v-model="form.default_log_path" placeholder="/var/log/syslog" />
+          <el-input v-model="form.default_log_path" placeholder="/var/log/messages" />
         </el-form-item>
         <el-form-item label="共享组织">
           <el-select
@@ -180,7 +190,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import LogTerminal from "./LogTerminal.vue";
 import {
@@ -198,6 +208,7 @@ import * as echarts from "echarts";
 const hosts = ref([]);
 const loading = ref(false);
 const selected = ref(null);
+const activeHost = ref(null); // 当前正在“实时连接”的主机（用于避免切换选择时自动断开）
 const logPath = ref("");
 const streaming = ref(false);
 const checkedIds = ref([]);
@@ -214,7 +225,7 @@ const form = ref({
   password: "",
   private_key: "",
   server_type: "linux",
-  default_log_path: "/var/log/syslog",
+  default_log_path: "/var/log/messages",
   organization: null,
 });
 
@@ -232,6 +243,7 @@ const searchLines = ref([]);
 
 const trendLoading = ref(false);
 const trendPoints = ref([]);
+const trendHint = ref("");
 const trendChartEl = ref(null);
 let trendChart = null;
 
@@ -306,12 +318,20 @@ async function loadHosts() {
 }
 
 function selectHost(row) {
-  stopStream();
   selected.value = row;
-  logPath.value = row.default_log_path || "/var/log/syslog";
+  // 未处于实时连接时，切换主机直接切换当前显示与输入框
+  if (!streaming.value || !activeHost.value) {
+    activeHost.value = row;
+    logPath.value = row.default_log_path || "/var/log/messages";
+  }
   searchHint.value = "";
   searchLines.value = [];
 }
+
+const currentHost = computed(() => {
+  if (streaming.value && activeHost.value) return activeHost.value;
+  return selected.value;
+});
 
 function toggleChecked(id, v) {
   const next = new Set(checkedIds.value);
@@ -331,7 +351,7 @@ function openCreate() {
     password: "",
     private_key: "",
     server_type: "linux",
-    default_log_path: "/var/log/syslog",
+    default_log_path: "/var/log/messages",
     organization: null,
   };
   dialogVisible.value = true;
@@ -349,7 +369,7 @@ function openEdit() {
     password: "",
     private_key: "",
     server_type: selected.value.server_type || "linux",
-    default_log_path: selected.value.default_log_path || "/var/log/syslog",
+    default_log_path: selected.value.default_log_path || "/var/log/messages",
     organization: selected.value.organization ?? null,
   };
   dialogVisible.value = true;
@@ -389,23 +409,38 @@ async function saveHost() {
 
 async function removeHost() {
   if (!editingId.value) return;
-  await ElMessageBox.confirm("确定删除该主机配置？", "提示", { type: "warning" });
-  await deleteServerLogHost(editingId.value);
-  ElMessage.success("已删除");
-  dialogVisible.value = false;
-  if (selected.value?.id === editingId.value) {
-    selected.value = null;
-    stopStream();
+  try {
+    await ElMessageBox.confirm("确定删除该主机配置？", "提示", { type: "warning" });
+  } catch {
+    return;
   }
-  editingId.value = null;
-  await loadHosts();
+  try {
+    await deleteServerLogHost(editingId.value);
+    ElMessage.success("已删除");
+    dialogVisible.value = false;
+    if (selected.value?.id === editingId.value) {
+      selected.value = null;
+    }
+    if (activeHost.value?.id === editingId.value) {
+      activeHost.value = null;
+      stopStream();
+    }
+    editingId.value = null;
+    await loadHosts();
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || e?.message || "删除失败");
+  }
 }
 
 async function removeChecked() {
   const ids = checkedIds.value.slice();
   if (!ids.length) return;
   const count = ids.length;
-  await ElMessageBox.confirm(`确定删除已勾选的 ${count} 台主机配置？`, "提示", { type: "warning" });
+  try {
+    await ElMessageBox.confirm(`确定删除已勾选的 ${count} 台主机配置？`, "提示", { type: "warning" });
+  } catch {
+    return;
+  }
   let ok = 0;
   let fail = 0;
   for (const id of ids) {
@@ -417,8 +452,9 @@ async function removeChecked() {
     }
   }
   checkedIds.value = [];
-  if (selected.value && ids.includes(selected.value.id)) {
-    selected.value = null;
+  if (selected.value && ids.includes(selected.value.id)) selected.value = null;
+  if (activeHost.value && ids.includes(activeHost.value.id)) {
+    activeHost.value = null;
     stopStream();
   }
   await loadHosts();
@@ -428,6 +464,35 @@ async function removeChecked() {
 
 function startStream() {
   if (!selected.value) return;
+  // 未连接：直接开始
+  if (!streaming.value || !activeHost.value) {
+    activeHost.value = selected.value;
+    logPath.value = selected.value.default_log_path || "/var/log/messages";
+    streaming.value = true;
+    return;
+  }
+  // 已连接且用户想连另一台：此时才提示是否切换
+  if (activeHost.value?.id !== selected.value.id) {
+    ElMessageBox.confirm(
+      `当前正在实时连接「${activeHost.value?.name || activeHost.value?.host || activeHost.value?.id}」。\n` +
+        `是否断开并切换连接到「${selected.value?.name || selected.value?.host || selected.value?.id}」？`,
+      "切换实时连接",
+      { type: "warning", confirmButtonText: "切换连接", cancelButtonText: "取消" }
+    )
+      .then(() => {
+        // 先断开旧连接，再切换目标并连接
+        streaming.value = false;
+        activeHost.value = selected.value;
+        logPath.value = selected.value.default_log_path || "/var/log/messages";
+        // 下一帧再打开，确保子组件先收到 streaming=false 触发 disconnect
+        requestAnimationFrame(() => {
+          streaming.value = true;
+        });
+      })
+      .catch(() => {});
+    return;
+  }
+  // 已连接且同一台：保持
   streaming.value = true;
 }
 
@@ -485,6 +550,7 @@ function renderTrend() {
 async function loadTrend() {
   if (!selected.value) return;
   trendLoading.value = true;
+  trendHint.value = "";
   try {
     const { data } = await getServerLogErrorTrend({
       server_id: selected.value.id,
@@ -492,10 +558,16 @@ async function loadTrend() {
       minutes: 60,
       interval: "1m",
     });
+    if (!data?.enabled) {
+      trendPoints.value = [];
+      trendHint.value = data?.message || "趋势暂不可用";
+      return;
+    }
     trendPoints.value = Array.isArray(data?.points) ? data.points : [];
     requestAnimationFrame(renderTrend);
   } catch {
     trendPoints.value = [];
+    trendHint.value = "趋势加载失败";
   } finally {
     trendLoading.value = false;
   }
@@ -686,6 +758,10 @@ onMounted(() => {
   color: #7eebfd;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.server-logs-page__switch-alert {
+  margin-bottom: 6px;
 }
 
 .server-logs-page__trend {

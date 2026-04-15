@@ -37,7 +37,7 @@ def _load_server_payload(server_id: int, user):
         "password": row.get_password(),
         "private_key": row.get_private_key(),
         "server_type": row.server_type,
-        "default_log_path": row.default_log_path or "/var/log/syslog",
+        "default_log_path": row.default_log_path or "/var/log/messages",
     }
 
 
@@ -149,7 +149,10 @@ class LogViewerConsumer(AsyncWebsocketConsumer):
             try:
                 await self.send(
                     text_data=json.dumps(
-                        {"type": "error", "message": "服务器内部错误（500），请查看后端运行日志定位原因"},
+                        {
+                            "type": "error",
+                            "message": "服务器内部错误（500），请查看后端运行日志定位原因",
+                        },
                         ensure_ascii=False,
                     )
                 )
@@ -196,13 +199,19 @@ class LogViewerConsumer(AsyncWebsocketConsumer):
         user = self.scope.get("user")
         if mtype == "ping":
             await self.send(
-                text_data=json.dumps({"type": "pong", "ts": msg.get("ts")}, ensure_ascii=False)
+                text_data=json.dumps(
+                    {"type": "pong", "ts": msg.get("ts")}, ensure_ascii=False
+                )
             )
         elif mtype == "stop" and hasattr(self, "_stop"):
             self._stop.set()
             await self.send(
                 text_data=json.dumps(
-                    {"type": "status", "phase": "stopping", "message": "正在停止远程 tail"},
+                    {
+                        "type": "status",
+                        "phase": "stopping",
+                        "message": "正在停止远程 tail",
+                    },
                     ensure_ascii=False,
                 )
             )

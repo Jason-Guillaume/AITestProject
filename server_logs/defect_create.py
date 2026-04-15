@@ -42,7 +42,10 @@ def _build_defect_content(draft: dict[str, Any]) -> str:
         parts.append("## 摘要\n\n" + sm)
     steps = draft.get("reproduction_steps") or []
     if isinstance(steps, list) and steps:
-        lines = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(str(x).strip() for x in steps if str(x).strip()))
+        lines = "\n".join(
+            f"{i + 1}. {s}"
+            for i, s in enumerate(str(x).strip() for x in steps if str(x).strip())
+        )
         parts.append("## 复现 / 验证步骤\n\n" + lines)
     env = (draft.get("environment_notes") or "").strip()
     if env:
@@ -112,5 +115,8 @@ def create_test_defect_from_auto_ticket(
             )
             return obj, None
     except Exception as e:
-        logger.exception("create_test_defect_from_auto_ticket failed job_id=%s", getattr(job, "pk", None))
+        logger.exception(
+            "create_test_defect_from_auto_ticket failed job_id=%s",
+            getattr(job, "pk", None),
+        )
         return None, str(e)[:2000]

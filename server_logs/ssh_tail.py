@@ -127,7 +127,11 @@ def _ensure_es_index_template(es, alias: str) -> None:
 def _ensure_es_ingest_worker() -> None:
     """启动后台 ES 写入线程（失败不影响实时推送）。"""
     global _es_ingest_q, _es_ingest_thread
-    if _es_ingest_q is not None and _es_ingest_thread is not None and _es_ingest_thread.is_alive():
+    if (
+        _es_ingest_q is not None
+        and _es_ingest_thread is not None
+        and _es_ingest_thread.is_alive()
+    ):
         return
     _es_ingest_q = queue.Queue(maxsize=50000)
 
@@ -151,7 +155,9 @@ def _ensure_es_ingest_worker() -> None:
                 # 只记录 debug，避免噪音；关键是不能阻塞/中断实时流
                 logger.debug("es index failed: %s", str(e)[:200])
 
-    _es_ingest_thread = threading.Thread(target=_worker, name="server-logs-es-ingest", daemon=True)
+    _es_ingest_thread = threading.Thread(
+        target=_worker, name="server-logs-es-ingest", daemon=True
+    )
     _es_ingest_thread.start()
 
 
@@ -223,13 +229,17 @@ def _import_paramiko():
     return paramiko
 
 
-def _emit_queue(out_queue: queue.Queue, item: tuple, *, prefer_drop: bool = False) -> None:
+def _emit_queue(
+    out_queue: queue.Queue, item: tuple, *, prefer_drop: bool = False
+) -> None:
     """prefer_drop：队列满时丢弃该条（用于日志行），避免阻塞 SSH 读线程。"""
     if not prefer_drop:
         try:
             out_queue.put(item, timeout=5.0)
         except queue.Full:
-            logger.warning("server_logs queue full, dropping critical message kind=%s", item[0])
+            logger.warning(
+                "server_logs queue full, dropping critical message kind=%s", item[0]
+            )
         return
     try:
         out_queue.put_nowait(item)
@@ -263,7 +273,7 @@ def _build_remote_command(server_type: str, log_path: str) -> str:
             "powershell.exe -NoProfile -Command "
             f"\"Get-Content -LiteralPath '{ps}' -Tail 200 -Wait -Encoding UTF8\""
         )
-    path_q = shlex.quote(log_path or "/var/log/syslog")
+    path_q = shlex.quote(log_path or "/var/log/messages")
     return f"tail -n 200 -f {path_q}"
 
 
@@ -368,7 +378,10 @@ def ssh_tail_worker(
                 if es != 0:
                     _emit_queue(
                         out_queue,
-                        ("error", f"远程 tail 进程已结束，退出码 {es}（请确认日志路径存在且有读权限）"),
+                        (
+                            "error",
+                            f"远程 tail 进程已结束，退出码 {es}（请确认日志路径存在且有读权限）",
+                        ),
                     )
         except Exception:
             pass
@@ -418,7 +431,7 @@ def _friendly_tail_error(server_type: str, log_path: str, err_text: str) -> str:
                 "- /var/log/messages（CentOS/RHEL 等）\n"
                 "- /var/log/syslog（Ubuntu/Debian 等）\n"
                 "- /var/log/auth.log（认证相关）\n"
-                "你可以先在目标机执行：ls -lh /var/log | grep -E \"syslog|messages|auth\"，"
+                '你可以先在目标机执行：ls -lh /var/log | grep -E "messages|syslog|auth"，'
                 "确认实际文件名后再填入上方“远程日志文件路径”。\n"
                 f"原始错误：{et}"
             )
@@ -431,7 +444,11 @@ def _friendly_tail_error(server_type: str, log_path: str, err_text: str) -> str:
 
     # Windows
     if st == "windows":
-        if "cannot find path" in low or "cannot find the path" in low or "does not exist" in low:
+        if (
+            "cannot find path" in low
+            or "cannot find the path" in low
+            or "does not exist" in low
+        ):
             return (
                 f"远程日志文件不存在或路径不正确：{lp}\n"
                 "请确认文件路径正确（建议用绝对路径），并确认运行 SSH 的账号有读取权限。\n"

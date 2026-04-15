@@ -11,6 +11,7 @@ try:
     try:
         from celery.exceptions import MaxRetriesExceededError
     except Exception:  # pragma: no cover
+
         class MaxRetriesExceededError(Exception):
             pass
 
@@ -69,11 +70,19 @@ if _CELERY_AVAILABLE:
 
             es = _es_client()
             idx = get_server_logs_es_index()
-            actions = [{"_index": idx, "_source": d} for d in docs if isinstance(d, dict) and d]
+            actions = [
+                {"_index": idx, "_source": d} for d in docs if isinstance(d, dict) and d
+            ]
             if not actions:
                 return
             # raise_on_error=True：任何单条失败会抛 BulkIndexError，便于触发 Celery 重试
-            bulk(es, actions, raise_on_error=True, raise_on_exception=True, request_timeout=15)
+            bulk(
+                es,
+                actions,
+                raise_on_error=True,
+                raise_on_exception=True,
+                request_timeout=15,
+            )
         except Exception as e:
             try:
                 raise self.retry(exc=e)  # type: ignore[misc]
@@ -102,7 +111,11 @@ if _CELERY_AVAILABLE:
         from server_logs.audit import log_server_log_event
         from server_logs.defect_create import create_test_defect_from_auto_ticket
         from server_logs.log_context import fetch_es_context_for_anchor
-        from server_logs.models import LogAutoTicketJob, LogAutoTicketJobStatus, ServerLogAuditEvent
+        from server_logs.models import (
+            LogAutoTicketJob,
+            LogAutoTicketJobStatus,
+            ServerLogAuditEvent,
+        )
 
         job = (
             LogAutoTicketJob.objects.select_related(
@@ -162,7 +175,10 @@ if _CELERY_AVAILABLE:
             model_override=model or "",
         )
 
-        meta: dict[str, object] = {"es": ctx_meta, "context_line_count": len(context_lines)}
+        meta: dict[str, object] = {
+            "es": ctx_meta,
+            "context_line_count": len(context_lines),
+        }
         u = job.user
         if err:
             LogAutoTicketJob.objects.filter(pk=job_id).update(
@@ -216,4 +232,3 @@ if _CELERY_AVAILABLE:
                 remote_server=srv,
                 client_ip="celery",
             )
-

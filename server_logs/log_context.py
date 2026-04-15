@@ -29,7 +29,10 @@ def fetch_es_context_for_anchor(
     used_backend = "es"
 
     try:
-        from server_logs.es_client import get_elasticsearch_client, get_server_logs_es_index
+        from server_logs.es_client import (
+            get_elasticsearch_client,
+            get_server_logs_es_index,
+        )
 
         es = get_elasticsearch_client()
         idx = get_server_logs_es_index()
@@ -42,8 +45,15 @@ def fetch_es_context_for_anchor(
     resolved_ts: int | None = int(anchor_ts) if anchor_ts is not None else None
     try:
         if resolved_ts is None:
-            must = [{"term": {"server_id": server_id}}, {"match": {"message": {"query": anchor_text}}}]
-            body = {"size": 1, "query": {"bool": {"must": must}}, "sort": [{"timestamp": {"order": "desc"}}]}
+            must = [
+                {"term": {"server_id": server_id}},
+                {"match": {"message": {"query": anchor_text}}},
+            ]
+            body = {
+                "size": 1,
+                "query": {"bool": {"must": must}},
+                "sort": [{"timestamp": {"order": "desc"}}],
+            }
             r = es.search(index=idx, body=body)
             hits = (r.get("hits") or {}).get("hits") or []
             if hits:

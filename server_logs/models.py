@@ -28,7 +28,7 @@ class RemoteLogServer(BaseModel):
     )
     default_log_path = models.CharField(
         max_length=1024,
-        default="/var/log/syslog",
+        default="/var/log/messages",
         verbose_name="默认日志路径",
     )
     organization = models.ForeignKey(
@@ -92,7 +92,9 @@ class ServerLogAuditEvent(models.Model):
         related_name="server_log_audit_events",
         verbose_name="操作人",
     )
-    action = models.CharField(max_length=40, choices=Action.choices, db_index=True, verbose_name="动作")
+    action = models.CharField(
+        max_length=40, choices=Action.choices, db_index=True, verbose_name="动作"
+    )
     remote_log_server = models.ForeignKey(
         RemoteLogServer,
         on_delete=models.SET_NULL,
@@ -110,8 +112,12 @@ class ServerLogAuditEvent(models.Model):
         verbose_name="关联组织",
     )
     meta = models.JSONField(default=dict, blank=True, verbose_name="扩展信息")
-    client_ip = models.CharField(max_length=64, blank=True, default="", verbose_name="客户端 IP")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="时间", db_index=True)
+    client_ip = models.CharField(
+        max_length=64, blank=True, default="", verbose_name="客户端 IP"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True, verbose_name="时间", db_index=True
+    )
 
     class Meta:
         db_table = "server_logs_audit_event"
@@ -148,8 +154,12 @@ class LogAutoTicketJob(models.Model):
         verbose_name="关联主机",
     )
     anchor_text = models.TextField(verbose_name="锚点文本")
-    anchor_ts = models.BigIntegerField(null=True, blank=True, verbose_name="锚点时间戳(ms)")
-    window_seconds = models.PositiveIntegerField(default=300, verbose_name="上下文窗口(秒)")
+    anchor_ts = models.BigIntegerField(
+        null=True, blank=True, verbose_name="锚点时间戳(ms)"
+    )
+    window_seconds = models.PositiveIntegerField(
+        default=300, verbose_name="上下文窗口(秒)"
+    )
     es_limit = models.PositiveIntegerField(default=200, verbose_name="ES 最大行数")
     status = models.CharField(
         max_length=16,
@@ -158,12 +168,16 @@ class LogAutoTicketJob(models.Model):
         db_index=True,
         verbose_name="状态",
     )
-    celery_task_id = models.CharField(max_length=128, blank=True, default="", verbose_name="Celery 任务 ID")
+    celery_task_id = models.CharField(
+        max_length=128, blank=True, default="", verbose_name="Celery 任务 ID"
+    )
     error_message = models.TextField(blank=True, default="", verbose_name="错误信息")
     draft = models.JSONField(null=True, blank=True, verbose_name="草稿 JSON")
     meta = models.JSONField(default=dict, blank=True, verbose_name="诊断元信息")
     # 可选：AI 成功后自动落库 TestDefect（凭据仍不入库）
-    create_defect_requested = models.BooleanField(default=False, verbose_name="是否请求创建缺陷")
+    create_defect_requested = models.BooleanField(
+        default=False, verbose_name="是否请求创建缺陷"
+    )
     defect_handler = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -197,7 +211,9 @@ class LogAutoTicketJob(models.Model):
         related_name="source_log_auto_ticket_jobs",
         verbose_name="已创建的缺陷",
     )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间", db_index=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True, verbose_name="创建时间", db_index=True
+    )
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
     class Meta:

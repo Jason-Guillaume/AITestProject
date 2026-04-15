@@ -29,7 +29,15 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="ServerLogAuditEvent",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
                 (
                     "action",
                     models.CharField(
@@ -48,9 +56,22 @@ class Migration(migrations.Migration):
                         verbose_name="动作",
                     ),
                 ),
-                ("meta", models.JSONField(blank=True, default=dict, verbose_name="扩展信息")),
-                ("client_ip", models.CharField(blank=True, default="", max_length=64, verbose_name="客户端 IP")),
-                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="时间")),
+                (
+                    "meta",
+                    models.JSONField(blank=True, default=dict, verbose_name="扩展信息"),
+                ),
+                (
+                    "client_ip",
+                    models.CharField(
+                        blank=True, default="", max_length=64, verbose_name="客户端 IP"
+                    ),
+                ),
+                (
+                    "created_at",
+                    models.DateTimeField(
+                        auto_now_add=True, db_index=True, verbose_name="时间"
+                    ),
+                ),
                 (
                     "organization",
                     models.ForeignKey(

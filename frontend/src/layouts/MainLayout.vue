@@ -347,6 +347,7 @@
             </template>
             <el-menu-item index="/system/message">消息设置</el-menu-item>
             <el-menu-item index="/system/messages">消息管理</el-menu-item>
+            <el-menu-item index="/system/ai-usage">AI 用量与审计</el-menu-item>
             <el-menu-item index="/system/org">组织管理</el-menu-item>
             <el-menu-item index="/system/role">角色管理</el-menu-item>
             <el-menu-item index="/system/user">用户管理</el-menu-item>
@@ -387,7 +388,20 @@
         </div>
         <div class="content-body">
           <!-- key：切换 /test-case/:type 等路径时强制重建页面实例，避免局部状态残留 -->
-          <router-view :key="route.path" />
+          <router-view v-slot="{ Component, route: r }">
+            <keep-alive>
+              <component
+                v-if="r?.meta?.keepAlive"
+                :is="Component"
+                :key="String(r.name || r.path)"
+              />
+            </keep-alive>
+            <component
+              v-if="!r?.meta?.keepAlive"
+              :is="Component"
+              :key="r.path"
+            />
+          </router-view>
         </div>
       </main>
     </div>
@@ -614,6 +628,7 @@ const BREADCRUMB_MAP = {
   '/server-logs': ['智能运维', '服务器日志'],
   '/system/message': ['系统管理', '消息设置'],
   '/system/messages': ['系统管理', '消息管理'],
+  '/system/ai-usage': ['系统管理', 'AI 用量与审计'],
   '/system/org': ['系统管理', '组织管理'],
   '/system/role': ['系统管理', '角色管理'],
   '/system/user': ['系统管理', '用户管理'],

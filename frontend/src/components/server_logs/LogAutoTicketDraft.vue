@@ -133,7 +133,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onActivated, onDeactivated, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import MarkdownIt from "markdown-it";
@@ -433,6 +433,16 @@ watch(
 
 onUnmounted(() => {
   stopPoll();
+});
+
+// 若外层页面使用 keep-alive，组件失活时也应停止轮询，避免后台无意义请求
+onDeactivated(() => {
+  stopPoll();
+  polling.value = false;
+});
+
+onActivated(() => {
+  // 不自动恢复轮询：由用户重新触发即可（避免切回页面突然继续跑老任务）
 });
 </script>
 

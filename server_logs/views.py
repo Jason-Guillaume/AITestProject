@@ -12,12 +12,23 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from common.views import BaseModelViewSet
-from server_logs.access import remote_log_server_queryset_for_user, user_is_platform_log_admin
+from server_logs.access import (
+    remote_log_server_queryset_for_user,
+    user_is_platform_log_admin,
+)
 from server_logs.es_client import get_elasticsearch_client, get_server_logs_es_index
-from server_logs.ai_analyze import analyze_log_markdown, analyze_log_markdown_with_context
+from server_logs.ai_analyze import (
+    analyze_log_markdown,
+    analyze_log_markdown_with_context,
+)
 from server_logs.log_context import fetch_es_context_for_anchor
 from server_logs.audit import log_server_log_event
-from server_logs.models import LogAutoTicketJob, LogAutoTicketJobStatus, RemoteLogServer, ServerLogAuditEvent
+from server_logs.models import (
+    LogAutoTicketJob,
+    LogAutoTicketJobStatus,
+    RemoteLogServer,
+    ServerLogAuditEvent,
+)
 from server_logs.serializers import (
     LogAnalyzeRequestSerializer,
     LogAnalyzeWithContextRequestSerializer,
@@ -61,7 +72,9 @@ class RemoteLogServerViewSet(BaseModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return remote_log_server_queryset_for_user(self.request.user).select_related("organization")
+        return remote_log_server_queryset_for_user(self.request.user).select_related(
+            "organization"
+        )
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -123,7 +136,8 @@ class AnalyzeLogAPIView(APIView):
                 meta={**meta, "success": False, "error": err[:500]},
                 request=request,
             )
-            return Response({"success": False, "error": err, "markdown": None}, status=502)
+            # 返回 200：避免前端拦截器将“上游 AI 错误”误判为后端 5xx 并刷红条
+            return Response({"success": False, "error": err, "markdown": None})
         log_server_log_event(
             request.user,
             ServerLogAuditEvent.Action.ANALYZE,
@@ -156,9 +170,20 @@ class AnalyzeLogWithContextAPIView(APIView):
         limit = int(ser.validated_data.get("limit") or 200)
 
         # 权限校验：必须能访问该 server_id
-        srv = remote_log_server_queryset_for_user(request.user).filter(pk=server_id).first()
+        srv = (
+            remote_log_server_queryset_for_user(request.user)
+            .filter(pk=server_id)
+            .first()
+        )
         if not srv:
-            return Response({"success": False, "error": "无权访问该主机或主机不存在", "markdown": None}, status=403)
+            return Response(
+                {
+                    "success": False,
+                    "error": "无权访问该主机或主机不存在",
+                    "markdown": None,
+                },
+                status=403,
+            )
 
         meta = {
             "server_id": server_id,
@@ -200,7 +225,7 @@ class AnalyzeLogWithContextAPIView(APIView):
                 remote_server=srv,
                 request=request,
             )
-            return Response({"success": False, "error": err, "markdown": None}, status=502)
+            return Response({"success": False, "error": err, "markdown": None})
         log_server_log_event(
             request.user,
             ServerLogAuditEvent.Action.ANALYZE,
@@ -208,7 +233,14 @@ class AnalyzeLogWithContextAPIView(APIView):
             remote_server=srv,
             request=request,
         )
-        return Response({"success": True, "error": None, "markdown": md, "context_count": len(context_lines)})
+        return Response(
+            {
+                "success": True,
+                "error": None,
+                "markdown": md,
+                "context_count": len(context_lines),
+            }
+        )
 
 
 class LogHistorySearchAPIView(APIView):
@@ -225,8 +257,12 @@ class LogHistorySearchAPIView(APIView):
 
         class _EsSearchSer(serializers.Serializer):
             server_id = serializers.IntegerField(required=False, min_value=1)
-            keyword = serializers.CharField(required=False, allow_blank=True, max_length=512)
-            limit = serializers.IntegerField(required=False, min_value=1, max_value=500, default=80)
+            keyword = serializers.CharField(
+                required=False, allow_blank=True, max_length=512
+            )
+            limit = serializers.IntegerField(
+                required=False, min_value=1, max_value=500, default=80
+            )
 
         ser = _EsSearchSer(data=request.query_params)
         ser.is_valid(raise_exception=True)
@@ -241,17 +277,40 @@ class LogHistorySearchAPIView(APIView):
             log_server_log_event(
                 request.user,
                 ServerLogAuditEvent.Action.SEARCH,
-                meta={"enabled": False, "backend": "elasticsearch", "error": str(e)[:200]},
+                meta={
+                    "enabled": False,
+                    "backend": "elasticsearch",
+                    "error": str(e)[:200],
+                },
+                request=request,
+            )
+            # 返回 200：避免前端统一拦截器弹“后端异常”红条
+            return Response(
+                {
+                    "enabled": False,
+                    "backend": "elasticsearch",
+                    "message": "未安装 elasticsearch Python 客户端，历史检索不可用。",
+                    "results": [],
+                }
+            )
+        except Exception as e:
+            log_server_log_event(
+                request.user,
+                ServerLogAuditEvent.Action.SEARCH,
+                meta={
+                    "enabled": False,
+                    "backend": "elasticsearch",
+                    "error": str(e)[:300],
+                },
                 request=request,
             )
             return Response(
                 {
                     "enabled": False,
                     "backend": "elasticsearch",
-                    "message": "未安装 elasticsearch Python 客户端，请先安装依赖后重启后端。",
+                    "message": "Elasticsearch 未连接或不可用（默认 http://localhost:9200）。",
                     "results": [],
-                },
-                status=503,
+                }
             )
 
         must = []
@@ -322,14 +381,14 @@ class LogHistorySearchAPIView(APIView):
                 },
                 request=request,
             )
+            # ES 查询失败也按“不可用”处理：避免前端红条刷屏
             return Response(
                 {
-                    "enabled": True,
+                    "enabled": False,
                     "backend": "elasticsearch",
-                    "message": str(e),
+                    "message": "Elasticsearch 查询失败或不可用，请检查 ES 服务与配置。",
                     "results": [],
-                },
-                status=status.HTTP_502_BAD_GATEWAY,
+                }
             )
 
 
@@ -347,9 +406,15 @@ class LogErrorTrendAPIView(APIView):
 
         class _Ser(serializers.Serializer):
             server_id = serializers.IntegerField(required=False, min_value=1)
-            keyword = serializers.CharField(required=False, allow_blank=True, max_length=128, default="ERROR")
-            minutes = serializers.IntegerField(required=False, min_value=1, max_value=1440, default=60)
-            interval = serializers.CharField(required=False, allow_blank=False, max_length=20, default="30s")
+            keyword = serializers.CharField(
+                required=False, allow_blank=True, max_length=128, default="ERROR"
+            )
+            minutes = serializers.IntegerField(
+                required=False, min_value=1, max_value=1440, default=60
+            )
+            interval = serializers.CharField(
+                required=False, allow_blank=False, max_length=20, default="30s"
+            )
 
         ser = _Ser(data=request.query_params)
         ser.is_valid(raise_exception=True)
@@ -366,10 +431,18 @@ class LogErrorTrendAPIView(APIView):
                 {
                     "enabled": False,
                     "backend": "elasticsearch",
-                    "message": "未安装 elasticsearch Python 客户端。",
+                    "message": "未安装 elasticsearch Python 客户端，趋势不可用。",
                     "points": [],
-                },
-                status=503,
+                }
+            )
+        except Exception:
+            return Response(
+                {
+                    "enabled": False,
+                    "backend": "elasticsearch",
+                    "message": "Elasticsearch 未连接或不可用（默认 http://localhost:9200）。",
+                    "points": [],
+                }
             )
 
         end_ms = int(time.time() * 1000)
@@ -399,8 +472,12 @@ class LogErrorTrendAPIView(APIView):
 
         try:
             r = es.search(index=idx, body=body)
-            buckets = (((r.get("aggregations") or {}).get("trend") or {}).get("buckets")) or []
-            points = [{"ts": b.get("key"), "count": b.get("doc_count", 0)} for b in buckets]
+            buckets = (
+                ((r.get("aggregations") or {}).get("trend") or {}).get("buckets")
+            ) or []
+            points = [
+                {"ts": b.get("key"), "count": b.get("doc_count", 0)} for b in buckets
+            ]
             log_server_log_event(
                 request.user,
                 ServerLogAuditEvent.Action.SEARCH,
@@ -426,12 +503,11 @@ class LogErrorTrendAPIView(APIView):
         except Exception as e:
             return Response(
                 {
-                    "enabled": True,
+                    "enabled": False,
                     "backend": "elasticsearch",
-                    "message": str(e),
+                    "message": "Elasticsearch 查询失败或不可用，请检查 ES 服务与配置。",
                     "points": [],
-                },
-                status=status.HTTP_502_BAD_GATEWAY,
+                }
             )
 
 
@@ -456,7 +532,10 @@ class LogAutoTicketEnqueueAPIView(APIView):
             .first()
         )
         if not srv:
-            return Response({"success": False, "error": "无权访问该主机或主机不存在"}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"success": False, "error": "无权访问该主机或主机不存在"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         job = LogAutoTicketJob.objects.create(
             user=request.user,
@@ -560,8 +639,12 @@ class LogAutoTicketJobDetailAPIView(APIView):
         )
         if not job:
             return Response({"detail": "任务不存在"}, status=status.HTTP_404_NOT_FOUND)
-        if job.user_id != request.user.id and not user_is_platform_log_admin(request.user):
-            return Response({"detail": "无权查看该任务"}, status=status.HTTP_403_FORBIDDEN)
+        if job.user_id != request.user.id and not user_is_platform_log_admin(
+            request.user
+        ):
+            return Response(
+                {"detail": "无权查看该任务"}, status=status.HTTP_403_FORBIDDEN
+            )
         return Response(LogAutoTicketJobSerializer(job).data)
 
 
@@ -590,9 +673,17 @@ class LogAutoTicketCreateDefectAPIView(APIView):
             .first()
         )
         if not job:
-            return Response({"success": False, "error": "任务不存在"}, status=status.HTTP_404_NOT_FOUND)
-        if job.user_id != request.user.id and not user_is_platform_log_admin(request.user):
-            return Response({"success": False, "error": "无权操作该任务"}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"success": False, "error": "任务不存在"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if job.user_id != request.user.id and not user_is_platform_log_admin(
+            request.user
+        ):
+            return Response(
+                {"success": False, "error": "无权操作该任务"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if job.status != LogAutoTicketJobStatus.SUCCESS:
             return Response(
                 {"success": False, "error": "仅成功任务可从草稿创建缺陷。"},
@@ -621,7 +712,9 @@ class LogAutoTicketCreateDefectAPIView(APIView):
         if "defect_handler" in raw:
             kw["defect_handler"] = ser.validated_data.get("defect_handler")
         if "defect_release_version" in raw:
-            kw["defect_release_version"] = ser.validated_data.get("defect_release_version")
+            kw["defect_release_version"] = ser.validated_data.get(
+                "defect_release_version"
+            )
         if "defect_module" in raw:
             kw["defect_module"] = ser.validated_data.get("defect_module")
 
@@ -656,17 +749,14 @@ class LogAutoTicketCreateDefectAPIView(APIView):
             request=request,
         )
 
-        job_out = (
-            LogAutoTicketJob.objects.select_related(
-                "remote_log_server",
-                "user",
-                "created_defect",
-                "defect_handler",
-                "defect_release_version",
-                "defect_module",
-            )
-            .get(pk=job.id)
-        )
+        job_out = LogAutoTicketJob.objects.select_related(
+            "remote_log_server",
+            "user",
+            "created_defect",
+            "defect_handler",
+            "defect_release_version",
+            "defect_module",
+        ).get(pk=job.id)
         return Response(
             {
                 "success": True,

@@ -103,7 +103,7 @@ class RemoteLogServerSerializer(serializers.ModelSerializer):
         dpath = attrs.get("default_log_path")
         if dpath is None and instance is not None:
             dpath = instance.default_log_path
-        dpath = dpath or "/var/log/syslog"
+        dpath = dpath or "/var/log/messages"
         stype = attrs.get("server_type")
         if stype is None and instance is not None:
             stype = instance.server_type
@@ -169,34 +169,54 @@ class RemoteLogServerListSerializer(serializers.ModelSerializer):
 
 
 class LogAnalyzeRequestSerializer(serializers.Serializer):
-    log_text = serializers.CharField(required=True, allow_blank=False, max_length=120_000)
+    log_text = serializers.CharField(
+        required=True, allow_blank=False, max_length=120_000
+    )
     model = serializers.CharField(required=False, allow_blank=True, max_length=128)
     api_key = serializers.CharField(required=False, allow_blank=True)
-    api_base_url = serializers.CharField(required=False, allow_blank=True, max_length=512)
+    api_base_url = serializers.CharField(
+        required=False, allow_blank=True, max_length=512
+    )
 
 
 class LogAnalyzeWithContextRequestSerializer(serializers.Serializer):
     server_id = serializers.IntegerField(required=True, min_value=1)
-    anchor_text = serializers.CharField(required=True, allow_blank=False, max_length=80_000)
+    anchor_text = serializers.CharField(
+        required=True, allow_blank=False, max_length=80_000
+    )
     anchor_ts = serializers.IntegerField(required=False, min_value=0)
-    window_seconds = serializers.IntegerField(required=False, min_value=10, max_value=3600, default=300)
-    limit = serializers.IntegerField(required=False, min_value=10, max_value=500, default=200)
+    window_seconds = serializers.IntegerField(
+        required=False, min_value=10, max_value=3600, default=300
+    )
+    limit = serializers.IntegerField(
+        required=False, min_value=10, max_value=500, default=200
+    )
     model = serializers.CharField(required=False, allow_blank=True, max_length=128)
     api_key = serializers.CharField(required=False, allow_blank=True)
-    api_base_url = serializers.CharField(required=False, allow_blank=True, max_length=512)
+    api_base_url = serializers.CharField(
+        required=False, allow_blank=True, max_length=512
+    )
 
 
 class LogAutoTicketEnqueueSerializer(serializers.Serializer):
     """异步工单草稿入队（凭据不落库，由 Celery 任务参数携带）。"""
 
     server_id = serializers.IntegerField(required=True, min_value=1)
-    anchor_text = serializers.CharField(required=True, allow_blank=False, max_length=80_000)
+    anchor_text = serializers.CharField(
+        required=True, allow_blank=False, max_length=80_000
+    )
     anchor_ts = serializers.IntegerField(required=False, min_value=0)
-    window_seconds = serializers.IntegerField(required=False, min_value=10, max_value=3600, default=300)
-    es_limit = serializers.IntegerField(required=False, min_value=10, max_value=500, default=200)
+    window_seconds = serializers.IntegerField(
+        required=False, min_value=10, max_value=3600, default=300
+    )
+    es_limit = serializers.IntegerField(
+        required=False, min_value=10, max_value=500, default=200
+    )
     model = serializers.CharField(required=False, allow_blank=True, max_length=128)
     api_key = serializers.CharField(required=False, allow_blank=True)
-    api_base_url = serializers.CharField(required=False, allow_blank=True, max_length=512)
+    api_base_url = serializers.CharField(
+        required=False, allow_blank=True, max_length=512
+    )
     create_defect = serializers.BooleanField(required=False, default=False)
     defect_handler = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.filter(is_deleted=False),
@@ -237,7 +257,9 @@ class LogAutoTicketCreateDefectSerializer(serializers.Serializer):
 
 class LogSearchQuerySerializer(serializers.Serializer):
     q = serializers.CharField(required=False, allow_blank=True, max_length=2000)
-    limit = serializers.IntegerField(required=False, min_value=1, max_value=500, default=50)
+    limit = serializers.IntegerField(
+        required=False, min_value=1, max_value=500, default=50
+    )
 
 
 class ServerLogAuditEventSerializer(serializers.ModelSerializer):
@@ -271,7 +293,9 @@ class ServerLogAuditEventSerializer(serializers.ModelSerializer):
 class LogAutoTicketJobSerializer(serializers.ModelSerializer):
     """任务状态查询（不含任何 API Key）。"""
 
-    remote_server_name = serializers.CharField(source="remote_log_server.name", read_only=True)
+    remote_server_name = serializers.CharField(
+        source="remote_log_server.name", read_only=True
+    )
     created_defect = serializers.SerializerMethodField()
 
     class Meta:

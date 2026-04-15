@@ -36,6 +36,8 @@ def decrypt_secret(ciphertext: str) -> str:
     if not (ciphertext or "").strip():
         return ""
     try:
-        return get_credentials_fernet().decrypt(ciphertext.encode("ascii")).decode("utf-8")
+        return (
+            get_credentials_fernet().decrypt(ciphertext.encode("ascii")).decode("utf-8")
+        )
     except InvalidToken:
         return ""

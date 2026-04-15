@@ -123,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, shallowRef } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, onActivated, nextTick, shallowRef } from "vue";
 import { ElMessage } from "element-plus";
 import MarkdownIt from "markdown-it";
 import LogAutoTicketDraft from "@/components/server_logs/LogAutoTicketDraft.vue";
@@ -131,7 +131,7 @@ import { analyzeServerLog, analyzeServerLogWithContext, searchServerLogs } from 
 
 const props = defineProps({
   serverId: { type: [Number, String], default: null },
-  logPath: { type: String, default: "/var/log/syslog" },
+  logPath: { type: String, default: "/var/log/messages" },
   streaming: { type: Boolean, default: false },
 });
 
@@ -171,7 +171,7 @@ const bottomSpacer = computed(() =>
   Math.max(0, (lines.value.length - endIndex.value) * lineHeight)
 );
 
-const displayPath = computed(() => props.logPath || "/var/log/syslog");
+const displayPath = computed(() => props.logPath || "/var/log/messages");
 
 let ws = null;
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
@@ -357,7 +357,7 @@ function formatLine(raw) {
 
 function wsUrl() {
   const token = localStorage.getItem("token") || "";
-  const path = encodeURIComponent(props.logPath || "/var/log/syslog");
+  const path = encodeURIComponent(props.logPath || "/var/log/messages");
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
   return `${proto}//${host}/ws/server-logs/${props.serverId}/?token=${encodeURIComponent(token)}&path=${path}`;
@@ -457,6 +457,19 @@ onMounted(() => {
   measureViewport();
   window.addEventListener("resize", measureViewport);
   pingTimer = setInterval(sendPing, 25000);
+});
+
+// keep-alive：页面切换回来时，DOM 尺寸可能变化（尤其在隐藏/恢复后 clientHeight 变为 0），
+// 需要重新测量并在连接被关闭时尝试恢复。
+onActivated(async () => {
+  await nextTick();
+  measureViewport();
+  // 若处于实时模式且 streaming 开启，但 WS 已被浏览器/代理关闭，则自动重连
+  if (mode.value === "live" && props.streaming) {
+    if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+      connectWs();
+    }
+  }
 });
 
 onUnmounted(() => {

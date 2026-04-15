@@ -52,7 +52,22 @@ class LogAutoTicketJobAdmin(admin.ModelAdmin):
 
 @admin.register(ServerLogAuditEvent)
 class ServerLogAuditEventAdmin(admin.ModelAdmin):
-    list_display = ("id", "action", "user", "remote_log_server", "client_ip", "created_at")
+    list_display = (
+        "id",
+        "action",
+        "user",
+        "remote_log_server",
+        "client_ip",
+        "created_at",
+    )
     list_filter = ("action",)
     search_fields = ("client_ip",)
-    readonly_fields = ("user", "action", "remote_log_server", "organization", "meta", "client_ip", "created_at")
+    readonly_fields = (
+        "user",
+        "action",
+        "remote_log_server",
+        "organization",
+        "meta",
+        "client_ip",
+        "created_at",
+    )
