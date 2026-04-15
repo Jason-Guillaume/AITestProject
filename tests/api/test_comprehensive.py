@@ -22,7 +22,6 @@ import time
 import uuid
 from datetime import datetime, timedelta
 
-
 # ==================== 配置部分 ====================
 
 TEST_API_BASE_URL = os.getenv("TEST_API_BASE_URL", "http://127.0.0.1:8000/api")
@@ -30,8 +29,12 @@ TEST_USERNAME = os.getenv("TEST_API_USERNAME", "admin")
 TEST_PASSWORD = os.getenv("TEST_API_PASSWORD", "admin123")
 TEST_AI_API_KEY = os.getenv("TEST_AI_API_KEY", "")
 
+if not os.getenv("TEST_API_BASE_URL", "").strip():
+    pytest.skip("缺少环境变量 TEST_API_BASE_URL，跳过 API 集成测试", allow_module_level=True)
+
 
 # ==================== 工具函数 ====================
+
 
 def get_nonce():
     """生成唯一标识符"""
@@ -43,7 +46,7 @@ def login(session, username, password):
     resp = session.post(
         f"{TEST_API_BASE_URL}/user/login/",
         json={"username": username, "password": password},
-        timeout=20
+        timeout=20,
     )
     assert resp.status_code == 200, f"登录失败：{resp.status_code}, {resp.text}"
     data = resp.json().get("data", {})
@@ -63,6 +66,7 @@ def create_auth_session(username=TEST_USERNAME, password=TEST_PASSWORD):
 
 
 # ==================== Fixtures ====================
+
 
 @pytest.fixture(scope="session")
 def auth_session():
@@ -84,7 +88,7 @@ def test_data(auth_session):
             "project_status": 1,
             "progress": 10,
         },
-        timeout=20
+        timeout=20,
     )
     assert project_resp.status_code in (200, 201), project_resp.text
     project_id = project_resp.json()["id"]
@@ -97,7 +101,7 @@ def test_data(auth_session):
             "name": f"module-{nonce}",
             "test_type": "api",
         },
-        timeout=20
+        timeout=20,
     )
     assert module_resp.status_code in (200, 201), module_resp.text
     module_id = module_resp.json()["id"]
@@ -113,7 +117,7 @@ def test_data(auth_session):
             "api_url": "https://httpbin.org/get",
             "api_method": "GET",
         },
-        timeout=20
+        timeout=20,
     )
     assert case_resp.status_code in (200, 201), case_resp.text
     case_id = case_resp.json()["id"]
@@ -127,6 +131,7 @@ def test_data(auth_session):
 
 
 # ==================== 用户认证模块测试 ====================
+
 
 class TestUserAuth:
     """用户认证相关测试"""
@@ -144,7 +149,7 @@ class TestUserAuth:
         resp = auth_session.post(
             f"{TEST_API_BASE_URL}/user/login/",
             json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
         data = resp.json().get("data", {})
@@ -156,7 +161,7 @@ class TestUserAuth:
         resp = auth_session.post(
             f"{TEST_API_BASE_URL}/user/login/",
             json={"username": TEST_USERNAME, "password": "wrong_password"},
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 400
 
@@ -165,7 +170,7 @@ class TestUserAuth:
         resp = auth_session.post(
             f"{TEST_API_BASE_URL}/user/login/",
             json={"username": f"nonexistent_{get_nonce()}", "password": "password"},
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 400
 
@@ -190,7 +195,7 @@ class TestUserAuth:
                 "new_password": new_password,
                 "confirm_password": new_password,
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
 
@@ -206,7 +211,7 @@ class TestUserAuth:
                 "new_password": old_password,
                 "confirm_password": old_password,
             },
-            timeout=20
+            timeout=20,
         )
 
     def test_change_password_invalid_old(self, auth_session):
@@ -218,7 +223,7 @@ class TestUserAuth:
                 "new_password": "new_password",
                 "confirm_password": "new_password",
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 400
 
@@ -231,7 +236,7 @@ class TestUserAuth:
                 "new_password": "new_password",
                 "confirm_password": "different_password",
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 400
 
@@ -244,12 +249,13 @@ class TestUserAuth:
                 "phone_number": "13800138000",
                 "email": f"test_{get_nonce()}@example.com",
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
 
 
 # ==================== 项目管理模块测试 ====================
+
 
 class TestProject:
     """项目管理相关测试"""
@@ -265,7 +271,7 @@ class TestProject:
                 "project_status": 1,
                 "progress": 0,
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code in (200, 201)
         data = resp.json()
@@ -283,7 +289,7 @@ class TestProject:
         """测试获取项目详情"""
         resp = auth_session.get(
             f"{TEST_API_BASE_URL}/project/projects/{test_data['project_id']}/",
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -294,7 +300,7 @@ class TestProject:
         resp = auth_session.patch(
             f"{TEST_API_BASE_URL}/project/projects/{test_data['project_id']}/",
             json={"progress": 50},
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
 
@@ -302,7 +308,7 @@ class TestProject:
         """测试删除项目"""
         resp = auth_session.delete(
             f"{TEST_API_BASE_URL}/project/projects/{test_data['project_id']}/",
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code in (204, 200)
 
@@ -314,12 +320,13 @@ class TestProject:
                 "project_name": "",  # 空名称
                 "project_status": 999,  # 无效状态
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 400
 
 
 # ==================== 测试用例模块测试 ====================
+
 
 class TestTestCase:
     """测试用例相关测试"""
@@ -336,7 +343,7 @@ class TestTestCase:
                 "api_url": "https://httpbin.org/get",
                 "api_method": "GET",
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code in (200, 201)
 
@@ -344,15 +351,14 @@ class TestTestCase:
         """测试获取用例列表"""
         resp = auth_session.get(
             f"{TEST_API_BASE_URL}/testcase/cases/?module={test_data['module_id']}",
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
 
     def test_get_case_detail(self, auth_session, test_data):
         """测试获取用例详情"""
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/testcase/cases/{test_data['case_id']}/",
-            timeout=20
+            f"{TEST_API_BASE_URL}/testcase/cases/{test_data['case_id']}/", timeout=20
         )
         assert resp.status_code == 200
 
@@ -361,7 +367,7 @@ class TestTestCase:
         resp = auth_session.post(
             f"{TEST_API_BASE_URL}/testcase/cases/{test_data['case_id']}/execute-api/",
             json={},
-            timeout=30
+            timeout=30,
         )
         # 可能返回 200 或 400，取决于用例配置
         assert resp.status_code in (200, 400)
@@ -371,7 +377,7 @@ class TestTestCase:
         resp = auth_session.post(
             f"{TEST_API_BASE_URL}/testcase/cases/batch-execute/",
             json={"ids": [test_data["case_id"]]},
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
 
@@ -380,7 +386,7 @@ class TestTestCase:
         resp = auth_session.post(
             f"{TEST_API_BASE_URL}/testcase/cases/batch-delete/",
             json={"ids": [test_data["case_id"]]},
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
 
@@ -390,13 +396,12 @@ class TestTestCase:
         auth_session.post(
             f"{TEST_API_BASE_URL}/testcase/cases/batch-delete/",
             json={"ids": [test_data["case_id"]]},
-            timeout=20
+            timeout=20,
         )
 
         # 查看回收站
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/testcase/cases/recycle-bin/",
-            timeout=20
+            f"{TEST_API_BASE_URL}/testcase/cases/recycle-bin/", timeout=20
         )
         assert resp.status_code == 200
 
@@ -406,14 +411,14 @@ class TestTestCase:
         auth_session.post(
             f"{TEST_API_BASE_URL}/testcase/cases/batch-delete/",
             json={"ids": [test_data["case_id"]]},
-            timeout=20
+            timeout=20,
         )
 
         # 恢复
         resp = auth_session.post(
             f"{TEST_API_BASE_URL}/testcase/cases/{test_data['case_id']}/restore/",
             json={},
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
 
@@ -425,12 +430,13 @@ class TestTestCase:
                 "module": "invalid_id",
                 "case_name": "",
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 400
 
 
 # ==================== RAG 知识库模块测试 ====================
+
 
 class TestKnowledgeRAG:
     """RAG 知识库相关测试"""
@@ -443,7 +449,7 @@ class TestKnowledgeRAG:
                 "query_text": "测试用例生成",
                 "top_k": 5,
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -457,7 +463,7 @@ class TestKnowledgeRAG:
             json={
                 "query_text": "",
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 400
 
@@ -465,8 +471,7 @@ class TestKnowledgeRAG:
         """测试知识库文档详情状态接口"""
         # 先取文档列表，若为空则跳过（不同环境初始数据可能为空）
         list_resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/assistant/knowledge/documents/",
-            timeout=20
+            f"{TEST_API_BASE_URL}/assistant/knowledge/documents/", timeout=20
         )
         assert list_resp.status_code == 200
         payload = list_resp.json() or {}
@@ -478,7 +483,7 @@ class TestKnowledgeRAG:
 
         resp = auth_session.get(
             f"{TEST_API_BASE_URL}/assistant/knowledge/documents/{doc_id}/status/",
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -487,8 +492,7 @@ class TestKnowledgeRAG:
     def test_knowledge_document_list(self, auth_session):
         """测试知识库文档列表"""
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/assistant/knowledge/documents/",
-            timeout=20
+            f"{TEST_API_BASE_URL}/assistant/knowledge/documents/", timeout=20
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -498,8 +502,7 @@ class TestKnowledgeRAG:
     def test_knowledge_runtime_status(self, auth_session):
         """测试知识库运行时状态"""
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/assistant/knowledge/runtime-status/",
-            timeout=20
+            f"{TEST_API_BASE_URL}/assistant/knowledge/runtime-status/", timeout=20
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -508,6 +511,7 @@ class TestKnowledgeRAG:
 
 
 # ==================== AI 用例生成模块测试 ====================
+
 
 class TestAICaseGeneration:
     """AI 用例生成相关测试"""
@@ -523,7 +527,7 @@ class TestAICaseGeneration:
                 "api_key": TEST_AI_API_KEY,
                 "model": "glm-4.7-flash",
             },
-            timeout=30
+            timeout=30,
         )
         # 可能返回 200 或 400，取决于 API Key 是否有效
         assert resp.status_code in (200, 400)
@@ -538,7 +542,7 @@ class TestAICaseGeneration:
             json={
                 "api_key": TEST_AI_API_KEY,
             },
-            timeout=30
+            timeout=30,
         )
         assert resp.status_code in (200, 400)
 
@@ -547,7 +551,7 @@ class TestAICaseGeneration:
         resp = auth_session.post(
             f"{TEST_API_BASE_URL}/ai/generate-cases/",
             json={},  # 缺少必要参数
-            timeout=30
+            timeout=30,
         )
         assert resp.status_code == 400
 
@@ -559,7 +563,7 @@ class TestAICaseGeneration:
                 json={
                     "prompt_text": "生成一个登录测试用例",
                 },
-                timeout=30
+                timeout=30,
             )
         except requests.exceptions.ReadTimeout:
             pytest.skip("AI 生成接口超时，跳过该环境下的不稳定校验")
@@ -569,15 +573,14 @@ class TestAICaseGeneration:
     def test_llm_test_connection(self, auth_session):
         """测试 LLM 连接测试"""
         resp = auth_session.post(
-            f"{TEST_API_BASE_URL}/assistant/llm/test-connection/",
-            json={},
-            timeout=20
+            f"{TEST_API_BASE_URL}/assistant/llm/test-connection/", json={}, timeout=20
         )
         # 可能返回 200 或 400
         assert resp.status_code in (200, 400)
 
 
 # ==================== 缺陷管理模块测试 ====================
+
 
 class TestDefect:
     """缺陷管理相关测试"""
@@ -594,7 +597,7 @@ class TestDefect:
                 "status": 1,
                 "defect_content": "测试缺陷内容",
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code in (200, 201)
 
@@ -616,13 +619,12 @@ class TestDefect:
                 "status": 1,
                 "defect_content": "测试",
             },
-            timeout=20
+            timeout=20,
         )
         defect_id = create_resp.json()["id"]
 
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/defect/defects/{defect_id}/",
-            timeout=20
+            f"{TEST_API_BASE_URL}/defect/defects/{defect_id}/", timeout=20
         )
         assert resp.status_code == 200
 
@@ -638,14 +640,14 @@ class TestDefect:
                 "status": 1,
                 "defect_content": "测试",
             },
-            timeout=20
+            timeout=20,
         )
         defect_id = create_resp.json()["id"]
 
         resp = auth_session.patch(
             f"{TEST_API_BASE_URL}/defect/defects/{defect_id}/",
             json={"status": 2},
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
 
@@ -661,13 +663,12 @@ class TestDefect:
                 "status": 1,
                 "defect_content": "测试",
             },
-            timeout=20
+            timeout=20,
         )
         defect_id = create_resp.json()["id"]
 
         resp = auth_session.delete(
-            f"{TEST_API_BASE_URL}/defect/defects/{defect_id}/",
-            timeout=20
+            f"{TEST_API_BASE_URL}/defect/defects/{defect_id}/", timeout=20
         )
         assert resp.status_code in (204, 200)
 
@@ -680,12 +681,13 @@ class TestDefect:
                 "severity": 999,
                 "priority": 999,
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 400
 
 
 # ==================== 执行管理模块测试 ====================
+
 
 class TestExecution:
     """执行管理相关测试"""
@@ -693,8 +695,7 @@ class TestExecution:
     def test_dashboard_summary(self, auth_session):
         """测试仪表盘摘要"""
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/execution/dashboard/summary/",
-            timeout=20
+            f"{TEST_API_BASE_URL}/execution/dashboard/summary/", timeout=20
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -705,8 +706,7 @@ class TestExecution:
     def test_quality_dashboard(self, auth_session):
         """测试质量分析看板"""
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/execution/dashboard/quality/",
-            timeout=20
+            f"{TEST_API_BASE_URL}/execution/dashboard/quality/", timeout=20
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -724,7 +724,7 @@ class TestExecution:
                 "release_date": (datetime.utcnow() + timedelta(days=1)).isoformat(),
                 "status": 1,
             },
-            timeout=20
+            timeout=20,
         )
         assert release_resp.status_code in (200, 201)
         release_id = release_resp.json()["id"]
@@ -738,7 +738,7 @@ class TestExecution:
                 "req_count": 1,
                 "case_count": 1,
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code in (200, 201)
 
@@ -758,7 +758,7 @@ class TestExecution:
                 "release_date": (datetime.utcnow() + timedelta(days=1)).isoformat(),
                 "status": 1,
             },
-            timeout=20
+            timeout=20,
         )
         assert release_resp.status_code in (200, 201)
         release_id = release_resp.json()["id"]
@@ -772,7 +772,7 @@ class TestExecution:
                 "req_count": 1,
                 "case_count": 1,
             },
-            timeout=20
+            timeout=20,
         )
         assert plan_resp.status_code in (200, 201)
         plan_id = plan_resp.json()["id"]
@@ -787,7 +787,7 @@ class TestExecution:
                 "start_time": datetime.utcnow().isoformat(),
                 "end_time": datetime.utcnow().isoformat(),
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code in (200, 201)
 
@@ -806,7 +806,7 @@ class TestExecution:
                 "concurrency": 10,
                 "duration": "10m",
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code in (200, 201)
 
@@ -821,15 +821,13 @@ class TestExecution:
                 "concurrency": 10,
                 "duration": "10m",
             },
-            timeout=20
+            timeout=20,
         )
         task_id = create_resp.json()["task_id"]
 
         # 执行任务
         resp = auth_session.post(
-            f"{TEST_API_BASE_URL}/execution/tasks/{task_id}/run/",
-            json={},
-            timeout=20
+            f"{TEST_API_BASE_URL}/execution/tasks/{task_id}/run/", json={}, timeout=20
         )
         assert resp.status_code in (200, 400)
 
@@ -842,12 +840,13 @@ class TestExecution:
                 "concurrency": -1,
                 "duration": "invalid",
             },
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 400
 
 
 # ==================== 边界条件与异常处理测试 ====================
+
 
 class TestBoundaryAndEdgeCases:
     """边界条件与异常处理测试"""
@@ -856,9 +855,7 @@ class TestBoundaryAndEdgeCases:
         """测试无效 JSON 载荷"""
         # 使用 requests 发送非法 JSON
         resp = auth_session.post(
-            f"{TEST_API_BASE_URL}/project/projects/",
-            data="not valid json",
-            timeout=20
+            f"{TEST_API_BASE_URL}/project/projects/", data="not valid json", timeout=20
         )
         assert resp.status_code in (400, 422)
 
@@ -868,7 +865,7 @@ class TestBoundaryAndEdgeCases:
         resp = auth_session.post(
             f"{TEST_API_BASE_URL}/project/projects/{test_data['project_id']}/",
             json={"project_name": "test"},
-            timeout=20
+            timeout=20,
         )
         # 可能返回 405 或其他错误
         assert resp.status_code in (405, 400, 200)
@@ -876,32 +873,28 @@ class TestBoundaryAndEdgeCases:
     def test_resource_not_found(self, auth_session):
         """测试资源不存在"""
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/project/projects/999999/",
-            timeout=20
+            f"{TEST_API_BASE_URL}/project/projects/999999/", timeout=20
         )
         assert resp.status_code in (404, 400)
 
     def test_pagination(self, auth_session):
         """测试分页功能"""
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/project/projects/?page=1&page_size=5",
-            timeout=20
+            f"{TEST_API_BASE_URL}/project/projects/?page=1&page_size=5", timeout=20
         )
         assert resp.status_code == 200
 
     def test_search_filter(self, auth_session, test_data):
         """测试搜索过滤"""
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/testcase/cases/?search=test",
-            timeout=20
+            f"{TEST_API_BASE_URL}/testcase/cases/?search=test", timeout=20
         )
         assert resp.status_code == 200
 
     def test_filter_invalid_type(self, auth_session):
         """测试过滤参数类型错误"""
         resp = auth_session.get(
-            f"{TEST_API_BASE_URL}/project/projects/?project=invalid",
-            timeout=20
+            f"{TEST_API_BASE_URL}/project/projects/?project=invalid", timeout=20
         )
         # 应该返回 200 但结果为空，或返回 400
         assert resp.status_code in (200, 400)
@@ -910,7 +903,7 @@ class TestBoundaryAndEdgeCases:
         """测试空列表响应"""
         resp = auth_session.get(
             f"{TEST_API_BASE_URL}/project/projects/?name=nonexistent_{get_nonce()}",
-            timeout=20
+            timeout=20,
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -919,6 +912,7 @@ class TestBoundaryAndEdgeCases:
 
 
 # ==================== 数据清理测试 ====================
+
 
 class TestDataCleanup:
     """测试数据清理 - 确保测试后不留残留数据"""
@@ -929,7 +923,7 @@ class TestDataCleanup:
         try:
             auth_session.delete(
                 f"{TEST_API_BASE_URL}/project/projects/{test_data['project_id']}/",
-                timeout=20
+                timeout=20,
             )
         except Exception:
             pass  # 可能已被删除

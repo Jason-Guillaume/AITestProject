@@ -15,7 +15,8 @@ def _must_env(name: str) -> str:
 
 @pytest.fixture(scope="session")
 def api_base_url() -> str:
-    return os.getenv("TEST_API_BASE_URL", "http://127.0.0.1:8000/api").rstrip("/")
+    # 这套 tests/api 为“对已运行后端的集成测试”，必须显式提供 base_url
+    return _must_env("TEST_API_BASE_URL").rstrip("/")
 
 
 @pytest.fixture(scope="session")
@@ -43,7 +44,9 @@ def api_client(api_base_url):
     return session
 
 
-def _login(session: requests.Session, base_url: str, username: str, password: str) -> str:
+def _login(
+    session: requests.Session, base_url: str, username: str, password: str
+) -> str:
     resp = session.post(
         f"{base_url}/user/login/",
         json={"username": username, "password": password},
@@ -147,7 +150,11 @@ def seed_objects(authed_client, user_context):
     assert release_resp.status_code in (200, 201), release_resp.text
     release_id = release_resp.json()["id"]
 
-    module_payload = {"project": project_id, "name": f"module-{nonce}", "test_type": "api"}
+    module_payload = {
+        "project": project_id,
+        "name": f"module-{nonce}",
+        "test_type": "api",
+    }
     module_resp = authed_client.post(
         f"{authed_client.base_url}/testcase/modules/",
         json=module_payload,
@@ -201,7 +208,11 @@ def seed_objects(authed_client, user_context):
     assert design_resp.status_code in (200, 201), design_resp.text
     design_id = design_resp.json()["id"]
 
-    approach_payload = {"scheme_name": f"approach-{nonce}", "version": "1.0", "test_category": 2}
+    approach_payload = {
+        "scheme_name": f"approach-{nonce}",
+        "version": "1.0",
+        "test_category": 2,
+    }
     approach_resp = authed_client.post(
         f"{authed_client.base_url}/testcase/approaches/",
         json=approach_payload,
@@ -210,7 +221,12 @@ def seed_objects(authed_client, user_context):
     assert approach_resp.status_code in (200, 201), approach_resp.text
     approach_id = approach_resp.json()["id"]
 
-    task_payload = {"task_title": f"task-{nonce}", "task_desc": "task desc", "status": 1, "assignee": u}
+    task_payload = {
+        "task_title": f"task-{nonce}",
+        "task_desc": "task desc",
+        "status": 1,
+        "assignee": u,
+    }
     task_resp = authed_client.post(
         f"{authed_client.base_url}/project/tasks/",
         json=task_payload,
