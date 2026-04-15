@@ -222,9 +222,37 @@
             匹配到已有模块则复用，否则<strong>自动新建</strong>同名模块。
           </div>
         </el-form-item>
+        <el-form-item v-if="effectiveTestType === 'api'" label="预检环境/变量" class="ai-gen-module-row">
+          <el-select
+            v-model="precheckEnvId"
+            placeholder="可选：选择环境用于拼接 base_url"
+            filterable
+            clearable
+            style="width: 240px"
+            :disabled="aiGenerating || aiImporting"
+            @change="() => runPreImportPrecheck(aiPreviewCases)"
+          >
+            <el-option v-for="e in envOptions" :key="e.id" :label="e.name" :value="e.id" />
+          </el-select>
+          <el-input
+            v-model="precheckVarsText"
+            placeholder='可选：运行时变量 JSON，例如 {"token":"xxx"}'
+            style="width: 420px"
+            :disabled="aiGenerating || aiImporting"
+            @blur="() => runPreImportPrecheck(aiPreviewCases)"
+          />
+        </el-form-item>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 10px">
+          <el-switch v-model="blockImportOnIssues" active-text="发现问题则阻断导入" inactive-text="允许导入（仅提示）" />
+          <div style="color: var(--el-text-color-secondary); font-size: 12px">
+            已勾选 {{ selectedIssuesSummary.total }} 条，其中 {{ selectedIssuesSummary.bad }} 条存在问题
+            <span v-if="preimportPrecheckLoading" style="margin-left: 10px">预检中…</span>
+          </div>
+        </div>
         <el-table
           ref="aiPreviewTableRef"
           :data="aiPreviewCases"
+          :row-class-name="({ row }) => (rowIssues(row).length ? 'ai-row-has-issues' : '')"
           row-key="_rowKey"
           max-height="320"
           size="small"
@@ -233,7 +261,14 @@
           @selection-change="onAiPreviewSelectionChange"
         >
           <el-table-column type="selection" width="48" align="center" />
-          <el-table-column prop="case_name" label="用例名称" min-width="140" align="left" show-overflow-tooltip />
+          <el-table-column prop="case_name" label="用例名称" min-width="160" align="left" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-tooltip v-if="rowIssues(row).length" :content="rowIssues(row).join('；')" placement="top">
+                <span style="color: var(--el-color-danger)">{{ row.case_name || '（空）' }}</span>
+              </el-tooltip>
+              <span v-else>{{ row.case_name }}</span>
+            </template>
+          </el-table-column>
           <el-table-column
             v-if="effectiveTestType === 'api'"
             prop="business_id"
@@ -262,8 +297,55 @@
               {{ (row.module_name || '').trim() || '—' }}
             </template>
           </el-table-column>
+          <el-table-column label="模块匹配" min-width="200" align="center">
+            <template #default="{ row }">
+              <el-select
+                v-model="row._target_module_id"
+                filterable
+                clearable
+                placeholder="自动匹配/新建"
+                style="width: 180px"
+                :disabled="aiGenerating || aiImporting"
+              >
+                <el-option v-for="m in flatModules" :key="m.id" :label="m.name" :value="m.id" />
+              </el-select>
+            </template>
+          </el-table-column>
           <el-table-column prop="precondition" label="前置条件" min-width="100" align="center" show-overflow-tooltip />
-          <el-table-column prop="steps" label="操作步骤" min-width="160" align="center" show-overflow-tooltip />
+          <el-table-column label="步骤数" width="76" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="Array.isArray(row.steps_list) && row.steps_list.length" size="small" type="success">
+                {{ row.steps_list.length }}
+              </el-tag>
+              <span v-else>—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作步骤" min-width="160" align="center" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-popover
+                v-if="Array.isArray(row.steps_list) && row.steps_list.length"
+                placement="top-start"
+                :width="520"
+                trigger="hover"
+              >
+                <template #reference>
+                  <span style="cursor: pointer; text-decoration: underline; text-underline-offset: 2px">
+                    {{ String(row.steps || '').slice(0, 80) || '查看' }}
+                  </span>
+                </template>
+                <div style="max-height: 260px; overflow: auto; white-space: pre-wrap; font-size: 12px">
+                  <div v-for="(s, i) in row.steps_list" :key="i" style="margin-bottom: 10px">
+                    <div style="font-weight: 700; margin-bottom: 4px">步骤 {{ i + 1 }}</div>
+                    <div>{{ s.step_desc || s.desc || s.action || '—' }}</div>
+                    <div style="margin-top: 4px; color: var(--el-text-color-secondary)">
+                      预期：{{ s.expected_result || s.expected || '—' }}
+                    </div>
+                  </div>
+                </div>
+              </el-popover>
+              <span v-else>{{ String(row.steps || '') }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="expected_result" label="预期结果" min-width="120" align="center" show-overflow-tooltip />
         </el-table>
       </div>
@@ -331,6 +413,40 @@
       <el-button @click="showSimilarDialog = false">关闭</el-button>
     </template>
   </el-dialog>
+
+  <el-dialog v-model="showPrecheckDialog" title="导入后预检报告（API）" width="860px">
+    <el-table :data="precheckRows" size="small" border v-loading="precheckLoading">
+      <template #empty>
+        <el-empty description="暂无预检结果" :image-size="86" />
+      </template>
+      <el-table-column prop="id" label="用例ID" width="90" align="center" />
+      <el-table-column prop="case_name" label="用例名称" min-width="180" show-overflow-tooltip />
+      <el-table-column label="结果" width="90" align="center">
+        <template #default="{ row }">
+          <el-tag size="small" :type="row.ok ? 'success' : 'danger'" effect="plain">
+            {{ row.ok ? '通过' : '有问题' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="未替换变量" min-width="220" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span v-if="Array.isArray(row.unresolved_vars) && row.unresolved_vars.length">
+            {{ row.unresolved_vars.join(', ') }}
+          </span>
+          <span v-else>—</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="请求预览" min-width="240" show-overflow-tooltip>
+        <template #default="{ row }">
+          {{ (row.request?.method || '—') + ' ' + (row.request?.url || '—') }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="error" label="错误" min-width="180" show-overflow-tooltip />
+    </el-table>
+    <template #footer>
+      <el-button @click="showPrecheckDialog = false">关闭</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -340,13 +456,17 @@ import {
   createCaseApi,
   createCaseStepApi,
   createModuleApi,
+  aiImportCasesApi,
+  batchPreviewRunApiCaseApi,
+  aiImportPrecheckApi,
 } from '@/api/testcase'
 import {
   AI_QUICK_START_BY_TYPE,
   mergeTestTypePromptWithRequirement,
 } from '@/utils/aiTestTypePrompts'
 import { extractBusinessModuleNameFromRequirement } from '@/utils/extractBusinessModuleFromRequirement'
-import { previewAiPhase1Api } from '@/api/assistant'
+import { previewAiPhase1Api, streamGenerateAiCases } from '@/api/assistant'
+import { getEnvironments } from '@/api/environment'
 
 const AI_ASSISTANT_MODEL_ROUTE = '/ai-assistant?tab=model'
 
@@ -474,6 +594,7 @@ const aiStreamText = ref('')
 const aiGenerating = ref(false)
 const aiImporting = ref(false)
 const aiPreviewCases = ref<Record<string, unknown>[]>([])
+const aiRunId = ref<number | null>(null)
 const aiImportModule = ref<number | null>(null)
 const aiPreviewTableRef = ref()
 const aiSelectedPreview = ref<Record<string, unknown>[]>([])
@@ -487,6 +608,110 @@ let aiLoadingTimer2: ReturnType<typeof setTimeout> | null = null
 
 const showSimilarDialog = ref(false)
 const activeSimilarRow = ref<Record<string, unknown> | null>(null)
+
+const showPrecheckDialog = ref(false)
+const precheckLoading = ref(false)
+const precheckRows = ref<Record<string, unknown>[]>([])
+const preimportPrecheckLoading = ref(false)
+
+const precheckEnvId = ref<number | null>(null)
+const precheckVarsText = ref<string>('{}')
+const envOptions = ref<Array<{ id: number; name: string }>>([])
+
+function parsePrecheckVars(): Record<string, unknown> {
+  const t = String(precheckVarsText.value || '').trim()
+  if (!t) return {}
+  try {
+    const v = JSON.parse(t)
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+async function loadEnvOptions() {
+  if (effectiveTestType.value !== 'api') return
+  try {
+    const { data } = await getEnvironments({ page_size: 100 })
+    const rows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : []
+    envOptions.value = rows
+      .map((x: any) => ({ id: Number(x?.id), name: String(x?.name || '') }))
+      .filter((x: any) => Number.isFinite(x.id) && x.name)
+  } catch {
+    envOptions.value = []
+  }
+}
+
+const blockImportOnIssues = ref(true)
+
+function rowIssues(row: Record<string, unknown>): string[] {
+  const issues: string[] = []
+  const name = String(row.case_name || '').trim()
+  if (!name) issues.push('缺少用例名称')
+  const mid = row._target_module_id
+  if (mid == null || mid === '') issues.push('未指定目标模块')
+  const stepsText = String(row.steps || '').trim()
+  const stepsList = Array.isArray(row.steps_list) ? row.steps_list : Array.isArray(row.stepsList) ? row.stepsList : []
+  if (!stepsText && (!Array.isArray(stepsList) || !stepsList.length)) issues.push('缺少步骤')
+  const unresolved = Array.isArray(row.unresolved_vars) ? row.unresolved_vars : []
+  if (unresolved.length) issues.push(`存在未替换变量：${unresolved.slice(0, 6).join(', ')}`)
+  const perr = String((row as any)._precheck_error || '').trim()
+  if (perr) issues.push(`预检失败：${perr}`)
+  if (effectiveTestType.value === 'api') {
+    const url = String(row.api_url || '').trim()
+    const method = String(row.api_method || '').trim()
+    if (!url) issues.push('API 缺少 url')
+    if (!method) issues.push('API 缺少 method')
+  }
+  return issues
+}
+
+async function runPreImportPrecheck(rows: Record<string, unknown>[]) {
+  if (effectiveTestType.value !== 'api') return
+  if (!rows?.length) return
+  preimportPrecheckLoading.value = true
+  try {
+    const items = rows.map((r) => ({
+      case_name: r.case_name,
+      api_url: r.api_url,
+      api_method: r.api_method,
+      api_headers: r.api_headers,
+      api_body: r.api_body,
+    }))
+    const overrides = {
+      environment_id: precheckEnvId.value,
+      variables: parsePrecheckVars(),
+    }
+    const res = await aiImportPrecheckApi({ test_type: 'api', overrides, items })
+    const d = res?.data || {}
+    const list = Array.isArray(d.results) ? d.results : []
+    for (const pr of list) {
+      const idx = pr.index
+      if (typeof idx !== 'number') continue
+      const row = rows[idx]
+      if (!row) continue
+      row.unresolved_vars = Array.isArray(pr.unresolved_vars) ? pr.unresolved_vars : []
+      row._precheck_error = pr.error || ''
+      // 同步一份最终 URL 用于展示（不改变原字段）
+      if (pr.request && typeof pr.request === 'object') {
+        row._precheck_final_url = pr.request.url
+      }
+    }
+  } catch {
+    // ignore
+  } finally {
+    preimportPrecheckLoading.value = false
+  }
+}
+
+const selectedIssuesSummary = computed(() => {
+  const rows = aiSelectedPreview.value || []
+  let bad = 0
+  for (const r of rows) {
+    if (rowIssues(r).length) bad += 1
+  }
+  return { bad, total: rows.length }
+})
 
 const semanticSimilarRows = computed(() => {
   const row = activeSimilarRow.value || {}
@@ -544,6 +769,8 @@ function resetAiForm() {
     props.selectedModuleId != null && props.selectedModuleId !== ''
       ? (props.selectedModuleId as number)
       : null
+  precheckEnvId.value = null
+  precheckVarsText.value = '{}'
 }
 
 watch(
@@ -551,6 +778,7 @@ watch(
   (open) => {
     if (open) {
       resetAiForm()
+      loadEnvOptions()
     }
   },
 )
@@ -734,141 +962,64 @@ async function runAiGenerate() {
   aiPreviewCases.value = []
   aiSelectedPreview.value = []
   aiStreamText.value = ''
+  aiRunId.value = null
   aiPhase1Analysis.value = null
   aiPhase1Override.value = null
   aiPhase1OverridePointsText.value = ''
   aiPhase1Editing.value = false
   let finished = false
-  const token = localStorage.getItem('token')
   try {
-    const streamHeaders = new Headers()
-    streamHeaders.set('Content-Type', 'application/json')
-    streamHeaders.set('Accept', 'text/event-stream')
-    if (token) {
-      streamHeaders.set('Authorization', `Token ${token}`)
-    }
-    const res = await fetch('/api/ai/generate-cases-stream/', {
-      method: 'POST',
-      headers: streamHeaders,
-      body: JSON.stringify(payload),
-    })
-
-    if (res.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      localStorage.removeItem('token')
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
-      }
-      return
-    }
-
-    const ct = (res.headers.get('content-type') || '').toLowerCase()
-    if (!res.ok && !ct.includes('event-stream') && !ct.includes('text/stream')) {
-      let msg = `请求失败 (${res.status})`
-      let errCode = ''
-      try {
-        const j = (await res.json()) as { error?: string; message?: string; detail?: string; code?: string }
-        errCode = String(j.code || '').trim()
-        msg =
-          (typeof j.error === 'string' && j.error) ||
-          (typeof j.message === 'string' && j.message) ||
-          (typeof j.detail === 'string' && j.detail) ||
-          msg
-      } catch {
-        /* ignore */
-      }
-      if (errCode === 'AUTH_ERROR') {
-        handleAiAuthExpired(msg)
-        return
-      }
-      if (res.status === 401) {
-        ElMessage.error('登录已过期，请重新登录')
-        localStorage.removeItem('token')
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login'
-        }
-        return
-      }
-      ElMessage.error(msg)
-      return
-    }
-
-    if (!res.body?.getReader) {
-      ElMessage.error('当前环境不支持流式读取')
-      return
-    }
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let carry = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      carry += decoder.decode(value, { stream: true })
-      carry = carry.replace(/\r\n/g, '\n')
-      let deltaRun = ''
-      let pos
-      while ((pos = carry.indexOf('\n\n')) !== -1) {
-        const block = carry.slice(0, pos).trim()
-        carry = carry.slice(pos + 2)
-        const dataLine = block.split('\n').find((line) => line.startsWith('data:'))
-        if (!dataLine) continue
-        const jsonStr = dataLine.replace(/^data:\s?/, '').trim()
-        let evt: Record<string, unknown>
-        try {
-          evt = JSON.parse(jsonStr) as Record<string, unknown>
-        } catch {
-          continue
-        }
-        if (evt.type === 'connected') {
-          continue
-        }
+    let deltaRun = ''
+    await streamGenerateAiCases(payload, {
+      onEvent: async (evt: any) => {
+        if (!evt || finished) return
+        if (evt.type === 'connected') return
         if (evt.type === 'phase' && typeof evt.message === 'string') {
           aiLoadingHint.value = evt.message
-          continue
+          return
         }
         if (evt.type === 'phase1_analysis') {
           const norm = normalizePhase1Analysis(evt.data)
           if (norm) aiPhase1Analysis.value = norm
-          continue
+          return
         }
         if (evt.type === 'all_covered') {
           const coveredPhase1 = normalizePhase1Analysis(evt.phase1_analysis)
           if (coveredPhase1) aiPhase1Analysis.value = coveredPhase1
           deltaRun = ''
           aiStreamText.value = ''
-          ElMessage.info(
-            (evt.message as string) || '语义检索：当前模块下已有用例已覆盖该需求，未生成新用例。',
-          )
+          ElMessage.info(evt.message || '语义检索：当前模块下已有用例已覆盖该需求，未生成新用例。')
           finished = true
-          break
+          return
         }
-        if (evt.type === 'delta' && evt.text) {
-          const chunkTrim = String(evt.text).trim()
+        if (evt.type === 'delta' && typeof evt.text === 'string') {
+          const chunkTrim = evt.text.trim()
           if (/^\[ALL_COVERED\]$/i.test(chunkTrim)) {
             deltaRun = ''
             aiStreamText.value = ''
             ElMessage.info('语义检索：当前模块下已有用例已覆盖该需求，未生成新用例。')
             finished = true
-            break
+            return
           }
-          deltaRun += String(evt.text)
-        } else if (evt.type === 'error') {
+          deltaRun += evt.text
+          return
+        }
+        if (evt.type === 'error') {
           if (deltaRun) {
             aiStreamText.value += deltaRun
             deltaRun = ''
           }
           const evtCode = String(evt.code || '').trim()
-          const evtMsg = (evt.message as string) || '生成失败'
+          const evtMsg = String(evt.message || '').trim() || '生成失败'
           if (evtCode === 'AUTH_ERROR') {
             handleAiAuthExpired(evtMsg)
           } else {
             ElMessage.error(evtMsg)
           }
           finished = true
-          break
-        } else if (evt.type === 'done' && evt.success && Array.isArray(evt.cases)) {
+          return
+        }
+        if (evt.type === 'done' && evt.success && Array.isArray(evt.cases)) {
           const donePhase1 = normalizePhase1Analysis(evt.phase1_analysis)
           if (donePhase1) aiPhase1Analysis.value = donePhase1
           if (deltaRun) {
@@ -876,14 +1027,18 @@ async function runAiGenerate() {
             deltaRun = ''
           }
           const cases = evt.cases as Record<string, unknown>[]
+          const rid = evt.run_id
+          if (typeof rid === 'number' && Number.isFinite(rid)) {
+            aiRunId.value = rid
+          }
           aiPreviewCases.value = cases.map((row, idx) => {
-            const headersRaw = row.api_headers
+            const headersRaw = (row as any).api_headers
             const headersClone =
               headersRaw && typeof headersRaw === 'object' && !Array.isArray(headersRaw)
                 ? { ...(headersRaw as object) }
                 : {}
             let bodyClone: unknown = {}
-            const ab = row.api_body
+            const ab = (row as any).api_body
             if (ab !== undefined && ab !== null && typeof ab === 'object') {
               try {
                 bodyClone = JSON.parse(JSON.stringify(ab))
@@ -893,27 +1048,27 @@ async function runAiGenerate() {
             } else if (ab !== undefined && ab !== null) {
               bodyClone = ab
             }
-            return { ...row, api_headers: headersClone, api_body: bodyClone, _rowKey: idx }
+            const base = { ...(row as any), api_headers: headersClone, api_body: bodyClone, _rowKey: idx }
+            return { ...base, _target_module_id: suggestTargetModuleId(base) }
           })
+          await runPreImportPrecheck(aiPreviewCases.value)
           aiStreamText.value = ''
-          ElMessage.success((evt.message as string) || `已生成 ${cases.length} 条用例`)
+          ElMessage.success(evt.message || `已生成 ${cases.length} 条用例`)
           finished = true
-          break
         }
-      }
-      if (deltaRun) {
-        const merged = (aiStreamText.value + deltaRun).replace(/\s+/g, ' ').trim()
-        if (/^\[ALL_COVERED\]$/i.test(merged)) {
-          aiStreamText.value = ''
-          ElMessage.info('语义检索：当前模块下已有用例已覆盖该需求，未生成新用例。')
-          finished = true
-        } else {
-          aiStreamText.value += deltaRun
-        }
-      }
-      if (finished) break
-    }
+      },
+    })
 
+    if (deltaRun) {
+      const merged = (aiStreamText.value + deltaRun).replace(/\s+/g, ' ').trim()
+      if (/^\[ALL_COVERED\]$/i.test(merged)) {
+        aiStreamText.value = ''
+        ElMessage.info('语义检索：当前模块下已有用例已覆盖该需求，未生成新用例。')
+        finished = true
+      } else {
+        aiStreamText.value += deltaRun
+      }
+    }
     if (!finished && !aiPreviewCases.value.length) {
       if (aiStreamText.value) {
         ElMessage.warning('流已结束，但未能解析为结构化用例，请检查模型输出或缩短需求后重试')
@@ -997,6 +1152,12 @@ function findFlatModuleByName(name: string) {
   return props.flatModules.find((m) => normModuleNameKey(m.name) === k) ?? null
 }
 
+function suggestTargetModuleId(row: Record<string, unknown>): number | null {
+  const name = resolvedModuleNameForImport(row)
+  const hit = findFlatModuleByName(name)
+  return hit?.id ?? null
+}
+
 async function ensureModuleIdForAiImport(moduleName: string, createdByKey: Map<string, number>) {
   const pid = props.projectId
   if (pid == null) {
@@ -1066,85 +1227,88 @@ async function confirmAiImport() {
     ElMessage.warning('请先在顶部选择项目')
     return
   }
-  aiImporting.value = true
-  let ok = 0
-  let skippedNoModule = 0
-  const createdByKey = new Map<string, number>()
-  const tt = effectiveTestType.value
-  try {
-    for (const row of selected) {
-      const mn = resolvedModuleNameForImport(row)
-      let mid: number | null = null
-      if (mn) {
-        mid = await ensureModuleIdForAiImport(mn, createdByKey)
-      } else if (aiImportModule.value != null) {
-        mid = aiImportModule.value
-      } else {
-        skippedNoModule += 1
-        continue
-      }
-      const createPayload: Record<string, unknown> = {
-        case_name: row.case_name,
-        level: row.level,
-        module: mid,
-        test_type: tt,
-      }
-      if (tt === 'api') {
-        const url = String(row.api_url || '').trim()
-        const method = String(row.api_method || 'GET')
-          .trim()
-          .toUpperCase()
-          .slice(0, 16)
-        if (url) createPayload.api_url = url
-        if (method) createPayload.api_method = method
-        if (row.api_headers && typeof row.api_headers === 'object') {
-          createPayload.api_headers = { ...(row.api_headers as object) }
-        }
-        const ab = row.api_body
-        if (ab !== undefined && ab !== null) {
-          createPayload.api_body = ab
-        }
-        if (row.api_expected_status != null && row.api_expected_status !== '') {
-          const n = Number(row.api_expected_status)
-          if (!Number.isNaN(n)) createPayload.api_expected_status = n
-        }
-      }
-      if (tt === 'security') {
-        const as = String(row.attack_surface || '').trim()
-        if (as) createPayload.attack_surface = as.slice(0, 512)
-        const tp = String(row.tool_preset || '').trim()
-        if (tp) createPayload.tool_preset = tp.slice(0, 128)
-        const rl = String(row.risk_level || '').trim()
-        if (['高', '中', '低'].includes(rl)) createPayload.risk_level = rl
-      }
-      const createRes = await createCaseApiResolvingRecycleConflict(
-        createPayload,
-        String(row.case_name || ''),
-      )
-      const caseId = extractCreatedCaseId(createRes)
-      if (!caseId) {
-        throw new Error('创建用例后未返回 ID')
-      }
-      await createCaseStepApi({
-        testcase: caseId,
-        step_number: 1,
-        step_desc: buildStepDescFromAi(row),
-        expected_result: (String(row.expected_result || '').trim() || '—') as string,
-      })
-      ok += 1
+  if (blockImportOnIssues.value) {
+    const badRows = selected.filter((r) => rowIssues(r).length)
+    if (badRows.length) {
+      ElMessage.warning(`已阻断导入：所选 ${badRows.length} 条存在问题（请在表格中查看红色提示）`)
+      return
     }
+  }
+  try {
+    aiImporting.value = true
+    const tt = effectiveTestType.value
+    const items = selected.map((row) => ({
+      case_name: row.case_name,
+      level: row.level,
+      module_id: row._target_module_id ?? null,
+      module_name: resolvedModuleNameForImport(row),
+      expected_result: row.expected_result,
+      precondition: row.precondition,
+      steps: row.steps,
+      steps_list: Array.isArray(row.steps_list) ? row.steps_list : (Array.isArray(row.stepsList) ? row.stepsList : null),
+      api_url: row.api_url,
+      api_method: row.api_method,
+      api_headers: row.api_headers,
+      api_body: row.api_body,
+      api_expected_status: row.api_expected_status,
+      api_source_curl: row.api_source_curl,
+      attack_surface: row.attack_surface,
+      tool_preset: row.tool_preset,
+      risk_level: row.risk_level,
+    }))
+    const res = await aiImportCasesApi({
+      project_id: props.projectId,
+      test_type: tt,
+      run_id: aiRunId.value || null,
+      default_module_id: aiImportModule.value ?? null,
+      module_match_threshold: 0.92,
+      strict: true,
+      items,
+    })
+    const d = res?.data || {}
+    const ok = Array.isArray(d.imported) ? d.imported.length : 0
+    const skipped = Number(d.skipped || 0)
+    const failed = Array.isArray(d.failed) ? d.failed : []
+
     if (!ok) {
       ElMessage.warning(
-        skippedNoModule
-          ? '未能导入：无法从用例/Phase1/标题推断业务模块名。请在需求中写明功能域（如登录、订单）、或勾选「默认模块」、或重新生成带 module_name 的用例。'
-          : '没有成功导入任何用例',
+        skipped
+          ? '未能导入：缺少业务模块归属。请在需求中写明功能域（如登录、订单）、或勾选「默认模块」、或重新生成带 module_name 的用例。'
+          : failed.length
+            ? `未能导入：${failed[0]?.error || '未知错误'}`
+            : '没有成功导入任何用例',
       )
       return
     }
-    if (skippedNoModule) {
-      ElMessage.warning(
-        `已导入 ${ok} 条；另有 ${skippedNoModule} 条因缺少业务模块归属已跳过（可选手动默认模块或补充需求后重试）。`,
-      )
+    // 导入后自动预检（仅 API 类型）：预览最终请求 + 检测未替换变量
+    if (tt === 'api') {
+      const importedIds = Array.isArray(d.imported)
+        ? d.imported.map((x: any) => x?.case_id).filter((x: any) => typeof x === 'number')
+        : []
+      if (importedIds.length) {
+        try {
+          precheckLoading.value = true
+          showPrecheckDialog.value = true
+          precheckRows.value = []
+          const r = await batchPreviewRunApiCaseApi({
+            ids: importedIds,
+            overrides: { environment_id: precheckEnvId.value, variables: parsePrecheckVars() },
+          })
+          const pd = r?.data || {}
+          precheckRows.value = Array.isArray(pd.results) ? pd.results : []
+        } catch {
+          precheckRows.value = []
+        } finally {
+          precheckLoading.value = false
+        }
+      }
+    }
+    if (failed.length) {
+      ElMessage.warning(`已导入 ${ok} 条；失败 ${failed.length} 条（可在控制台查看原因）`)
+      // eslint-disable-next-line no-console
+      console.warn('AI import failed items:', failed)
+    } else if (skipped) {
+      ElMessage.warning(`已导入 ${ok} 条；另有 ${skipped} 条因缺少模块归属已跳过`)
     } else {
       ElMessage.success(`成功导入 ${ok} 条用例`)
     }
@@ -1167,6 +1331,9 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.ai-row-has-issues :deep(td) {
+  background: rgba(239, 68, 68, 0.08) !important;
+}
 .ai-generate-dialog :deep(.el-dialog__body) {
   overflow: visible;
   padding-top: 10px;

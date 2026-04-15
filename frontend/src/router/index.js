@@ -81,6 +81,7 @@ const routes = [
         path: "server-logs",
         name: "ServerLogs",
         component: () => import("@/views/server_logs/index.vue"),
+        meta: { keepAlive: true },
       },
 
       // system / knowledge / help 占位
@@ -89,10 +90,14 @@ const routes = [
       { path: "system/org", component: () => import("@/views/system/OrgManagement.vue") },
       { path: "system/role", component: () => import("@/views/system/RoleManagement.vue") },
       { path: "system/user", component: () => import("@/views/system/UserManagement.vue") },
+      { path: "system/ai-usage", component: () => import("@/views/system/AiUsageDashboard.vue") },
       { path: "knowledge", component: () => import("@/views/system/KnowledgeCenter.vue") },
       { path: "help", component: () => import("@/views/system/HelpCenter.vue") },
     ],
   },
+
+  // 兜底：未知路径跳回首页（避免空白页/刷新 404）
+  { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 
 const router = createRouter({
@@ -111,6 +116,7 @@ const SYSTEM_ADMIN_ONLY_PREFIXES = [
   "/system/role",
   "/system/user",
   "/system/messages",
+  "/system/ai-usage",
 ];
 
 router.beforeEach((to, _from, next) => {

@@ -66,21 +66,48 @@ export async function streamGenerateAiCases(payload, options = {}) {
     onEvent,
   } = options;
   const token = localStorage.getItem("token");
-  const response = await fetch("/api/ai/generate-cases-stream/", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Token ${token}` } : {}),
-    },
-    body: JSON.stringify(payload || {}),
-    signal,
-  });
+  let response;
+  try {
+    response = await fetch("/api/ai/generate-cases-stream/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Token ${token}` } : {}),
+      },
+      body: JSON.stringify(payload || {}),
+      signal,
+    });
+  } catch (e) {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("app:backend-unhealthy", {
+          detail: { message: "后端未就绪或连接失败，请确认后端服务正在运行" },
+        })
+      );
+    }
+    throw e;
+  }
+
+  if (response.status === 401) {
+    localStorage.removeItem("token");
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+    throw new Error("登录已过期，请重新登录");
+  }
   if (!response.ok) {
     let detail = "";
     try {
       detail = await response.text();
     } catch (_) {
       detail = "";
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("app:backend-unhealthy", {
+          detail: { message: "后端服务暂不可用" },
+        })
+      );
     }
     throw new Error(`流式生成失败(${response.status})${detail ? `: ${detail}` : ""}`);
   }
