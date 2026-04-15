@@ -19,3 +19,16 @@ data/chroma/
 # Node / Vite
 frontend/node_modules/
 frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+
+# Vite transient timestamped config artifacts
+frontend/vite.config.js.timestamp-*.mjs
+
+# Local AI/IDE configs (machine-specific)
+.claude/settings.local.json
+
+# Test caches
+.pytest_cache/
