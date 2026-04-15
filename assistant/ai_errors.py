@@ -169,7 +169,9 @@ def resolve_ai_generate_cases_outer_openai_error(
             api_base_url,
             module_id,
         )
-        return fail("调用智谱接口超时，请稍后重试。", status_code=504, code="UPSTREAM_TIMEOUT")
+        return fail(
+            "调用智谱接口超时，请稍后重试。", status_code=504, code="UPSTREAM_TIMEOUT"
+        )
     if isinstance(exc, APIConnectionError):
         logger.exception(
             "AI generate cases upstream unreachable. user_id=%s model=%s base_url=%s module_id=%s",
@@ -178,7 +180,9 @@ def resolve_ai_generate_cases_outer_openai_error(
             api_base_url,
             module_id,
         )
-        return fail(f"无法连接模型服务：{exc}", status_code=502, code="UPSTREAM_UNREACHABLE")
+        return fail(
+            f"无法连接模型服务：{exc}", status_code=502, code="UPSTREAM_UNREACHABLE"
+        )
     if isinstance(exc, APIError):
         logger.exception(
             "AI generate cases API error. user_id=%s model=%s base_url=%s module_id=%s",

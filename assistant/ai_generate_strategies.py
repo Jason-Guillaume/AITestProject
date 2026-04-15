@@ -57,7 +57,9 @@ def get_ai_prompt_context(
     cn = (case_name or "").strip()
 
     if use_api_prompt:
-        input_data = spec if spec else f"根据名称预测接口: {cn or '（结合需求描述推断各接口）'}"
+        input_data = (
+            spec if spec else f"根据名称预测接口: {cn or '（结合需求描述推断各接口）'}"
+        )
         ctx = {
             "module_name": module_name,
             "requirement": requirement,
@@ -117,8 +119,7 @@ def build_user_message_for_generate(ctx: Dict[str, Any]) -> str:
     pc = get_ai_prompt_context_from_request_ctx(ctx)
     parts = [
         "请严格按系统提示：只输出 JSON 数组，且所有说明性字符串取值必须为简体中文。\n"
-        "用户需求（再次强调）：\n\n"
-        + (ctx.get("requirement") or "").strip()
+        "用户需求（再次强调）：\n\n" + (ctx.get("requirement") or "").strip()
     ]
     spec = (ctx.get("api_spec") or "").strip()
     if spec:
@@ -164,7 +165,9 @@ def should_apply_api_case_enrichment(ctx: Dict[str, Any]) -> bool:
     return str(ctx.get("test_type") or "").strip() == "api"
 
 
-def apply_test_type_domain_strategy(base_system_prompt: str, ctx: Dict[str, Any]) -> str:
+def apply_test_type_domain_strategy(
+    base_system_prompt: str, ctx: Dict[str, Any]
+) -> str:
     """
     在 RAG 外层包装之前，按 test_type 注入「领域专家」补充段（策略模式）。
     与 ctx['context_data'] 联动：安全场景可强调 OWASP；性能/UI 等可追加侧重点。

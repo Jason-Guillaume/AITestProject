@@ -51,7 +51,9 @@ def build_rag_system_prompt(
         context_block = "（知识库未检索到高相关片段，请依据需求与接口定义生成。）"
     else:
         parts = []
-        max_context_chars = max(200, int(getattr(settings, "RAG_MAX_CONTEXT_CHARS", 1200)))
+        max_context_chars = max(
+            200, int(getattr(settings, "RAG_MAX_CONTEXT_CHARS", 1200))
+        )
         for i, item in enumerate(results, 1):
             title = item.get("title") or "未命名文档"
             category = item.get("category") or "-"

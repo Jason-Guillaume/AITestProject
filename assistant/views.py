@@ -1,6 +1,7 @@
 import json
 import logging
 import importlib.util
+import hashlib
 import re
 from difflib import SequenceMatcher
 from datetime import timedelta
@@ -84,6 +85,12 @@ from assistant.permissions import (
     IsAdminOrDocumentCreator,
     user_is_knowledge_document_privileged,
 )
+from assistant.services.ai_governance import (
+    acquire_ai_concurrency_slot,
+    check_and_increment_daily_quota,
+    release_ai_concurrency_slot,
+    write_ai_usage_event,
+)
 from assistant.serialize import KnowledgeArticleSerializer, KnowledgeDocumentSerializer
 from assistant.error_parser import simplify_vector_error
 from assistant.services.document_parser import (
@@ -95,7 +102,176 @@ from testcase.models import TestModule
 logger = logging.getLogger(__name__)
 
 
-def _knowledge_document_forbidden_if_no_object_permission(request, view, doc, message: str):
+def _yyyymmdd_now() -> str:
+    try:
+        return timezone.now().strftime("%Y%m%d")
+    except Exception:
+        return time.strftime("%Y%m%d")
+
+
+def _request_path(request) -> str:
+    try:
+        return str(getattr(request, "path", "") or "")[:128]
+    except Exception:
+        return ""
+
+
+def _guard_ai_request_or_429(request, *, action: str):
+    """
+    AI 治理：每日配额 + 并发保护（按 user）。
+    返回 (slot_acquired, denied_response_or_none)。
+    """
+    u = getattr(request, "user", None)
+    if not u or not getattr(u, "is_authenticated", False):
+        return False, None
+    uid = int(getattr(u, "id", 0) or 0)
+    if uid <= 0:
+        return False, None
+
+    allowed, used, limit = check_and_increment_daily_quota(
+        user_id=uid, yyyymmdd=_yyyymmdd_now()
+    )
+    if not allowed:
+        msg = f"今日 AI 调用次数已达上限（{used}/{limit}），请明日再试或联系管理员调整配额。"
+        try:
+            write_ai_usage_event(
+                user=u,
+                action=action,
+                endpoint=_request_path(request),
+                success=False,
+                status_code=429,
+                error_code="QUOTA_EXCEEDED",
+                error_message=msg,
+                meta={"daily_used": used, "daily_limit": limit},
+            )
+        except Exception:
+            pass
+        return False, Response(
+            {"success": False, "error": msg, "message": msg, "cases": []}, status=429
+        )
+
+    acquired, cur, max_c = acquire_ai_concurrency_slot(user_id=uid)
+    if not acquired:
+        msg = f"当前 AI 并发过高（>{max_c}），请稍后重试。"
+        try:
+            write_ai_usage_event(
+                user=u,
+                action=action,
+                endpoint=_request_path(request),
+                success=False,
+                status_code=429,
+                error_code="CONCURRENCY_LIMIT",
+                error_message=msg,
+                meta={"concurrency": cur, "max_concurrency": max_c},
+            )
+        except Exception:
+            pass
+        return False, Response(
+            {"success": False, "error": msg, "message": msg, "cases": []}, status=429
+        )
+    return True, None
+
+
+def _redact_ext_config_for_run(ext_config: object) -> dict:
+    """
+    生成 run 记录时，对 ext_config 做轻量脱敏/瘦身：
+    - 仅保留 key 列表与若干字段的长度统计，避免把大段 spec/文本落库
+    """
+    if not isinstance(ext_config, dict):
+        return {}
+    out = {"keys": [], "sizes": {}}
+    try:
+        keys = [str(k) for k in ext_config.keys()]
+        out["keys"] = keys[:80]
+        sizes = {}
+        for k in keys[:80]:
+            v = ext_config.get(k)
+            if v is None:
+                continue
+            if isinstance(v, (str, bytes)):
+                sizes[k] = len(v)
+            elif isinstance(v, (list, dict)):
+                try:
+                    sizes[k] = len(v)
+                except Exception:
+                    pass
+        out["sizes"] = sizes
+    except Exception:
+        return {}
+    return out
+
+
+def _write_ai_case_generation_run(
+    *,
+    user,
+    action: str,
+    ctx: dict,
+    model_used: str,
+    phase1: dict,
+    phase1_override: dict | None,
+    streamed: bool,
+    success: bool,
+    all_covered: bool,
+    cases_count: int,
+    latency_ms: int,
+    output_chars: int,
+    error_code: str = "",
+    error_message: str = "",
+    meta: dict | None = None,
+) -> int | None:
+    """
+    写入 AiCaseGenerationRun，返回 run_id（失败返回 None）。
+    """
+    try:
+        from assistant.models import AiCaseGenerationRun
+    except Exception:
+        return None
+
+    requirement = str(ctx.get("requirement") or "")
+    req_sha = (
+        hashlib.sha256(requirement.encode("utf-8")).hexdigest() if requirement else ""
+    )
+    preview = re.sub(r"\s+", " ", requirement).strip()[:200] if requirement else ""
+    prompt_chars = len(requirement) + len(str(ctx.get("api_spec") or ""))
+    try:
+        row = AiCaseGenerationRun.objects.create(
+            user=user if getattr(user, "is_authenticated", False) else None,
+            action=str(action or "")[:64],
+            test_type=str(ctx.get("test_type") or "")[:32],
+            module_id=ctx.get("module_id"),
+            streamed=bool(streamed),
+            model_used=str(model_used or "")[:128],
+            prompt_version=str((meta or {}).get("prompt_version") or "v1")[:64],
+            params=(
+                _redact_ext_config_for_run(ctx.get("params") or {})
+                if isinstance(ctx.get("params"), dict)
+                else {}
+            ),
+            requirement_sha256=req_sha,
+            requirement_preview=preview[:256],
+            ext_config=_redact_ext_config_for_run(ctx.get("ext_config") or {}),
+            phase1_analysis=phase1 if isinstance(phase1, dict) else {},
+            phase1_override=(
+                phase1_override if isinstance(phase1_override, dict) else {}
+            ),
+            success=bool(success),
+            all_covered=bool(all_covered),
+            cases_count=int(cases_count or 0),
+            prompt_chars=int(prompt_chars or 0),
+            output_chars=int(output_chars or 0),
+            latency_ms=int(latency_ms or 0),
+            error_code=str(error_code or "")[:64],
+            error_message=str(error_message or "")[:512],
+            meta=meta or {},
+        )
+        return int(row.id)
+    except Exception:
+        return None
+
+
+def _knowledge_document_forbidden_if_no_object_permission(
+    request, view, doc, message: str
+):
     """403 with project JSON shape when any ``permission_classes`` entry denies object access."""
     for p in view.get_permissions():
         if not p.has_object_permission(request, view, doc):
@@ -187,8 +363,26 @@ def _infer_doc_form_fallback(text: str, filename: str, module_options: list[dict
                 module_id = row.get("id")
 
     dict_words = [
-        "登录", "注册", "鉴权", "权限", "接口", "API", "状态码", "并发", "性能", "安全",
-        "SQL注入", "越权", "支付", "订单", "用户", "搜索", "消息", "文件上传", "边界", "异常",
+        "登录",
+        "注册",
+        "鉴权",
+        "权限",
+        "接口",
+        "API",
+        "状态码",
+        "并发",
+        "性能",
+        "安全",
+        "SQL注入",
+        "越权",
+        "支付",
+        "订单",
+        "用户",
+        "搜索",
+        "消息",
+        "文件上传",
+        "边界",
+        "异常",
     ]
     tags = []
     for word in dict_words:
@@ -206,7 +400,9 @@ def _infer_doc_form_fallback(text: str, filename: str, module_options: list[dict
 
 
 def _infer_doc_form_with_llm(text: str, filename: str, module_options: list[dict]):
-    fallback = _infer_doc_form_fallback(text=text, filename=filename, module_options=module_options)
+    fallback = _infer_doc_form_fallback(
+        text=text, filename=filename, module_options=module_options
+    )
     text = (text or "").strip()
     if not text:
         return fallback
@@ -217,8 +413,14 @@ def _infer_doc_form_with_llm(text: str, filename: str, module_options: list[dict
     if not api_key or not api_base_url or not model_used or not OPENAI_SDK_AVAILABLE:
         return fallback
 
-    module_names = [str(x.get("name") or "").strip() for x in module_options if str(x.get("name") or "").strip()]
-    module_names_text = "、".join(module_names[:120]) if module_names else "（无模块可选）"
+    module_names = [
+        str(x.get("name") or "").strip()
+        for x in module_options
+        if str(x.get("name") or "").strip()
+    ]
+    module_names_text = (
+        "、".join(module_names[:120]) if module_names else "（无模块可选）"
+    )
     snippet = text[:12000]
     system_prompt = (
         "你是文档入库助手。请根据文档内容提取表单预填信息。"
@@ -323,17 +525,32 @@ class KnowledgeArticleViewSet(BaseModelViewSet):
         if "text_source" in payload:
             payload.pop("text_source")
         if uploaded_file is not None:
-            max_size = int(getattr(settings, "KNOWLEDGE_UPLOAD_MAX_SIZE", 10 * 1024 * 1024))
+            max_size = int(
+                getattr(settings, "KNOWLEDGE_UPLOAD_MAX_SIZE", 10 * 1024 * 1024)
+            )
             if int(getattr(uploaded_file, "size", 0) or 0) > max_size:
-                return Response({"msg": f"上传文件过大，最大支持 {max_size // 1024 // 1024}MB"}, status=400)
+                return Response(
+                    {"msg": f"上传文件过大，最大支持 {max_size // 1024 // 1024}MB"},
+                    status=400,
+                )
             try:
-                payload["markdown_content"] = extract_text_from_uploaded_file(uploaded_file)
+                payload["markdown_content"] = extract_text_from_uploaded_file(
+                    uploaded_file
+                )
             except ValueError as exc:
                 return Response({"msg": str(exc)}, status=400)
             except Exception:
-                logger.exception("解析知识库上传文件失败: filename=%s", getattr(uploaded_file, "name", ""))
-                return Response({"msg": "文件解析失败，请检查文件格式或内容后重试"}, status=400)
-        elif text_source == "upload" and not (payload.get("markdown_content") or "").strip():
+                logger.exception(
+                    "解析知识库上传文件失败: filename=%s",
+                    getattr(uploaded_file, "name", ""),
+                )
+                return Response(
+                    {"msg": "文件解析失败，请检查文件格式或内容后重试"}, status=400
+                )
+        elif (
+            text_source == "upload"
+            and not (payload.get("markdown_content") or "").strip()
+        ):
             return Response({"msg": "请选择文件或填写内容"}, status=400)
 
         tags_val = payload.get("tags")
@@ -343,7 +560,9 @@ class KnowledgeArticleViewSet(BaseModelViewSet):
                 try:
                     payload["tags"] = json.loads(tags_val)
                 except Exception:
-                    payload["tags"] = [x.strip() for x in tags_val.split(",") if x.strip()]
+                    payload["tags"] = [
+                        x.strip() for x in tags_val.split(",") if x.strip()
+                    ]
             else:
                 payload["tags"] = [x.strip() for x in tags_val.split(",") if x.strip()]
 
@@ -365,7 +584,10 @@ class KnowledgeExtractTextAPIView(APIView):
         max_size = int(getattr(settings, "KNOWLEDGE_UPLOAD_MAX_SIZE", 10 * 1024 * 1024))
         if int(getattr(uploaded_file, "size", 0) or 0) > max_size:
             return Response(
-                {"success": False, "message": f"上传文件过大，最大支持 {max_size // 1024 // 1024}MB"},
+                {
+                    "success": False,
+                    "message": f"上传文件过大，最大支持 {max_size // 1024 // 1024}MB",
+                },
                 status=400,
             )
         ext = (uploaded_file.name or "").lower()
@@ -379,7 +601,9 @@ class KnowledgeExtractTextAPIView(APIView):
         except ValueError as exc:
             return Response({"success": False, "message": str(exc)}, status=400)
         except Exception:
-            logger.exception("知识库文件预解析失败: filename=%s", getattr(uploaded_file, "name", ""))
+            logger.exception(
+                "知识库文件预解析失败: filename=%s", getattr(uploaded_file, "name", "")
+            )
             return Response({"success": False, "message": "文件解析失败"}, status=400)
         return Response(
             {
@@ -395,16 +619,25 @@ class KnowledgeAutoFillFromFileAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request):
+        started_at = time.monotonic()
+        slot, denied = _guard_ai_request_or_429(request, action="knowledge_autofill")
+        if denied is not None:
+            return denied
         uploaded_file = request.FILES.get("file")
         text = (request.data.get("text") or "").strip()
         filename = (request.data.get("filename") or "").strip()
 
         if uploaded_file is not None:
             filename = (uploaded_file.name or "").strip() or filename
-            max_size = int(getattr(settings, "KNOWLEDGE_UPLOAD_MAX_SIZE", 10 * 1024 * 1024))
+            max_size = int(
+                getattr(settings, "KNOWLEDGE_UPLOAD_MAX_SIZE", 10 * 1024 * 1024)
+            )
             if int(getattr(uploaded_file, "size", 0) or 0) > max_size:
                 return Response(
-                    {"success": False, "message": f"上传文件过大，最大支持 {max_size // 1024 // 1024}MB"},
+                    {
+                        "success": False,
+                        "message": f"上传文件过大，最大支持 {max_size // 1024 // 1024}MB",
+                    },
                     status=400,
                 )
             ext = (uploaded_file.name or "").lower()
@@ -418,8 +651,13 @@ class KnowledgeAutoFillFromFileAPIView(APIView):
             except ValueError as exc:
                 return Response({"success": False, "message": str(exc)}, status=400)
             except Exception:
-                logger.exception("自动填充提取文本失败: filename=%s", getattr(uploaded_file, "name", ""))
-                return Response({"success": False, "message": "文件解析失败"}, status=400)
+                logger.exception(
+                    "自动填充提取文本失败: filename=%s",
+                    getattr(uploaded_file, "name", ""),
+                )
+                return Response(
+                    {"success": False, "message": "文件解析失败"}, status=400
+                )
 
         text = (text or "").strip()
         if not text:
@@ -428,20 +666,41 @@ class KnowledgeAutoFillFromFileAPIView(APIView):
         module_rows = list(
             TestModule.objects.filter(is_deleted=False).values("id", "name")[:300]
         )
-        auto = _infer_doc_form_with_llm(text=text, filename=filename, module_options=module_rows)
-        return Response(
-            {
-                "success": True,
-                "data": {
-                    "title": auto.get("title") or "",
-                    "purpose": auto.get("purpose") or "requirement",
-                    "module_id": auto.get("module_id"),
-                    "tags": auto.get("tags") if isinstance(auto.get("tags"), list) else [],
-                    "source": auto.get("source") or "fallback",
-                    "text_preview": text[:800],
-                },
-            }
+        auto = _infer_doc_form_with_llm(
+            text=text, filename=filename, module_options=module_rows
         )
+        payload = {
+            "success": True,
+            "data": {
+                "title": auto.get("title") or "",
+                "purpose": auto.get("purpose") or "requirement",
+                "module_id": auto.get("module_id"),
+                "tags": auto.get("tags") if isinstance(auto.get("tags"), list) else [],
+                "source": auto.get("source") or "fallback",
+                "text_preview": text[:800],
+            },
+        }
+        try:
+            write_ai_usage_event(
+                user=request.user,
+                action="knowledge_autofill",
+                endpoint=_request_path(request),
+                success=True,
+                status_code=200,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                prompt_chars=len(text or ""),
+                output_chars=len(
+                    json.dumps(payload.get("data") or {}, ensure_ascii=False)
+                ),
+                module_id=payload["data"].get("module_id"),
+                meta={"source": payload["data"].get("source")},
+            )
+        finally:
+            if slot:
+                release_ai_concurrency_slot(
+                    user_id=int(getattr(request.user, "id", 0) or 0)
+                )
+        return Response(payload)
 
 
 class KnowledgeCategoryOptionsAPIView(APIView):
@@ -596,14 +855,20 @@ class KnowledgeDocumentIngestAPIView(APIView):
         module = None
         if raw_module_id not in (None, ""):
             try:
-                module = TestModule.objects.filter(pk=int(raw_module_id), is_deleted=False).first()
+                module = TestModule.objects.filter(
+                    pk=int(raw_module_id), is_deleted=False
+                ).first()
             except (TypeError, ValueError):
                 module = None
             if module is None:
-                return Response({"success": False, "message": "module_id 无效"}, status=400)
+                return Response(
+                    {"success": False, "message": "module_id 无效"}, status=400
+                )
 
         if mode not in ("upload", "url"):
-            return Response({"success": False, "message": "mode 仅支持 upload 或 url"}, status=400)
+            return Response(
+                {"success": False, "message": "mode 仅支持 upload 或 url"}, status=400
+            )
 
         # 2) 按模式构建文档元数据，确保文档类型、文件名、来源字段一致。
         document_type = KnowledgeDocument.DOC_TYPE_MD
@@ -614,25 +879,42 @@ class KnowledgeDocumentIngestAPIView(APIView):
 
         if mode == "upload":
             if uploaded_file is None:
-                return Response({"success": False, "message": "upload 模式下 file 不能为空"}, status=400)
+                return Response(
+                    {"success": False, "message": "upload 模式下 file 不能为空"},
+                    status=400,
+                )
             file_name = (getattr(uploaded_file, "name", "") or "").strip()
             if not file_name:
-                return Response({"success": False, "message": "上传文件名不能为空"}, status=400)
+                return Response(
+                    {"success": False, "message": "上传文件名不能为空"}, status=400
+                )
             ext = file_name.lower()
             if ext.endswith(".pdf"):
                 document_type = KnowledgeDocument.DOC_TYPE_PDF
             elif ext.endswith(".md"):
                 document_type = KnowledgeDocument.DOC_TYPE_MD
             else:
-                return Response({"success": False, "message": "仅支持 PDF 或 MD 文件"}, status=400)
+                return Response(
+                    {"success": False, "message": "仅支持 PDF 或 MD 文件"}, status=400
+                )
             file_path = uploaded_file
             if not final_title:
                 final_title = file_name
         else:
             if not source_url:
-                return Response({"success": False, "message": "url 模式下 url 不能为空"}, status=400)
-            if not (source_url.startswith("http://") or source_url.startswith("https://")):
-                return Response({"success": False, "message": "URL 必须以 http:// 或 https:// 开头"}, status=400)
+                return Response(
+                    {"success": False, "message": "url 模式下 url 不能为空"}, status=400
+                )
+            if not (
+                source_url.startswith("http://") or source_url.startswith("https://")
+            ):
+                return Response(
+                    {
+                        "success": False,
+                        "message": "URL 必须以 http:// 或 https:// 开头",
+                    },
+                    status=400,
+                )
             document_type = KnowledgeDocument.DOC_TYPE_URL
             final_source_url = source_url
             file_name = source_url
@@ -695,11 +977,15 @@ class KnowledgeDocumentStatusAPIView(APIView):
             if summary or chunks:
                 doc.semantic_summary = summary
                 doc.semantic_chunks = chunks
-                doc.save(update_fields=["semantic_summary", "semantic_chunks", "update_time"])
+                doc.save(
+                    update_fields=["semantic_summary", "semantic_chunks", "update_time"]
+                )
         return Response(
             {
                 "success": True,
-                "data": _sanitize_doc_error_fields(KnowledgeDocumentSerializer(doc).data),
+                "data": _sanitize_doc_error_fields(
+                    KnowledgeDocumentSerializer(doc).data
+                ),
             }
         )
 
@@ -767,7 +1053,9 @@ class KnowledgeArticleChunksPreviewAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, article_id: int):
-        article = KnowledgeArticle.objects.filter(pk=article_id, is_deleted=False).first()
+        article = KnowledgeArticle.objects.filter(
+            pk=article_id, is_deleted=False
+        ).first()
         if article is None:
             return Response({"success": False, "message": "文章不存在"}, status=404)
 
@@ -814,7 +1102,10 @@ class KnowledgeDocumentRetryAPIView(APIView):
             return denied
         # 允许待处理/失败/已完成状态重提任务；仅“处理中”禁止重复触发。
         if doc.status == KnowledgeDocument.STATUS_PROCESSING:
-            return Response({"success": False, "message": "当前任务仍在处理中，无需重试"}, status=400)
+            return Response(
+                {"success": False, "message": "当前任务仍在处理中，无需重试"},
+                status=400,
+            )
 
         doc.status = KnowledgeDocument.STATUS_PENDING
         doc.error_message = ""
@@ -896,7 +1187,9 @@ class KnowledgeDocumentListAPIView(APIView):
         return Response(
             {
                 "success": True,
-                "results": _sanitize_doc_error_fields(KnowledgeDocumentSerializer(rows, many=True).data),
+                "results": _sanitize_doc_error_fields(
+                    KnowledgeDocumentSerializer(rows, many=True).data
+                ),
             }
         )
 
@@ -913,8 +1206,12 @@ class KnowledgeRuntimeStatusAPIView(APIView):
             base_qs = base_qs.filter(creator=request.user)
         counters = {
             "pending": base_qs.filter(status=KnowledgeDocument.STATUS_PENDING).count(),
-            "processing": base_qs.filter(status=KnowledgeDocument.STATUS_PROCESSING).count(),
-            "completed": base_qs.filter(status=KnowledgeDocument.STATUS_COMPLETED).count(),
+            "processing": base_qs.filter(
+                status=KnowledgeDocument.STATUS_PROCESSING
+            ).count(),
+            "completed": base_qs.filter(
+                status=KnowledgeDocument.STATUS_COMPLETED
+            ).count(),
             "failed": base_qs.filter(status=KnowledgeDocument.STATUS_FAILED).count(),
         }
         return Response(
@@ -986,10 +1283,7 @@ def _is_iflytek_maas_model(model: str) -> bool:
     if not m:
         return False
     return (
-        m == IFLYTEK_MAAS_MODEL_TYPE
-        or "iflytek" in m
-        or "spark" in m
-        or "astron" in m
+        m == IFLYTEK_MAAS_MODEL_TYPE or "iflytek" in m or "spark" in m or "astron" in m
     )
 
 
@@ -1065,7 +1359,11 @@ class LlmTestConnectionAPIView(APIView):
         api_base_url = _normalize_openai_sdk_base_url(base_url, model).rstrip("/")
         if not api_base_url:
             return Response(
-                {"code": 400, "msg": "当前模型需填写自定义 API 地址（Base URL）", "data": None},
+                {
+                    "code": 400,
+                    "msg": "当前模型需填写自定义 API 地址（Base URL）",
+                    "data": None,
+                },
                 status=200,
             )
 
@@ -1076,7 +1374,10 @@ class LlmTestConnectionAPIView(APIView):
                 model=model,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": "Connection test. Reply as instructed."},
+                    {
+                        "role": "user",
+                        "content": "Connection test. Reply as instructed.",
+                    },
                 ],
                 max_tokens=80,
                 temperature=0.3,
@@ -1084,6 +1385,7 @@ class LlmTestConnectionAPIView(APIView):
             choice = completion.choices[0].message
             reply = (getattr(choice, "content", None) or "").strip()
         except Exception as e:
+
             def _err_body(msg: str, status_code: int = 400):
                 return Response({"code": 400, "msg": msg, "data": None}, status=200)
 
@@ -1103,7 +1405,11 @@ class LlmTestConnectionAPIView(APIView):
 
         if not reply:
             return Response(
-                {"code": 400, "msg": "模型未返回有效内容，请检查 model 名称与账户权限。", "data": None},
+                {
+                    "code": 400,
+                    "msg": "模型未返回有效内容，请检查 model 名称与账户权限。",
+                    "data": None,
+                },
                 status=200,
             )
 
@@ -1126,6 +1432,10 @@ class AiTestConnectionAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        started_at = time.monotonic()
+        slot, denied = _guard_ai_request_or_429(request, action="test_connection")
+        if denied is not None:
+            return denied
         api_key = (request.data.get("api_key") or "").strip()
         api_base_url = (
             request.data.get("api_base_url") or request.data.get("base_url") or ""
@@ -1181,6 +1491,23 @@ class AiTestConnectionAPIView(APIView):
                 err_body=err_body,
             )
             if handled is not None:
+                try:
+                    write_ai_usage_event(
+                        user=request.user,
+                        action="test_connection",
+                        endpoint=_request_path(request),
+                        success=False,
+                        status_code=int(getattr(handled, "status_code", 400) or 400),
+                        model_used=model,
+                        latency_ms=int((time.monotonic() - started_at) * 1000),
+                        error_code="UPSTREAM_ERROR",
+                        error_message=str(e),
+                    )
+                finally:
+                    if slot:
+                        release_ai_concurrency_slot(
+                            user_id=int(getattr(request.user, "id", 0) or 0)
+                        )
                 return handled
             logger.exception(
                 "AI test connection unexpected exception. user_id=%s model=%s base_url=%s",
@@ -1188,12 +1515,48 @@ class AiTestConnectionAPIView(APIView):
                 model,
                 api_base_url,
             )
-            return err_body(str(e), status_code=500)
+            resp = err_body(str(e), status_code=500)
+            try:
+                write_ai_usage_event(
+                    user=request.user,
+                    action="test_connection",
+                    endpoint=_request_path(request),
+                    success=False,
+                    status_code=500,
+                    model_used=model,
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    error_code="UNEXPECTED_ERROR",
+                    error_message=str(e),
+                )
+            finally:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            return resp
 
         if not reply:
-            return err_body("模型未返回有效内容，请检查 model 名称与账户权限。")
+            resp = err_body("模型未返回有效内容，请检查 model 名称与账户权限。")
+            try:
+                write_ai_usage_event(
+                    user=request.user,
+                    action="test_connection",
+                    endpoint=_request_path(request),
+                    success=False,
+                    status_code=int(getattr(resp, "status_code", 400) or 400),
+                    model_used=model,
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    error_code="EMPTY_REPLY",
+                    error_message="模型未返回有效内容",
+                )
+            finally:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            return resp
 
-        return Response(
+        resp = Response(
             {
                 "success": True,
                 "message": "连接成功",
@@ -1203,6 +1566,23 @@ class AiTestConnectionAPIView(APIView):
             },
             status=200,
         )
+        try:
+            write_ai_usage_event(
+                user=request.user,
+                action="test_connection",
+                endpoint=_request_path(request),
+                success=True,
+                status_code=200,
+                model_used=model,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                output_chars=len(reply or ""),
+            )
+        finally:
+            if slot:
+                release_ai_concurrency_slot(
+                    user_id=int(getattr(request.user, "id", 0) or 0)
+                )
+        return resp
 
 
 class AiVerifyConnectionAPIView(APIView):
@@ -1217,6 +1597,10 @@ class AiVerifyConnectionAPIView(APIView):
     _VERIFY_BASE = "https://open.bigmodel.cn/api/paas/v4"
 
     def post(self, request):
+        started_at = time.monotonic()
+        slot, denied = _guard_ai_request_or_429(request, action="verify_connection")
+        if denied is not None:
+            return denied
         api_key = (request.data.get("api_key") or "").strip()
         model = self._VERIFY_MODEL
 
@@ -1264,6 +1648,23 @@ class AiVerifyConnectionAPIView(APIView):
                 fail=fail,
             )
             if handled is not None:
+                try:
+                    write_ai_usage_event(
+                        user=request.user,
+                        action="verify_connection",
+                        endpoint=_request_path(request),
+                        success=False,
+                        status_code=int(getattr(handled, "status_code", 400) or 400),
+                        model_used=model,
+                        latency_ms=int((time.monotonic() - started_at) * 1000),
+                        error_code="UPSTREAM_ERROR",
+                        error_message=str(e),
+                    )
+                finally:
+                    if slot:
+                        release_ai_concurrency_slot(
+                            user_id=int(getattr(request.user, "id", 0) or 0)
+                        )
                 return handled
             logger.exception(
                 "AI verify connection unexpected exception. user_id=%s model=%s base_url=%s",
@@ -1271,12 +1672,48 @@ class AiVerifyConnectionAPIView(APIView):
                 model,
                 base_url,
             )
-            return fail(str(e), status_code=500)
+            resp = fail(str(e), status_code=500)
+            try:
+                write_ai_usage_event(
+                    user=request.user,
+                    action="verify_connection",
+                    endpoint=_request_path(request),
+                    success=False,
+                    status_code=500,
+                    model_used=model,
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    error_code="UNEXPECTED_ERROR",
+                    error_message=str(e),
+                )
+            finally:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            return resp
 
         if not reply:
-            return fail("模型未返回内容，请检查账号是否开通该模型。")
+            resp = fail("模型未返回内容，请检查账号是否开通该模型。")
+            try:
+                write_ai_usage_event(
+                    user=request.user,
+                    action="verify_connection",
+                    endpoint=_request_path(request),
+                    success=False,
+                    status_code=int(getattr(resp, "status_code", 400) or 400),
+                    model_used=model,
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    error_code="EMPTY_REPLY",
+                    error_message="模型未返回内容",
+                )
+            finally:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            return resp
 
-        return Response(
+        resp = Response(
             {
                 "success": True,
                 "message": "连接成功",
@@ -1286,15 +1723,38 @@ class AiVerifyConnectionAPIView(APIView):
             },
             status=200,
         )
+        try:
+            write_ai_usage_event(
+                user=request.user,
+                action="verify_connection",
+                endpoint=_request_path(request),
+                success=True,
+                status_code=200,
+                model_used=model,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                output_chars=len(reply or ""),
+            )
+        finally:
+            if slot:
+                release_ai_concurrency_slot(
+                    user_id=int(getattr(request.user, "id", 0) or 0)
+                )
+        return resp
 
 
 AI_GENERATE_MODEL = "glm-4.7-flash"
-AI_GENERATE_CASES_MAX_TOKENS = max(4096, int(getattr(settings, "AI_GENERATE_CASES_MAX_TOKENS", 8192)))
+AI_GENERATE_CASES_MAX_TOKENS = max(
+    4096, int(getattr(settings, "AI_GENERATE_CASES_MAX_TOKENS", 8192))
+)
 AI_GENERATE_MIN_CASES = max(1, int(getattr(settings, "AI_GENERATE_MIN_CASES", 4)))
-AI_GENERATE_MAX_CASES = max(AI_GENERATE_MIN_CASES, int(getattr(settings, "AI_GENERATE_MAX_CASES", 20)))
+AI_GENERATE_MAX_CASES = max(
+    AI_GENERATE_MIN_CASES, int(getattr(settings, "AI_GENERATE_MAX_CASES", 20))
+)
 AI_GENERATE_RETRY_ROUNDS = max(0, int(getattr(settings, "AI_GENERATE_RETRY_ROUNDS", 2)))
 AI_PHASE2_TIMEOUT_SECONDS = float(getattr(settings, "AI_PHASE2_TIMEOUT_SECONDS", 60.0))
-AI_GENERATE_TOTAL_TIMEOUT_SECONDS = float(getattr(settings, "AI_GENERATE_TOTAL_TIMEOUT_SECONDS", 70.0))
+AI_GENERATE_TOTAL_TIMEOUT_SECONDS = float(
+    getattr(settings, "AI_GENERATE_TOTAL_TIMEOUT_SECONDS", 70.0)
+)
 
 
 def _get_active_ai_model_credentials():
@@ -1573,7 +2033,9 @@ def _build_ai_generate_system_prompt(
     test_type_focus: str | None = None,
 ) -> str:
     """Fill module and requirement into the expert system template."""
-    mn = (module_name or "").strip() or "（未指定模块，请仅围绕需求归纳；module_name 须为简体中文）"
+    mn = (
+        module_name or ""
+    ).strip() or "（未指定模块，请仅围绕需求归纳；module_name 须为简体中文）"
     focus = (test_type_focus or _AI_TEST_TYPE_FOCUS["functional"]).strip()
     return _AI_GENERATE_SYSTEM_TEMPLATE.format(
         test_type_focus=focus,
@@ -1636,7 +2098,9 @@ def _phase1_fallback(requirement: str, fallback_module: str = "") -> dict:
     return {"module_name": mod, "key_test_points": points}
 
 
-def _run_phase1_intent_analysis(client, model_used: str, requirement: str, fallback_module: str = "") -> dict:
+def _run_phase1_intent_analysis(
+    client, model_used: str, requirement: str, fallback_module: str = ""
+) -> dict:
     user_prompt = "用户需求如下：\n" + (requirement or "").strip()
     try:
         phase1_resp = client.chat.completions.create(
@@ -1652,7 +2116,9 @@ def _run_phase1_intent_analysis(client, model_used: str, requirement: str, fallb
         parsed = _parse_phase1_json(raw_phase1)
         if parsed:
             if not parsed["module_name"]:
-                parsed["module_name"] = (fallback_module or "").strip() or "通用功能模块"
+                parsed["module_name"] = (
+                    fallback_module or ""
+                ).strip() or "通用功能模块"
             return parsed
         # 一次修复重试：让模型把上次文本纠正为合法 JSON
         repair_resp = client.chat.completions.create(
@@ -1668,7 +2134,9 @@ def _run_phase1_intent_analysis(client, model_used: str, requirement: str, fallb
         parsed2 = _parse_phase1_json(repaired)
         if parsed2:
             if not parsed2["module_name"]:
-                parsed2["module_name"] = (fallback_module or "").strip() or "通用功能模块"
+                parsed2["module_name"] = (
+                    fallback_module or ""
+                ).strip() or "通用功能模块"
             return parsed2
         logger.warning("Phase1 JSON 解析失败，已降级。raw=%s", raw_phase1[:500])
     except Exception:
@@ -1700,7 +2168,9 @@ def _phase1_query_text(requirement: str, phase1: dict, api_spec: str = "") -> st
     q = "\n".join(parts)
     spec = (api_spec or "").strip()
     if spec:
-        q += "\n\n【接口定义原文摘录】\n" + (spec[:6000] + ("...(truncated)" if len(spec) > 6000 else ""))
+        q += "\n\n【接口定义原文摘录】\n" + (
+            spec[:6000] + ("...(truncated)" if len(spec) > 6000 else "")
+        )
     return q.strip()
 
 
@@ -1739,7 +2209,9 @@ def _module_name_key(name: str) -> str:
     return re.sub(r"[\s\-_，,。.:：/\\]+", "", t)
 
 
-def _resolve_effective_module(module_id, ctx_module_name: str, phase1_module_name: str, test_type: str):
+def _resolve_effective_module(
+    module_id, ctx_module_name: str, phase1_module_name: str, test_type: str
+):
     """
     未指定 module_id 时，尝试按 phase1 推导模块名自动匹配 TestModule。
     返回：(effective_module_id, effective_module_name)
@@ -1749,7 +2221,10 @@ def _resolve_effective_module(module_id, ctx_module_name: str, phase1_module_nam
 
     target = (phase1_module_name or "").strip() or (ctx_module_name or "").strip()
     if _is_placeholder_module_name(target):
-        return None, (phase1_module_name or "").strip() or (ctx_module_name or "").strip()
+        return (
+            None,
+            (phase1_module_name or "").strip() or (ctx_module_name or "").strip(),
+        )
 
     try:
         qs = TestModule.objects.filter(is_deleted=False)
@@ -1774,7 +2249,11 @@ def _resolve_effective_module(module_id, ctx_module_name: str, phase1_module_nam
     for row in module_rows:
         name = str(row.get("name") or "").strip()
         name_key = _module_name_key(name)
-        if target_key and name_key and (target_key in name_key or name_key in target_key):
+        if (
+            target_key
+            and name_key
+            and (target_key in name_key or name_key in target_key)
+        ):
             return int(row.get("id")), name
     # 3) 相似度匹配
     best = None
@@ -1825,12 +2304,16 @@ def _load_existing_case_context(module_id, test_type: str):
         step_desc = str(x.get("_first_step_desc") or "").strip()
         expected = str(x.get("_first_expected") or "").strip()
         steps = f"{step_desc}\n{expected}".strip() if (step_desc or expected) else ""
-        existing_rows.append({"case_name": str(x.get("case_name") or "").strip(), "steps": steps})
+        existing_rows.append(
+            {"case_name": str(x.get("case_name") or "").strip(), "steps": steps}
+        )
     existing_titles = [x["case_name"] for x in existing_rows if x.get("case_name")]
     return existing_rows, existing_titles
 
 
-def _enqueue_celery_or_thread(*, celery_delay, thread_target, args: tuple, error_log_msg: str):
+def _enqueue_celery_or_thread(
+    *, celery_delay, thread_target, args: tuple, error_log_msg: str
+):
     """
     优先使用 Celery delay；不可用时降级线程执行。
     返回: "celery" | "thread"
@@ -1858,10 +2341,14 @@ def _normalize_case_name_for_exact_dedup(name: str) -> str:
     return re.sub(r"[\W_]+", "", t)
 
 
-def _drop_cases_duplicated_with_existing_titles(cases: list[dict], existing_titles: list[str]) -> list[dict]:
+def _drop_cases_duplicated_with_existing_titles(
+    cases: list[dict], existing_titles: list[str]
+) -> list[dict]:
     if not cases or not existing_titles:
         return cases
-    existing_keys = {_normalize_case_name_for_exact_dedup(x) for x in existing_titles if x}
+    existing_keys = {
+        _normalize_case_name_for_exact_dedup(x) for x in existing_titles if x
+    }
     out = []
     for row in cases:
         key = _normalize_case_name_for_exact_dedup(str(row.get("case_name") or ""))
@@ -1880,14 +2367,16 @@ def _parse_bool_flag(v) -> bool:
 
 def _collect_case_names(cases: list[dict]) -> list[str]:
     out = []
-    for row in (cases or []):
+    for row in cases or []:
         name = str((row or {}).get("case_name") or "").strip()
         if name:
             out.append(name)
     return out
 
 
-def _diff_dropped_names(before_names: list[str], after_names: list[str], limit: int = 20) -> list[str]:
+def _diff_dropped_names(
+    before_names: list[str], after_names: list[str], limit: int = 20
+) -> list[str]:
     after_set = set(after_names)
     dropped = []
     for n in before_names:
@@ -1940,8 +2429,16 @@ def _apply_dedup_pipeline(
             from assistant.generated_case_dedup import string_similarity_candidates
             from assistant.services.semantic_dedup import semantic_similarity_candidates
 
-            str_cands = string_similarity_candidates(after_semantic, existing_rows, top_k=3)
-            sem_cands = semantic_similarity_candidates(after_semantic, existing_rows, api_key=api_key, base_url=base_url, top_k=3)
+            str_cands = string_similarity_candidates(
+                after_semantic, existing_rows, top_k=3
+            )
+            sem_cands = semantic_similarity_candidates(
+                after_semantic,
+                existing_rows,
+                api_key=api_key,
+                base_url=base_url,
+                top_k=3,
+            )
             candidates = {"string": str_cands, "semantic": sem_cands}
         except Exception:
             logger.exception("相似候选计算失败，已跳过")
@@ -1952,8 +2449,12 @@ def _apply_dedup_pipeline(
         "input_count": len(cases),
         "after_exact_title_dedup_count": len(after_exact),
         "after_semantic_dedup_count": len(after_semantic),
-        "dropped_by_exact_title_dedup": _diff_dropped_names(before_names, after_exact_names),
-        "dropped_by_semantic_dedup": _diff_dropped_names(after_exact_names, after_semantic_names),
+        "dropped_by_exact_title_dedup": _diff_dropped_names(
+            before_names, after_exact_names
+        ),
+        "dropped_by_semantic_dedup": _diff_dropped_names(
+            after_exact_names, after_semantic_names
+        ),
     }
     if highlight:
         report["similar_candidates"] = candidates
@@ -2117,6 +2618,28 @@ def _normalize_generated_case(item, index: int, test_type: str | None = None):
         level = "P2"
     pre = str(item.get("precondition") or item.get("pre_condition") or "").strip()
     steps = str(item.get("steps") or item.get("step") or "").strip()
+    steps_list = item.get("steps_list") or item.get("stepsList")
+    if steps_list is None and isinstance(item.get("steps"), list):
+        steps_list = item.get("steps")
+    if isinstance(steps_list, list):
+        norm_steps_list = []
+        for it in steps_list:
+            if not isinstance(it, dict):
+                continue
+            desc = str(
+                it.get("step_desc") or it.get("desc") or it.get("action") or ""
+            ).strip()
+            if not desc:
+                continue
+            exp2 = str(it.get("expected_result") or it.get("expected") or "").strip()
+            norm_steps_list.append(
+                {"step_desc": desc[:4000], "expected_result": exp2[:2000]}
+            )
+        steps_list = norm_steps_list
+        if not steps and norm_steps_list:
+            steps = "\n".join(
+                f"{i+1}. {x['step_desc']}" for i, x in enumerate(norm_steps_list)
+            )
     exp = str(
         item.get("expected_result")
         or item.get("expectedResult")
@@ -2166,6 +2689,7 @@ def _normalize_generated_case(item, index: int, test_type: str | None = None):
         "level": level,
         "precondition": pre,
         "steps": steps,
+        "steps_list": steps_list if isinstance(steps_list, list) else None,
         "expected_result": exp,
         "module_name": mod,
     }
@@ -2205,7 +2729,9 @@ def _expand_cases_to_minimum_if_needed(
     if len(cases) >= min_cases:
         return cases
     needed = min_cases - len(cases)
-    brief_names = [str(x.get("case_name") or "").strip() for x in cases[:20] if isinstance(x, dict)]
+    brief_names = [
+        str(x.get("case_name") or "").strip() for x in cases[:20] if isinstance(x, dict)
+    ]
     existing_hint = "\n".join(f"- {x}" for x in brief_names if x) or "- （暂无）"
     supplement_user = (
         user_msg
@@ -2227,7 +2753,9 @@ def _expand_cases_to_minimum_if_needed(
             max_tokens=AI_GENERATE_CASES_MAX_TOKENS,
             timeout=AI_PHASE2_TIMEOUT_SECONDS,
         )
-        raw = _sanitize_llm_json_text((completion.choices[0].message.content or "").strip())
+        raw = _sanitize_llm_json_text(
+            (completion.choices[0].message.content or "").strip()
+        )
         parsed = _parse_ai_cases_json(raw)
         if not parsed:
             return cases
@@ -2236,7 +2764,9 @@ def _expand_cases_to_minimum_if_needed(
             norm = _normalize_generated_case(row, len(cases) + i, test_type)
             if norm:
                 if use_api:
-                    norm = enrich_normalized_case_with_api_fields(norm, row, len(cases) + i)
+                    norm = enrich_normalized_case_with_api_fields(
+                        norm, row, len(cases) + i
+                    )
                 extra_cases.append(norm)
         if not extra_cases:
             return cases
@@ -2292,7 +2822,9 @@ class AiGenerateCasesAPIView(APIView):
         return None
 
     @staticmethod
-    def _run_phase2_parse(client, *, model_used: str, phase2_system_prompt: str, batch_user_prompt: str):
+    def _run_phase2_parse(
+        client, *, model_used: str, phase2_system_prompt: str, batch_user_prompt: str
+    ):
         try:
             try:
                 completion = client.chat.completions.create(
@@ -2317,7 +2849,9 @@ class AiGenerateCasesAPIView(APIView):
                     max_tokens=AI_GENERATE_CASES_MAX_TOKENS,
                     timeout=AI_PHASE2_TIMEOUT_SECONDS,
                 )
-            raw = _sanitize_llm_json_text((completion.choices[0].message.content or "").strip())
+            raw = _sanitize_llm_json_text(
+                (completion.choices[0].message.content or "").strip()
+            )
             try:
                 parsed = parse_batch_json_array(raw)
             except Exception:
@@ -2328,13 +2862,56 @@ class AiGenerateCasesAPIView(APIView):
 
     def post(self, request):
         started_at = time.monotonic()
+        slot, denied = _guard_ai_request_or_429(request, action="generate_cases")
+        if denied is not None:
+            return denied
 
         ctx, err = _prepare_ai_generate_context(request)
         if err:
-            return self._fail(err, status_code=400, code="INVALID_INPUT")
+            resp = self._fail(err, status_code=400, code="INVALID_INPUT")
+            try:
+                write_ai_usage_event(
+                    user=request.user,
+                    action="generate_cases",
+                    endpoint=_request_path(request),
+                    success=False,
+                    status_code=400,
+                    streamed=False,
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    error_code="INVALID_INPUT",
+                    error_message=err,
+                )
+            finally:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            return resp
 
         if not OPENAI_SDK_AVAILABLE:
-            return self._fail(_openai_missing_response_json(), status_code=503, code="SDK_NOT_AVAILABLE")
+            resp = self._fail(
+                _openai_missing_response_json(),
+                status_code=503,
+                code="SDK_NOT_AVAILABLE",
+            )
+            try:
+                write_ai_usage_event(
+                    user=request.user,
+                    action="generate_cases",
+                    endpoint=_request_path(request),
+                    success=False,
+                    status_code=503,
+                    streamed=False,
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    error_code="SDK_NOT_AVAILABLE",
+                    error_message="OpenAI SDK 不可用",
+                )
+            finally:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            return resp
 
         guard_result = self._timeout_guard(started_at)
         if guard_result is not None:
@@ -2355,9 +2932,15 @@ class AiGenerateCasesAPIView(APIView):
         dedup_debug_report = None
 
         try:
-            _debug_log_openai_target("ai_generate_cases_sync_sdk", model_used, api_base_url)
+            _debug_log_openai_target(
+                "ai_generate_cases_sync_sdk", model_used, api_base_url
+            )
             client = OpenAI(api_key=api_key, base_url=api_base_url, timeout=120.0)
-            phase1_override = request.data.get("phase1_override") if isinstance(request.data, dict) else None
+            phase1_override = (
+                request.data.get("phase1_override")
+                if isinstance(request.data, dict)
+                else None
+            )
             if isinstance(phase1_override, dict):
                 phase1 = phase1_override
             else:
@@ -2367,7 +2950,9 @@ class AiGenerateCasesAPIView(APIView):
                     requirement=str(ctx.get("requirement") or ""),
                     fallback_module=str(ctx.get("module_name") or ""),
                 )
-            phase1_module = str(phase1.get("module_name") or "").strip() or str(ctx.get("module_name") or "")
+            phase1_module = str(phase1.get("module_name") or "").strip() or str(
+                ctx.get("module_name") or ""
+            )
             phase1_require = _phase1_query_text(
                 requirement=str(ctx.get("requirement") or ""),
                 phase1=phase1,
@@ -2411,7 +2996,9 @@ class AiGenerateCasesAPIView(APIView):
                 logger.exception("读取已有用例失败，跳过前置规避提示")
 
             batch_user_prompt = build_batch_generation_prompt(
-                module_name=effective_module_name or phase1_module or str(ctx.get("module_name") or ""),
+                module_name=effective_module_name
+                or phase1_module
+                or str(ctx.get("module_name") or ""),
                 requirement=str(ctx.get("requirement") or ""),
                 test_type_focus=str(ctx.get("test_type_focus") or ""),
                 existing_titles=existing_titles,
@@ -2443,7 +3030,9 @@ class AiGenerateCasesAPIView(APIView):
                         cases.append(norm)
 
                 cases = _deduplicate_cases_with_guard(cases, "生成结果")
-                dedup_mode = str(ctx.get("dedup_mode") or request.data.get("dedup_mode") or "drop")
+                dedup_mode = str(
+                    ctx.get("dedup_mode") or request.data.get("dedup_mode") or "drop"
+                )
                 cases, dedup_debug_report = _apply_dedup_pipeline(
                     cases=cases,
                     existing_titles=existing_titles,
@@ -2454,7 +3043,10 @@ class AiGenerateCasesAPIView(APIView):
                     mode=dedup_mode,
                 )
                 retry_round = 0
-                while len(cases) < AI_GENERATE_MIN_CASES and retry_round < AI_GENERATE_RETRY_ROUNDS:
+                while (
+                    len(cases) < AI_GENERATE_MIN_CASES
+                    and retry_round < AI_GENERATE_RETRY_ROUNDS
+                ):
                     retry_round += 1
                     cases = _expand_cases_to_minimum_if_needed(
                         client=client,
@@ -2492,7 +3084,9 @@ class AiGenerateCasesAPIView(APIView):
                     api_base_url,
                     module_id,
                 )
-                return self._fail("大模型生成超时或格式错误", status_code=500, code="PHASE2_TIMEOUT")
+                return self._fail(
+                    "大模型生成超时或格式错误", status_code=500, code="PHASE2_TIMEOUT"
+                )
             except Exception as phase2_error:
                 logger.exception(
                     "AI generate cases phase2 failed. user_id=%s model=%s base_url=%s module_id=%s err=%s",
@@ -2502,7 +3096,9 @@ class AiGenerateCasesAPIView(APIView):
                     module_id,
                     phase2_error,
                 )
-                return self._fail("大模型生成超时或格式错误", status_code=500, code="PHASE2_FAILED")
+                return self._fail(
+                    "大模型生成超时或格式错误", status_code=500, code="PHASE2_FAILED"
+                )
         except Exception as e:
             handled = resolve_ai_generate_cases_outer_openai_error(
                 e,
@@ -2524,11 +3120,34 @@ class AiGenerateCasesAPIView(APIView):
             return self._fail(str(e), status_code=500, code="UNEXPECTED_ERROR")
 
         if is_all_covered_output(raw):
-            return Response(
+            run_id = _write_ai_case_generation_run(
+                user=request.user,
+                action="generate_cases",
+                ctx=ctx,
+                model_used=model_used,
+                phase1=phase1,
+                phase1_override=(
+                    request.data.get("phase1_override")
+                    if isinstance(request.data, dict)
+                    else None
+                ),
+                streamed=False,
+                success=True,
+                all_covered=True,
+                cases_count=0,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                output_chars=0,
+                meta={
+                    "dedup_debug": bool(ctx.get("dedup_debug")),
+                    "prompt_version": "v1",
+                },
+            )
+            resp = Response(
                 {
                     "success": True,
                     "all_covered": True,
                     "phase1_analysis": phase1,
+                    "run_id": run_id,
                     "error": None,
                     "cases": [],
                     "message": "语义检索：当前模块下已有用例已覆盖该需求，无需生成新用例。",
@@ -2536,6 +3155,35 @@ class AiGenerateCasesAPIView(APIView):
                 },
                 status=200,
             )
+            try:
+                write_ai_usage_event(
+                    user=request.user,
+                    action="generate_cases",
+                    endpoint=_request_path(request),
+                    success=True,
+                    status_code=200,
+                    model_used=model_used,
+                    test_type=str(ctx.get("test_type") or ""),
+                    module_id=ctx.get("module_id"),
+                    streamed=False,
+                    all_covered=True,
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    prompt_chars=len(str(ctx.get("requirement") or ""))
+                    + len(str(ctx.get("api_spec") or "")),
+                    output_chars=0,
+                    cases_count=0,
+                    meta={
+                        "dedup_debug": bool(ctx.get("dedup_debug")),
+                        "run_id": run_id,
+                        "prompt_version": "v1",
+                    },
+                )
+            finally:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            return resp
 
         guard_result = self._timeout_guard(started_at)
         if guard_result is not None:
@@ -2549,9 +3197,33 @@ class AiGenerateCasesAPIView(APIView):
             "cases": cases,
             "model": model_used,
         }
+        run_id = _write_ai_case_generation_run(
+            user=request.user,
+            action="generate_cases",
+            ctx=ctx,
+            model_used=model_used,
+            phase1=phase1,
+            phase1_override=(
+                request.data.get("phase1_override")
+                if isinstance(request.data, dict)
+                else None
+            ),
+            streamed=False,
+            success=True,
+            all_covered=False,
+            cases_count=len(cases),
+            latency_ms=int((time.monotonic() - started_at) * 1000),
+            output_chars=len(
+                json.dumps(resp_payload.get("cases") or [], ensure_ascii=False)
+            ),
+            meta={"dedup_debug": bool(ctx.get("dedup_debug")), "prompt_version": "v1"},
+        )
+        resp_payload["run_id"] = run_id
         if ctx.get("dedup_debug"):
             resp_payload["dedup_debug"] = dedup_debug_report
-        elif isinstance(dedup_debug_report, dict) and dedup_debug_report.get("similar_candidates"):
+        elif isinstance(dedup_debug_report, dict) and dedup_debug_report.get(
+            "similar_candidates"
+        ):
             # highlight 模式：把相似候选直接回传给前端展示（不做过滤）
             sim = dedup_debug_report.get("similar_candidates") or {}
             str_cands = sim.get("string") if isinstance(sim, dict) else None
@@ -2571,7 +3243,37 @@ class AiGenerateCasesAPIView(APIView):
                         else []
                     ),
                 }
-        return Response(resp_payload, status=200)
+        resp = Response(resp_payload, status=200)
+        try:
+            write_ai_usage_event(
+                user=request.user,
+                action="generate_cases",
+                endpoint=_request_path(request),
+                success=True,
+                status_code=200,
+                model_used=model_used,
+                test_type=str(ctx.get("test_type") or ""),
+                module_id=ctx.get("module_id"),
+                streamed=False,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                prompt_chars=len(str(ctx.get("requirement") or ""))
+                + len(str(ctx.get("api_spec") or "")),
+                output_chars=len(
+                    json.dumps(resp_payload.get("cases") or [], ensure_ascii=False)
+                ),
+                cases_count=len(resp_payload.get("cases") or []),
+                meta={
+                    "dedup_debug": bool(ctx.get("dedup_debug")),
+                    "run_id": run_id,
+                    "prompt_version": "v1",
+                },
+            )
+        finally:
+            if slot:
+                release_ai_concurrency_slot(
+                    user_id=int(getattr(request.user, "id", 0) or 0)
+                )
+        return resp
 
 
 class AiPhase1PreviewAPIView(APIView):
@@ -2583,12 +3285,58 @@ class AiPhase1PreviewAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        started_at = time.monotonic()
+        slot, denied = _guard_ai_request_or_429(request, action="phase1_preview")
+        if denied is not None:
+            return denied
         ctx, err = _prepare_ai_generate_context(request)
         if err:
-            return Response({"success": False, "error": err, "message": err, "data": None}, status=400)
+            resp = Response(
+                {"success": False, "error": err, "message": err, "data": None},
+                status=400,
+            )
+            try:
+                write_ai_usage_event(
+                    user=request.user,
+                    action="phase1_preview",
+                    endpoint=_request_path(request),
+                    success=False,
+                    status_code=400,
+                    streamed=False,
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    error_code="INVALID_INPUT",
+                    error_message=err,
+                )
+            finally:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            return resp
         if not OPENAI_SDK_AVAILABLE:
             msg = _openai_missing_response_json()
-            return Response({"success": False, "error": msg, "message": msg, "data": None}, status=503)
+            resp = Response(
+                {"success": False, "error": msg, "message": msg, "data": None},
+                status=503,
+            )
+            try:
+                write_ai_usage_event(
+                    user=request.user,
+                    action="phase1_preview",
+                    endpoint=_request_path(request),
+                    success=False,
+                    status_code=503,
+                    streamed=False,
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    error_code="SDK_NOT_AVAILABLE",
+                    error_message="OpenAI SDK 不可用",
+                )
+            finally:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            return resp
 
         api_key = ctx["api_key"]
         api_base_url = ctx["api_base_url"]
@@ -2610,14 +3358,25 @@ class AiPhase1PreviewAPIView(APIView):
                 api_base_url=api_base_url,
                 module_id=ctx.get("module_id"),
                 fail=lambda m, status_code=400, code="PHASE1_FAILED": Response(
-                    {"success": False, "error": m, "message": m, "code": code, "data": None},
+                    {
+                        "success": False,
+                        "error": m,
+                        "message": m,
+                        "code": code,
+                        "data": None,
+                    },
                     status=status_code,
                 ),
             )
             if handled is not None:
                 return handled
             return Response(
-                {"success": False, "error": str(e), "message": "Phase1 分析失败", "data": None},
+                {
+                    "success": False,
+                    "error": str(e),
+                    "message": "Phase1 分析失败",
+                    "data": None,
+                },
                 status=500,
             )
 
@@ -2634,7 +3393,29 @@ class AiPhase1PreviewAPIView(APIView):
             "raw": phase1,
             "model": model_used,
         }
-        return Response({"success": True, "message": "ok", "data": out}, status=200)
+        resp = Response({"success": True, "message": "ok", "data": out}, status=200)
+        try:
+            write_ai_usage_event(
+                user=request.user,
+                action="phase1_preview",
+                endpoint=_request_path(request),
+                success=True,
+                status_code=200,
+                model_used=str(out.get("model") or ""),
+                test_type=str(ctx.get("test_type") or ""),
+                module_id=ctx.get("module_id"),
+                streamed=False,
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                prompt_chars=len(str(ctx.get("requirement") or ""))
+                + len(str(ctx.get("api_spec") or "")),
+                output_chars=len(json.dumps(out or {}, ensure_ascii=False)),
+            )
+        finally:
+            if slot:
+                release_ai_concurrency_slot(
+                    user_id=int(getattr(request.user, "id", 0) or 0)
+                )
+        return resp
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -2715,6 +3496,26 @@ class AiGenerateCasesStreamView(View):
                 status=503,
             )
 
+        # AI 治理：进入长连接前先做配额与并发校验（拒绝则直接返回 429）
+        slot, denied = _guard_ai_request_or_429(
+            drf_request, action="generate_cases_stream"
+        )
+        if denied is not None:
+            try:
+                data = getattr(denied, "data", None)
+            except Exception:
+                data = None
+            return JsonResponse(
+                data
+                or {
+                    "success": False,
+                    "error": "AI 请求被限流/配额阻断",
+                    "cases": [],
+                    "message": "限流",
+                },
+                status=429,
+            )
+
         api_key = ctx["api_key"]
         api_base_url = ctx["api_base_url"]
         model_used = ctx["model_used"]
@@ -2733,6 +3534,10 @@ class AiGenerateCasesStreamView(View):
             phase1_override = None
 
         def event_stream():
+            raw_parts_outer: list[str] = []
+            audit_success = False
+            audit_all_covered = False
+            audit_cases_count = 0
             # 首包立即下发，降低「首字等待」感知；不经过上游模型（本项目的 MIDDLEWARE 未启用 GZipMiddleware）。
             yield _sse_event(
                 {
@@ -2763,7 +3568,9 @@ class AiGenerateCasesStreamView(View):
                 _debug_log_openai_target(
                     "ai_generate_cases_stream_sdk_phase1", model_used, api_base_url
                 )
-                phase1_client = OpenAI(api_key=api_key, base_url=api_base_url, timeout=90.0)
+                phase1_client = OpenAI(
+                    api_key=api_key, base_url=api_base_url, timeout=90.0
+                )
                 if phase1_override is not None:
                     phase1 = phase1_override
                 else:
@@ -2773,9 +3580,9 @@ class AiGenerateCasesStreamView(View):
                         requirement=str(ctx.get("requirement") or ""),
                         fallback_module=str(ctx.get("module_name") or ""),
                     )
-                phase1_module_name = str(phase1.get("module_name") or "").strip() or str(
-                    ctx.get("module_name") or ""
-                )
+                phase1_module_name = str(
+                    phase1.get("module_name") or ""
+                ).strip() or str(ctx.get("module_name") or "")
                 phase1_query = _phase1_query_text(
                     requirement=str(ctx.get("requirement") or ""),
                     phase1=phase1,
@@ -2810,7 +3617,9 @@ class AiGenerateCasesStreamView(View):
                 )
             else:
                 stream_system_prompt = domain_system_with_phase1
-            stream_phase2_system_prompt = stream_system_prompt + "\n\n" + _PHASE2_MULTI_CASE_MANDATE
+            stream_phase2_system_prompt = (
+                stream_system_prompt + "\n\n" + _PHASE2_MULTI_CASE_MANDATE
+            )
             effective_module_id, effective_module_name = _resolve_effective_module(
                 module_id=module_id,
                 ctx_module_name=str(ctx.get("module_name") or ""),
@@ -2827,7 +3636,9 @@ class AiGenerateCasesStreamView(View):
             except Exception:
                 logger.exception("读取已有用例失败（流式），跳过前置规避提示")
             stream_batch_user_prompt = build_batch_generation_prompt(
-                module_name=effective_module_name or phase1_module_name or str(ctx.get("module_name") or ""),
+                module_name=effective_module_name
+                or phase1_module_name
+                or str(ctx.get("module_name") or ""),
                 requirement=str(ctx.get("requirement") or ""),
                 test_type_focus=str(ctx.get("test_type_focus") or ""),
                 existing_titles=existing_titles,
@@ -2840,7 +3651,7 @@ class AiGenerateCasesStreamView(View):
                     "message": "✨ 正在结合规范生成详细用例，请稍候...",
                 }
             )
-            raw_parts: list[str] = []
+            raw_parts = raw_parts_outer
             truncate_by_length = False
             last_ping_ts = time.monotonic()
             try:
@@ -2966,6 +3777,9 @@ class AiGenerateCasesStreamView(View):
                             "message": "语义检索：当前模块下已有用例已覆盖该需求，无需生成新用例。",
                         }
                     )
+                    audit_success = True
+                    audit_all_covered = True
+                    audit_cases_count = 0
                     return
 
                 try:
@@ -2975,7 +3789,9 @@ class AiGenerateCasesStreamView(View):
                 if not parsed:
                     snippet = raw[:400] + ("…" if len(raw) > 400 else "")
                     failure_fragment = (
-                        raw[-800:] if len(raw) > 800 and truncate_by_length else raw[:800]
+                        raw[-800:]
+                        if len(raw) > 800 and truncate_by_length
+                        else raw[:800]
                     )
                     if len(raw) <= 800:
                         failure_fragment = raw
@@ -3002,7 +3818,15 @@ class AiGenerateCasesStreamView(View):
                         cases.append(norm)
 
                 cases = _deduplicate_cases_with_guard(cases, "流式生成结果")
-                dedup_mode = str(ctx.get("dedup_mode") or drf_request.data.get("dedup_mode") or "drop") if isinstance(getattr(drf_request, "data", None), dict) else "drop"
+                dedup_mode = (
+                    str(
+                        ctx.get("dedup_mode")
+                        or drf_request.data.get("dedup_mode")
+                        or "drop"
+                    )
+                    if isinstance(getattr(drf_request, "data", None), dict)
+                    else "drop"
+                )
                 cases, dedup_debug_report = _apply_dedup_pipeline(
                     cases=cases,
                     existing_titles=existing_titles,
@@ -3015,7 +3839,10 @@ class AiGenerateCasesStreamView(View):
                 if use_api and cases:
                     renumber_api_business_ids(cases)
                 retry_round = 0
-                while len(cases) < AI_GENERATE_MIN_CASES and retry_round < AI_GENERATE_RETRY_ROUNDS:
+                while (
+                    len(cases) < AI_GENERATE_MIN_CASES
+                    and retry_round < AI_GENERATE_RETRY_ROUNDS
+                ):
                     retry_round += 1
                     yield _sse_event(
                         {
@@ -3046,7 +3873,9 @@ class AiGenerateCasesStreamView(View):
                 if use_api and cases:
                     backfill_api_request_fields_in_batch(cases)
             except Exception as parse_err:
-                logger.exception("AI stream phase2 parse/normalize failed: %s", parse_err)
+                logger.exception(
+                    "AI stream phase2 parse/normalize failed: %s", parse_err
+                )
                 yield _sse_event(
                     {
                         "type": "error",
@@ -3075,7 +3904,63 @@ class AiGenerateCasesStreamView(View):
             }
             if ctx.get("dedup_debug"):
                 done_payload["dedup_debug"] = dedup_debug_report
+            run_id = _write_ai_case_generation_run(
+                user=drf_request.user,
+                action="generate_cases_stream",
+                ctx=ctx,
+                model_used=model_used,
+                phase1=phase1,
+                phase1_override=(
+                    payload.get("phase1_override")
+                    if isinstance(payload, dict)
+                    else None
+                ),
+                streamed=True,
+                success=True,
+                all_covered=False,
+                cases_count=len(cases),
+                latency_ms=int((time.monotonic() - started_at) * 1000),
+                output_chars=len("".join(raw_parts_outer)),
+                meta={
+                    "truncated_by_length": bool(truncate_by_length),
+                    "dedup_debug": bool(ctx.get("dedup_debug")),
+                    "prompt_version": "v1",
+                },
+            )
+            done_payload["run_id"] = run_id
+            audit_success = True
+            audit_all_covered = False
+            audit_cases_count = len(cases)
             yield _sse_event(done_payload)
+            try:
+                write_ai_usage_event(
+                    user=drf_request.user,
+                    action="generate_cases_stream",
+                    endpoint=_request_path(request),
+                    success=bool(audit_success),
+                    status_code=200 if audit_success else 500,
+                    model_used=model_used,
+                    test_type=str(ctx.get("test_type") or ""),
+                    module_id=ctx.get("module_id"),
+                    streamed=True,
+                    all_covered=bool(audit_all_covered),
+                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    prompt_chars=len(str(ctx.get("requirement") or ""))
+                    + len(str(ctx.get("api_spec") or "")),
+                    output_chars=len("".join(raw_parts_outer)),
+                    cases_count=int(audit_cases_count),
+                    meta={
+                        "truncated_by_length": bool(truncate_by_length),
+                        "run_id": run_id,
+                        "prompt_version": "v1",
+                    },
+                )
+            except Exception:
+                pass
+            if slot:
+                release_ai_concurrency_slot(
+                    user_id=int(getattr(drf_request.user, "id", 0) or 0)
+                )
 
         response = StreamingHttpResponse(
             streaming_content=event_stream(),

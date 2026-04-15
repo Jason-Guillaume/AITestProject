@@ -54,7 +54,10 @@ def build_engine_addon(ctx: Dict[str, Any]) -> str:
     if tt == "security":
         vecs = ext.get("sec_vectors")
         if isinstance(vecs, (list, tuple)) and vecs:
-            extras.append("【用户勾选漏洞向量】" + "、".join(str(x) for x in vecs if str(x).strip()))
+            extras.append(
+                "【用户勾选漏洞向量】"
+                + "、".join(str(x) for x in vecs if str(x).strip())
+            )
         rl = (ext.get("risk_level") or "").strip()
         if rl:
             extras.append("【用户指定风险等级偏好】" + rl)
@@ -62,12 +65,16 @@ def build_engine_addon(ctx: Dict[str, Any]) -> str:
         if ss:
             extras.append("【扫描/范围补充】\n" + ss)
     elif tt == "ui-automation" and (ext.get("ui_elements") or "").strip():
-        extras.append("【页面/DOM 参考】\n" + str(ext.get("ui_elements")).strip()[:8000])
+        extras.append(
+            "【页面/DOM 参考】\n" + str(ext.get("ui_elements")).strip()[:8000]
+        )
     elif tt == "performance":
         pt = ext.get("perf_targets")
         if isinstance(pt, dict) and pt:
             try:
-                extras.append("【性能目标 JSON】\n" + json.dumps(pt, ensure_ascii=False)[:8000])
+                extras.append(
+                    "【性能目标 JSON】\n" + json.dumps(pt, ensure_ascii=False)[:8000]
+                )
             except (TypeError, ValueError):
                 pass
 

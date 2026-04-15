@@ -8,6 +8,7 @@ from django.conf import settings
 from assistant.models import KnowledgeDocument
 from assistant.error_parser import simplify_vector_error
 
+
 def _resolve_document_path(doc: KnowledgeDocument) -> str:
     if not doc.file_path:
         raise ValueError("文档未绑定文件")
@@ -15,7 +16,9 @@ def _resolve_document_path(doc: KnowledgeDocument) -> str:
 
 
 def _build_loader(file_path: str):
-    Docx2txtLoader, PyPDFLoader, TextLoader, UnstructuredFileLoader = _import_document_loaders()
+    Docx2txtLoader, PyPDFLoader, TextLoader, UnstructuredFileLoader = (
+        _import_document_loaders()
+    )
     suffix = Path(file_path).suffix.lower()
     if suffix == ".pdf":
         return PyPDFLoader(file_path)
@@ -82,7 +85,9 @@ def process_and_embed_document(doc_id: int) -> None:
     doc.save(update_fields=["status", "error_message", "update_time"])
 
     try:
-        Chroma, RecursiveCharacterTextSplitter, OpenAIEmbeddings = _import_vector_components()
+        Chroma, RecursiveCharacterTextSplitter, OpenAIEmbeddings = (
+            _import_vector_components()
+        )
         file_path = _resolve_document_path(doc)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")

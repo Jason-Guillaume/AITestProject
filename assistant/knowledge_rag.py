@@ -51,6 +51,7 @@ def _build_embedding_function():
     """
     mode = (os.environ.get("KNOWLEDGE_EMBED_MODE", "hash") or "hash").strip().lower()
     if mode == "hash":
+
         class _HashEmbeddingFunction:
             def name(self) -> str:
                 return "default"
@@ -99,7 +100,9 @@ def _build_embedding_function():
     try:
         return SentenceTransformerEmbeddingFunction(model_name=model_name)
     except Exception as exc:  # pragma: no cover
-        logger.warning("SentenceTransformerEmbeddingFunction 初始化失败，回退默认嵌入: %s", exc)
+        logger.warning(
+            "SentenceTransformerEmbeddingFunction 初始化失败，回退默认嵌入: %s", exc
+        )
         return DefaultEmbeddingFunction()
 
 
@@ -190,7 +193,9 @@ class KnowledgeIndexer:
         col = get_collection()
         if col is None:
             return False
-        article = KnowledgeArticle.objects.filter(pk=article_id, is_deleted=False).first()
+        article = KnowledgeArticle.objects.filter(
+            pk=article_id, is_deleted=False
+        ).first()
         cls.delete_article(article_id)
         if article is None:
             return True
@@ -203,7 +208,10 @@ class KnowledgeIndexer:
             "title": article.title or "",
             "category": article.category or "",
             "tags": ",".join(
-                [str(t) for t in (article.tags if isinstance(article.tags, list) else [])]
+                [
+                    str(t)
+                    for t in (article.tags if isinstance(article.tags, list) else [])
+                ]
             ),
         }
         try:
@@ -216,7 +224,9 @@ class KnowledgeIndexer:
             )
             return True
         except Exception as exc:  # pragma: no cover
-            logger.exception("KnowledgeIndexer upsert 失败: article_id=%s err=%s", article_id, exc)
+            logger.exception(
+                "KnowledgeIndexer upsert 失败: article_id=%s err=%s", article_id, exc
+            )
             return False
 
     @classmethod
@@ -233,7 +243,9 @@ class KnowledgeIndexer:
     def reindex_all(cls) -> Dict[str, int]:
         total = 0
         success = 0
-        for item in KnowledgeArticle.objects.filter(is_deleted=False).values_list("id", flat=True):
+        for item in KnowledgeArticle.objects.filter(is_deleted=False).values_list(
+            "id", flat=True
+        ):
             total += 1
             if cls.index_article(int(item)):
                 success += 1
@@ -355,7 +367,9 @@ class KnowledgeSearcher:
             dist = dists[i] if i < len(dists) else None
             score = (1.0 - float(dist)) if dist is not None else None
             item = {
-                "article_id": int(meta.get("article_id")) if meta.get("article_id") else None,
+                "article_id": (
+                    int(meta.get("article_id")) if meta.get("article_id") else None
+                ),
                 "title": title,
                 "category": category,
                 "tags": tags,

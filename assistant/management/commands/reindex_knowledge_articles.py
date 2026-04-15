@@ -31,10 +31,14 @@ class Command(BaseCommand):
         skipped = 0
 
         for article in qs:
-            existing = KnowledgeDocument.objects.filter(
-                article=article,
-                is_deleted=False,
-            ).order_by("-id").first()
+            existing = (
+                KnowledgeDocument.objects.filter(
+                    article=article,
+                    is_deleted=False,
+                )
+                .order_by("-id")
+                .first()
+            )
             prev_status = existing.status if existing is not None else None
             if failed_only and prev_status != KnowledgeDocument.STATUS_FAILED:
                 skipped += 1

@@ -25,7 +25,10 @@ from assistant.services.case_batch_generation import (
     parse_batch_json_array,
     normalize_batch_case_item,
 )
-from assistant.services.semantic_dedup import cosine_similarity, semantic_deduplicate_cases
+from assistant.services.semantic_dedup import (
+    cosine_similarity,
+    semantic_deduplicate_cases,
+)
 from assistant.views import (
     IFLYTEK_MAAS_MODEL_TYPE,
     IFLYTEK_MAAS_CHAT_COMPLETIONS,
@@ -66,6 +69,7 @@ class IflytekMaasRoutingTests(TestCase):
 
     def test_prepare_context_keep_custom_iflytek_base_when_api_key_provided(self):
         custom_base = "https://not-used.example.com/v1"
+
         class DummyRequest:
             data = {
                 "requirement": "生成登录测试用例",
@@ -138,7 +142,9 @@ class IflytekMaasRoutingTests(TestCase):
         )
         self.assertIn("登录接口", pc2.input_data)
 
-        pc3 = get_ai_prompt_context("functional", requirement="下单流程", module_name="订单")
+        pc3 = get_ai_prompt_context(
+            "functional", requirement="下单流程", module_name="订单"
+        )
         self.assertFalse(pc3.use_api_prompt)
         self.assertEqual(pc3.model_target, "TestCase")
 
@@ -374,11 +380,22 @@ class KnowledgeRagTests(TestCase):
     @patch("assistant.views.KnowledgeSearcher.search_similar")
     def test_knowledge_search_api(self, mock_search):
         mock_search.return_value = [
-            {"article_id": 1, "title": "登录模板", "category": "template", "tags": ["登录"]}
+            {
+                "article_id": 1,
+                "title": "登录模板",
+                "category": "template",
+                "tags": ["登录"],
+            }
         ]
         resp = self.client.post(
             "/api/assistant/knowledge/search/",
-            {"query_text": "登录", "top_k": 3, "category": "template", "tag": "登录", "min_score": 0.2},
+            {
+                "query_text": "登录",
+                "top_k": 3,
+                "category": "template",
+                "tag": "登录",
+                "min_score": 0.2,
+            },
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
@@ -393,7 +410,12 @@ class KnowledgeRagTests(TestCase):
     @patch("testcase.views.KnowledgeSearcher.search_similar")
     def test_case_create_returns_knowledge_recommendations(self, mock_search):
         mock_search.return_value = [
-            {"article_id": 2, "title": "API最佳实践", "category": "best_practice", "tags": ["API"]}
+            {
+                "article_id": 2,
+                "title": "API最佳实践",
+                "category": "best_practice",
+                "tags": ["API"],
+            }
         ]
         project = TestProject.objects.create(
             project_name="RAG-P",
@@ -442,7 +464,9 @@ class KnowledgeRagTests(TestCase):
         article.delete()
         self.assertTrue(mock_delete.called)
 
-    @patch("assistant.management.commands.reindex_knowledge_base.KnowledgeIndexer.reindex_all")
+    @patch(
+        "assistant.management.commands.reindex_knowledge_base.KnowledgeIndexer.reindex_all"
+    )
     def test_reindex_knowledge_base_command(self, mock_reindex):
         mock_reindex.return_value = {"total": 3, "success": 2, "failed": 1}
         out = StringIO()
@@ -470,12 +494,16 @@ class KnowledgeRagTests(TestCase):
         if isinstance(by_cat.data, list):
             self.assertGreaterEqual(len(by_cat.data), 1)
         else:
-            self.assertGreaterEqual((by_cat.data.get("count") or len(by_cat.data.get("results") or [])), 1)
+            self.assertGreaterEqual(
+                (by_cat.data.get("count") or len(by_cat.data.get("results") or [])), 1
+            )
         by_tag = self.client.get("/api/assistant/knowledge-articles/?tag=登录")
         self.assertEqual(by_tag.status_code, 200)
 
     @patch("assistant.knowledge_rag.KnowledgeIndexer.index_article")
-    def test_knowledge_article_create_upload_mode_requires_file_or_content(self, mock_index):
+    def test_knowledge_article_create_upload_mode_requires_file_or_content(
+        self, mock_index
+    ):
         resp = self.client.post(
             "/api/assistant/knowledge-articles/",
             {
@@ -490,7 +518,9 @@ class KnowledgeRagTests(TestCase):
         self.assertFalse(mock_index.called)
 
     def test_extract_text_api_success_for_txt(self):
-        f = SimpleUploadedFile("k.txt", "提取测试".encode("utf-8"), content_type="text/plain")
+        f = SimpleUploadedFile(
+            "k.txt", "提取测试".encode("utf-8"), content_type="text/plain"
+        )
         resp = self.client.post(
             "/api/assistant/knowledge/extract-text/",
             {"file": f},
@@ -501,7 +531,9 @@ class KnowledgeRagTests(TestCase):
         self.assertIn("提取测试", resp.data.get("text", ""))
 
     def test_extract_text_api_rejects_unsupported_suffix(self):
-        f = SimpleUploadedFile("bad.exe", b"abc", content_type="application/octet-stream")
+        f = SimpleUploadedFile(
+            "bad.exe", b"abc", content_type="application/octet-stream"
+        )
         resp = self.client.post(
             "/api/assistant/knowledge/extract-text/",
             {"file": f},
@@ -536,9 +568,13 @@ class AiBatchAndSemanticDedupTests(TestCase):
         self.assertIn("已有用例标题", prompt)
 
     def test_parse_batch_json_array_supports_array_and_object_wrapped(self):
-        arr = parse_batch_json_array('[{"title":"a","type":"正向","steps":"s","expected":"e"}]')
+        arr = parse_batch_json_array(
+            '[{"title":"a","type":"正向","steps":"s","expected":"e"}]'
+        )
         self.assertEqual(len(arr), 1)
-        obj = parse_batch_json_array('{"cases":[{"title":"b","type":"逆向","steps":"s2","expected":"e2"}]}')
+        obj = parse_batch_json_array(
+            '{"cases":[{"title":"b","type":"逆向","steps":"s2","expected":"e2"}]}'
+        )
         self.assertEqual(len(obj), 1)
         with self.assertRaises(ValueError):
             parse_batch_json_array('{"x":1}')
@@ -558,13 +594,20 @@ class AiBatchAndSemanticDedupTests(TestCase):
                 "api_method": "GET",
                 "api_headers": {},
                 "api_body": {},
-                "request_config": {"method": "GET", "url": "old", "headers": {}, "body": {}},
+                "request_config": {
+                    "method": "GET",
+                    "url": "old",
+                    "headers": {},
+                    "body": {},
+                },
             },
         ]
         backfill_api_request_fields_in_batch(cases)
         self.assertEqual(cases[1]["api_url"], "https://real.api/login")
         self.assertEqual(cases[1]["api_method"], "POST")
-        self.assertEqual(cases[1]["api_headers"].get("Content-Type"), "application/json")
+        self.assertEqual(
+            cases[1]["api_headers"].get("Content-Type"), "application/json"
+        )
         self.assertEqual(cases[1]["api_body"], {"username": "a", "password": "b"})
         rc = cases[1].get("request_config")
         self.assertIsInstance(rc, dict)
@@ -572,7 +615,12 @@ class AiBatchAndSemanticDedupTests(TestCase):
 
     def test_normalize_batch_case_item(self):
         item = normalize_batch_case_item(
-            {"title": "登录成功", "type": "正向", "steps": "输入账号密码", "expected": "登录成功"},
+            {
+                "title": "登录成功",
+                "type": "正向",
+                "steps": "输入账号密码",
+                "expected": "登录成功",
+            },
             0,
         )
         self.assertEqual(item["case_name"], "登录成功")

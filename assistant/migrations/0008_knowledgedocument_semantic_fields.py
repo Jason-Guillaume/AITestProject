@@ -19,4 +19,3 @@ class Migration(migrations.Migration):
             field=models.TextField(blank=True, default="", verbose_name="语义摘要"),
         ),
     ]
-

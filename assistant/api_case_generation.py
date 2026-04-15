@@ -54,6 +54,7 @@ def _build_curl_from_request(
 
     return " ".join(parts)
 
+
 ZH_JSON_MANDATE_API = """
 ══════════════════════════════════════════════════════
 【输出形态 · 最高优先级】
@@ -107,9 +108,7 @@ def _api_output_example_block() -> str:
 """
 
 
-API_CASE_SYSTEM_TEMPLATE = (
-    ZH_JSON_MANDATE_API
-    + """
+API_CASE_SYSTEM_TEMPLATE = ZH_JSON_MANDATE_API + """
 你现在是一名资深接口自动化测试专家。
 
 {api_spec_instruction}
@@ -135,14 +134,14 @@ API_CASE_SYSTEM_TEMPLATE = (
 当前模块（module_name 宜对齐，中文）：{module_name}
 需求描述：
 {requirement_description}
-"""
-    + _api_output_example_block()
-)
+""" + _api_output_example_block()
 
 
 def build_api_case_system_prompt_from_ctx(ctx: Dict[str, Any]) -> str:
     """ApiCasePrompt：由策略层传入完整 ctx（含 api_spec 是否为空）。"""
-    mn = (ctx.get("module_name") or "").strip() or "（未指定模块，从需求推断中文模块名）"
+    mn = (
+        ctx.get("module_name") or ""
+    ).strip() or "（未指定模块，从需求推断中文模块名）"
     focus = (ctx.get("test_type_focus") or "").strip()
     spec = (ctx.get("api_spec") or "").strip()
     api_spec_instruction = _API_SPEC_BLOCK_STRICT if spec else _API_SPEC_BLOCK_INFER
@@ -151,12 +150,11 @@ def build_api_case_system_prompt_from_ctx(ctx: Dict[str, Any]) -> str:
         api_spec_section = (
             spec
             if len(spec) <= max_embed
-            else spec[:max_embed] + "\n…(以下已截断，完整原文同时见用户消息中的【接口定义原文】)"
+            else spec[:max_embed]
+            + "\n…(以下已截断，完整原文同时见用户消息中的【接口定义原文】)"
         )
     else:
-        api_spec_section = (
-            "（未单独粘贴接口定义：请以用户消息中的「需求描述」与「接口上下文/推断依据」为准解析或推断接口。）"
-        )
+        api_spec_section = "（未单独粘贴接口定义：请以用户消息中的「需求描述」与「接口上下文/推断依据」为准解析或推断接口。）"
     return API_CASE_SYSTEM_TEMPLATE.format(
         api_spec_instruction=api_spec_instruction,
         api_spec_section=api_spec_section,
@@ -281,7 +279,9 @@ def _assertions_to_summary(assertions: Any) -> str:
             path = a.get("path", "")
             op = a.get("op", "")
             val = a.get("value", "")
-            lines.append(f"JSONPath `{path}` {op} {val}" + (f"（{desc}）" if desc else ""))
+            lines.append(
+                f"JSONPath `{path}` {op} {val}" + (f"（{desc}）" if desc else "")
+            )
         elif kind == "body_contains":
             sub = a.get("substring", "")
             lines.append(f"响应体包含 `{sub}`" + (f"（{desc}）" if desc else ""))
@@ -338,7 +338,9 @@ def _status_from_assert_logic(text: str) -> Optional[int]:
     return None
 
 
-def _parse_response_assert(raw_item: Dict[str, Any]) -> tuple[Dict[str, Any], List[Any], str]:
+def _parse_response_assert(
+    raw_item: Dict[str, Any],
+) -> tuple[Dict[str, Any], List[Any], str]:
     """返回 (response_assert dict, rules list, logic_text)；兼容 assert_logic 字符串。"""
     al = str(raw_item.get("assert_logic") or raw_item.get("assertLogic") or "").strip()
     ra = raw_item.get("response_assert")
@@ -408,9 +410,9 @@ def enrich_normalized_case_with_api_fields(
                 :_MAX_URL_LEN
             ]
         if method == "GET" and req_cfg.get("method"):
-            method = (
-                str(req_cfg.get("method") or "GET").strip().upper() or "GET"
-            )[:_MAX_METHOD_LEN]
+            method = (str(req_cfg.get("method") or "GET").strip().upper() or "GET")[
+                :_MAX_METHOD_LEN
+            ]
             if method not in _ALLOWED_HTTP_METHODS:
                 method = "GET"
         if not headers:
@@ -419,7 +421,9 @@ def enrich_normalized_case_with_api_fields(
             req_cfg.get("body") is not None or req_cfg.get("body_positive") is not None
         ):
             body = _coerce_body_for_api_model(
-                req_cfg.get("body") if req_cfg.get("body") is not None else req_cfg.get("body_positive")
+                req_cfg.get("body")
+                if req_cfg.get("body") is not None
+                else req_cfg.get("body_positive")
             )
 
     ra_dict, rules, logic_text = _parse_response_assert(raw_item)
@@ -456,7 +460,9 @@ def enrich_normalized_case_with_api_fields(
         extra_parts.append(f"【断言逻辑】{logic_text}")
     if extra_parts:
         out["expected_result"] = (
-            (exp + "\n\n" + "\n".join(extra_parts)).strip() if exp else "\n".join(extra_parts)
+            (exp + "\n\n" + "\n".join(extra_parts)).strip()
+            if exp
+            else "\n".join(extra_parts)
         )
 
     out["api_method"] = method[:_MAX_METHOD_LEN]
@@ -540,7 +546,9 @@ def backfill_api_request_fields_in_batch(cases: List[Dict[str, Any]]) -> None:
     a_method = str(anchor.get("api_method") or "GET").strip().upper()
     if a_method not in _ALLOWED_HTTP_METHODS:
         a_method = "GET"
-    a_headers = anchor.get("api_headers") if isinstance(anchor.get("api_headers"), dict) else {}
+    a_headers = (
+        anchor.get("api_headers") if isinstance(anchor.get("api_headers"), dict) else {}
+    )
     a_body = anchor.get("api_body")
 
     for c in cases:
@@ -565,9 +573,17 @@ def backfill_api_request_fields_in_batch(cases: List[Dict[str, Any]]) -> None:
         c["api_method"] = c.get("api_method", a_method)
         c["api_url"] = c.get("api_url", a_url)
         h = c.get("api_headers", a_headers)
-        c["api_headers"] = h if isinstance(h, dict) else (a_headers if isinstance(a_headers, dict) else {})
+        c["api_headers"] = (
+            h
+            if isinstance(h, dict)
+            else (a_headers if isinstance(a_headers, dict) else {})
+        )
         b = c.get("api_body", a_body)
-        c["api_body"] = b if isinstance(b, (dict, list)) else (a_body if isinstance(a_body, (dict, list)) else {})
+        c["api_body"] = (
+            b
+            if isinstance(b, (dict, list))
+            else (a_body if isinstance(a_body, (dict, list)) else {})
+        )
         c["api_source_curl"] = _build_curl_from_request(
             c["api_method"], c["api_url"], c["api_headers"], c["api_body"]
         )

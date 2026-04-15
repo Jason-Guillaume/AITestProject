@@ -18,6 +18,7 @@ except Exception:  # pragma: no cover
 
         return _decorator
 
+
 from assistant.services.rag_service import process_and_embed_document
 from assistant.knowledge_rag import KnowledgeIndexer
 from assistant.models import KnowledgeDocument
@@ -104,7 +105,9 @@ def _load_documents_from_url(doc: KnowledgeDocument):
         content_type = (resp.headers.get("Content-Type") or "").lower()
         charset = "utf-8"
         if "charset=" in content_type:
-            charset = (content_type.split("charset=")[-1] or "utf-8").split(";")[0].strip() or "utf-8"
+            charset = (content_type.split("charset=")[-1] or "utf-8").split(";")[
+                0
+            ].strip() or "utf-8"
         raw_text = raw_bytes.decode(charset, errors="ignore").strip()
         if not raw_text:
             raise ValueError("URL 返回内容为空，无法向量化")
@@ -178,9 +181,13 @@ def _build_embeddings():
     - provider=ollama => OllamaEmbeddings
     """
     provider = (
-        getattr(settings, "KNOWLEDGE_EMBEDDING_PROVIDER", "")
-        or os.environ.get("KNOWLEDGE_EMBEDDING_PROVIDER", "openai")
-    ).strip().lower()
+        (
+            getattr(settings, "KNOWLEDGE_EMBEDDING_PROVIDER", "")
+            or os.environ.get("KNOWLEDGE_EMBEDDING_PROVIDER", "openai")
+        )
+        .strip()
+        .lower()
+    )
 
     def _build_ollama_embeddings():
         model_name = (
@@ -209,7 +216,8 @@ def _build_embeddings():
         getattr(settings, "OPENAI_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
     ).strip()
     openai_base_url = (
-        getattr(settings, "OPENAI_BASE_URL", "") or os.environ.get("OPENAI_BASE_URL", "")
+        getattr(settings, "OPENAI_BASE_URL", "")
+        or os.environ.get("OPENAI_BASE_URL", "")
     ).strip()
     if openai_api_key:
         kwargs["api_key"] = openai_api_key
@@ -272,7 +280,9 @@ def process_document_rag(document_id: int) -> None:
     4) 写入 Chroma 本地持久化库
     5) 回写任务状态（处理中 -> 已完成/失败）
     """
-    doc = KnowledgeDocument.objects.filter(pk=int(document_id), is_deleted=False).first()
+    doc = KnowledgeDocument.objects.filter(
+        pk=int(document_id), is_deleted=False
+    ).first()
     if doc is None:
         raise ValueError(f"KnowledgeDocument 不存在: id={document_id}")
 

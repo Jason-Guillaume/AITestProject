@@ -20,7 +20,9 @@ def build_batch_generation_prompt(
     构建一次性批量生成多条测试用例的 Prompt。
     """
     cnt = AI_CASE_BATCH_MIN_COUNT if min_count is None else max(1, int(min_count))
-    existing_block = "\n".join(f"- {x}" for x in existing_titles[:120] if str(x).strip())
+    existing_block = "\n".join(
+        f"- {x}" for x in existing_titles[:120] if str(x).strip()
+    )
     if not existing_block:
         existing_block = "- （当前模块暂无历史用例）"
 
@@ -39,8 +41,11 @@ def build_batch_generation_prompt(
   {{
     "title": "用例标题",
     "type": "正向/逆向/边界",
-    "steps": "操作步骤",
+    "steps": "（兼容字段）操作步骤文本，可选",
     "expected": "预期结果",
+    "steps_list": [
+      {{"step_desc": "步骤描述（简体中文、可直接落库）", "expected_result": "该步骤预期（可选）"}}
+    ],
     "module_name": "与【当前模块】一致的中文模块名"
   }}
 ]
@@ -95,11 +100,38 @@ def normalize_batch_case_item(item: dict[str, Any], index: int) -> dict[str, Any
     将批量 JSON 用例归一化为系统通用用例字段。
     须保留 module_name：下游 _normalize_generated_case 依赖该字段写入预览与导入。
     """
-    name = str(item.get("title") or item.get("caseName") or item.get("name") or "").strip()
+    name = str(
+        item.get("title") or item.get("caseName") or item.get("name") or ""
+    ).strip()
     if not name:
         name = f"AI生成用例-{index + 1}"
     case_type = str(item.get("type") or "").strip()
     steps = str(item.get("steps") or "").strip()
+    steps_list = item.get("steps_list") or item.get("stepsList")
+    if steps_list is None and isinstance(item.get("steps"), list):
+        steps_list = item.get("steps")
+    if isinstance(steps_list, list):
+        norm_steps_list = []
+        for it in steps_list:
+            if not isinstance(it, dict):
+                continue
+            desc = str(
+                it.get("step_desc") or it.get("desc") or it.get("action") or ""
+            ).strip()
+            if not desc:
+                continue
+            exp2 = str(it.get("expected_result") or it.get("expected") or "").strip()
+            norm_steps_list.append(
+                {
+                    "step_desc": desc[:4000],
+                    "expected_result": exp2[:2000],
+                }
+            )
+        steps_list = norm_steps_list
+        if not steps and norm_steps_list:
+            steps = "\n".join(
+                f"{i+1}. {x['step_desc']}" for i, x in enumerate(norm_steps_list)
+            )
     expected = str(item.get("expected") or item.get("expectedResult") or "").strip()
     level_raw = str(item.get("level") or "").strip().upper()
     level = level_raw if level_raw in ("P0", "P1", "P2", "P3") else "P2"
@@ -117,6 +149,7 @@ def normalize_batch_case_item(item: dict[str, Any], index: int) -> dict[str, Any
         "level": level,
         "precondition": pre,
         "steps": steps,
+        "steps_list": steps_list if isinstance(steps_list, list) else None,
         "expected_result": expected,
         "case_type": case_type,
         "module_name": mod,

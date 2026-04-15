@@ -53,7 +53,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ("markdown_content", models.TextField(verbose_name="Markdown内容")),
-                ("tags", models.JSONField(blank=True, default=list, verbose_name="标签")),
+                (
+                    "tags",
+                    models.JSONField(blank=True, default=list, verbose_name="标签"),
+                ),
                 (
                     "creator",
                     models.ForeignKey(

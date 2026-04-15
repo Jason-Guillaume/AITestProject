@@ -31,8 +31,9 @@ def simplify_vector_error(exc_or_message) -> str:
     if "文档内容为空" in raw or "切片后没有有效文本块" in raw:
         return "文档内容为空，无法向量化"
 
-    traceback_hit = re.search(r"Traceback \(most recent call last\):", raw, re.IGNORECASE)
+    traceback_hit = re.search(
+        r"Traceback \(most recent call last\):", raw, re.IGNORECASE
+    )
     if traceback_hit:
         return "向量化失败（内部异常）"
     return raw[:180]
-

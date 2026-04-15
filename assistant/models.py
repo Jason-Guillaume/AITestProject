@@ -2,6 +2,7 @@ from django.db import models
 
 from common.models import BaseModel
 from testcase.models import TestModule
+from django.conf import settings
 
 
 class KnowledgeArticle(BaseModel):
@@ -87,7 +88,9 @@ class KnowledgeDocument(BaseModel):
         related_name="knowledge_documents",
         verbose_name="模块分类（测试模块）",
     )
-    category = models.CharField(max_length=64, blank=True, default="", verbose_name="分类")
+    category = models.CharField(
+        max_length=64, blank=True, default="", verbose_name="分类"
+    )
     document_type = models.CharField(
         max_length=16,
         choices=DOC_TYPE_CHOICES,
@@ -136,7 +139,9 @@ class KnowledgeDocument(BaseModel):
         verbose_name="向量数据库ID",
     )
     semantic_summary = models.TextField(blank=True, default="", verbose_name="语义摘要")
-    semantic_chunks = models.JSONField(default=list, blank=True, verbose_name="语义切片")
+    semantic_chunks = models.JSONField(
+        default=list, blank=True, verbose_name="语义切片"
+    )
     error_message = models.TextField(blank=True, default="", verbose_name="失败原因")
 
     class Meta:
@@ -144,4 +149,164 @@ class KnowledgeDocument(BaseModel):
         ordering = ("-created_at",)
         indexes = [
             models.Index(fields=["category", "status", "-created_at"]),
+        ]
+
+
+class AiUsageEvent(models.Model):
+    """
+    AI 治理：调用审计与用量统计（最小可用版本）。
+
+    设计目标：
+    - 记录“谁在什么时候调用了哪个 AI 能力、是否成功、耗时与规模”等关键字段
+    - 不落敏感原文：仅保存字符数、关键枚举与少量 meta（已做脱敏）
+    """
+
+    ACTION_GENERATE_CASES = "generate_cases"
+    ACTION_GENERATE_CASES_STREAM = "generate_cases_stream"
+    ACTION_PHASE1_PREVIEW = "phase1_preview"
+    ACTION_TEST_CONNECTION = "test_connection"
+    ACTION_VERIFY_CONNECTION = "verify_connection"
+    ACTION_KNOWLEDGE_AUTOFILL = "knowledge_autofill"
+    ACTION_CHOICES = [
+        (ACTION_GENERATE_CASES, "生成用例（同步）"),
+        (ACTION_GENERATE_CASES_STREAM, "生成用例（流式）"),
+        (ACTION_PHASE1_PREVIEW, "Phase1 预览"),
+        (ACTION_TEST_CONNECTION, "模型连通性测试"),
+        (ACTION_VERIFY_CONNECTION, "固定模型连通性校验"),
+        (ACTION_KNOWLEDGE_AUTOFILL, "知识库自动填表"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ai_usage_events",
+        verbose_name="调用用户",
+    )
+    action = models.CharField(
+        max_length=64, choices=ACTION_CHOICES, db_index=True, verbose_name="动作"
+    )
+    endpoint = models.CharField(
+        max_length=128, blank=True, default="", verbose_name="接口路径"
+    )
+    success = models.BooleanField(default=False, db_index=True, verbose_name="是否成功")
+    status_code = models.IntegerField(default=0, verbose_name="HTTP 状态码")
+    error_code = models.CharField(
+        max_length=64, blank=True, default="", verbose_name="错误码（可选）"
+    )
+    error_message = models.CharField(
+        max_length=512, blank=True, default="", verbose_name="错误摘要（脱敏）"
+    )
+
+    model_used = models.CharField(
+        max_length=128, blank=True, default="", verbose_name="模型名"
+    )
+    test_type = models.CharField(
+        max_length=32, blank=True, default="", verbose_name="测试类型（可选）"
+    )
+    module_id = models.IntegerField(
+        null=True, blank=True, db_index=True, verbose_name="模块ID（可选）"
+    )
+    streamed = models.BooleanField(default=False, verbose_name="是否流式")
+    all_covered = models.BooleanField(default=False, verbose_name="是否判定无需生成")
+
+    latency_ms = models.IntegerField(default=0, verbose_name="耗时(ms)")
+    prompt_chars = models.IntegerField(default=0, verbose_name="输入字符数")
+    output_chars = models.IntegerField(default=0, verbose_name="输出字符数")
+    cases_count = models.IntegerField(default=0, verbose_name="生成用例条数（可选）")
+
+    meta = models.JSONField(default=dict, blank=True, verbose_name="元信息（脱敏）")
+    created_at = models.DateTimeField(
+        auto_now_add=True, db_index=True, verbose_name="创建时间"
+    )
+
+    class Meta:
+        db_table = "ai_usage_event"
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["action", "-created_at"]),
+            models.Index(fields=["user", "-created_at"]),
+        ]
+
+
+class AiCaseGenerationRun(models.Model):
+    """
+    AI 生成用例批次（run）：
+    - 记录一次“生成请求→产出”的关键元数据，便于追溯、导入关联、质量回放与成本分析。
+    - 不保存完整敏感原文：仅保存 hash、少量摘要与结构化结果（如 Phase1 分析）。
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ai_case_generation_runs",
+        verbose_name="发起用户",
+    )
+
+    action = models.CharField(
+        max_length=64, blank=True, default="", db_index=True, verbose_name="动作"
+    )
+    test_type = models.CharField(
+        max_length=32, blank=True, default="", db_index=True, verbose_name="测试类型"
+    )
+    module_id = models.IntegerField(
+        null=True, blank=True, db_index=True, verbose_name="模块ID（可选）"
+    )
+    streamed = models.BooleanField(default=False, verbose_name="是否流式")
+
+    model_used = models.CharField(
+        max_length=128, blank=True, default="", verbose_name="模型名"
+    )
+    prompt_version = models.CharField(
+        max_length=64, blank=True, default="v1", verbose_name="提示词版本"
+    )
+    params = models.JSONField(default=dict, blank=True, verbose_name="参数（脱敏）")
+
+    requirement_sha256 = models.CharField(
+        max_length=64, blank=True, default="", db_index=True, verbose_name="需求哈希"
+    )
+    requirement_preview = models.CharField(
+        max_length=256, blank=True, default="", verbose_name="需求摘要（脱敏）"
+    )
+    ext_config = models.JSONField(
+        default=dict, blank=True, verbose_name="扩展配置（脱敏）"
+    )
+
+    phase1_analysis = models.JSONField(
+        default=dict, blank=True, verbose_name="Phase1 分析结果"
+    )
+    phase1_override = models.JSONField(
+        default=dict, blank=True, verbose_name="Phase1 覆盖输入（可选）"
+    )
+
+    success = models.BooleanField(default=False, db_index=True, verbose_name="是否成功")
+    all_covered = models.BooleanField(default=False, verbose_name="是否判定无需生成")
+    cases_count = models.IntegerField(default=0, verbose_name="生成用例条数")
+    prompt_chars = models.IntegerField(default=0, verbose_name="输入字符数")
+    output_chars = models.IntegerField(default=0, verbose_name="输出字符数")
+    latency_ms = models.IntegerField(default=0, verbose_name="耗时(ms)")
+
+    error_code = models.CharField(
+        max_length=64, blank=True, default="", verbose_name="错误码（可选）"
+    )
+    error_message = models.CharField(
+        max_length=512, blank=True, default="", verbose_name="错误摘要（脱敏）"
+    )
+
+    meta = models.JSONField(default=dict, blank=True, verbose_name="元信息（脱敏）")
+    created_at = models.DateTimeField(
+        auto_now_add=True, db_index=True, verbose_name="创建时间"
+    )
+
+    class Meta:
+        db_table = "ai_case_generation_run"
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["action", "-created_at"]),
+            models.Index(fields=["test_type", "-created_at"]),
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["module_id", "-created_at"]),
         ]
