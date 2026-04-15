@@ -29,12 +29,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="testcase",
             name="api_headers",
-            field=models.JSONField(blank=True, default=dict, verbose_name="请求头(JSON)"),
+            field=models.JSONField(
+                blank=True, default=dict, verbose_name="请求头(JSON)"
+            ),
         ),
         migrations.AddField(
             model_name="testcase",
             name="api_method",
-            field=models.CharField(default="GET", max_length=16, verbose_name="HTTP 方法"),
+            field=models.CharField(
+                default="GET", max_length=16, verbose_name="HTTP 方法"
+            ),
         ),
         migrations.AddField(
             model_name="testcase",
@@ -46,27 +50,63 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="ApiTestLog",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("create_time", models.DateTimeField(auto_now_add=True, verbose_name="创建时间")),
-                ("update_time", models.DateTimeField(auto_now=True, verbose_name="更新时间")),
-                ("is_deleted", models.BooleanField(default=False, verbose_name="逻辑删除标识")),
-                ("request_url", models.CharField(max_length=2048, verbose_name="请求 URL")),
-                ("request_method", models.CharField(max_length=16, verbose_name="请求方法")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "create_time",
+                    models.DateTimeField(auto_now_add=True, verbose_name="创建时间"),
+                ),
+                (
+                    "update_time",
+                    models.DateTimeField(auto_now=True, verbose_name="更新时间"),
+                ),
+                (
+                    "is_deleted",
+                    models.BooleanField(default=False, verbose_name="逻辑删除标识"),
+                ),
+                (
+                    "request_url",
+                    models.CharField(max_length=2048, verbose_name="请求 URL"),
+                ),
+                (
+                    "request_method",
+                    models.CharField(max_length=16, verbose_name="请求方法"),
+                ),
                 (
                     "request_headers",
                     models.JSONField(blank=True, default=dict, verbose_name="请求头"),
                 ),
-                ("request_body", models.TextField(blank=True, default="", verbose_name="请求体")),
+                (
+                    "request_body",
+                    models.TextField(blank=True, default="", verbose_name="请求体"),
+                ),
                 (
                     "response_status_code",
-                    models.PositiveIntegerField(blank=True, null=True, verbose_name="响应状态码"),
+                    models.PositiveIntegerField(
+                        blank=True, null=True, verbose_name="响应状态码"
+                    ),
                 ),
-                ("response_body", models.TextField(blank=True, default="", verbose_name="响应体")),
+                (
+                    "response_body",
+                    models.TextField(blank=True, default="", verbose_name="响应体"),
+                ),
                 (
                     "response_time_ms",
-                    models.PositiveIntegerField(blank=True, null=True, verbose_name="耗时(ms)"),
+                    models.PositiveIntegerField(
+                        blank=True, null=True, verbose_name="耗时(ms)"
+                    ),
                 ),
-                ("is_passed", models.BooleanField(default=False, verbose_name="是否通过")),
+                (
+                    "is_passed",
+                    models.BooleanField(default=False, verbose_name="是否通过"),
+                ),
                 (
                     "creator",
                     models.ForeignKey(

@@ -48,7 +48,9 @@ def notify_admins_new_change_request(change_request):
     if change_request.request_type == UserChangeRequest.RequestType.USERNAME:
         body_lines.append(f"目标用户名: {change_request.new_value}")
     else:
-        body_lines.append("目标密码: 已以 Django 哈希形式保存，审核「通过」后将写入该用户。")
+        body_lines.append(
+            "目标密码: 已以 Django 哈希形式保存，审核「通过」后将写入该用户。"
+        )
 
     body = "\n".join(body_lines)
 

@@ -53,10 +53,24 @@ class Migration(migrations.Migration):
                         verbose_name="健康状态",
                     ),
                 ),
-                ("response_time_ms", models.PositiveIntegerField(default=0, verbose_name="响应时间(ms)")),
-                ("error_log", models.TextField(blank=True, default="", verbose_name="错误日志")),
-                ("target", models.CharField(blank=True, default="", max_length=255, verbose_name="检查目标")),
-                ("dimension", models.JSONField(blank=True, default=dict, verbose_name="维度信息")),
+                (
+                    "response_time_ms",
+                    models.PositiveIntegerField(default=0, verbose_name="响应时间(ms)"),
+                ),
+                (
+                    "error_log",
+                    models.TextField(blank=True, default="", verbose_name="错误日志"),
+                ),
+                (
+                    "target",
+                    models.CharField(
+                        blank=True, default="", max_length=255, verbose_name="检查目标"
+                    ),
+                ),
+                (
+                    "dimension",
+                    models.JSONField(blank=True, default=dict, verbose_name="维度信息"),
+                ),
                 (
                     "creator",
                     models.ForeignKey(

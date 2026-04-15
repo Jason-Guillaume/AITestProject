@@ -20,7 +20,9 @@ class TestScheduler:
     _instance = None
 
     def __init__(self):
-        self.scheduler = BackgroundScheduler(timezone=str(timezone.get_current_timezone()))
+        self.scheduler = BackgroundScheduler(
+            timezone=str(timezone.get_current_timezone())
+        )
         self.scheduler.add_jobstore(DjangoJobStore(), "default")
         self._started = False
         self._op_lock = threading.RLock()
@@ -84,7 +86,9 @@ class TestScheduler:
                     )
                     job = self.scheduler.get_job(task.job_id)
                     next_run_time = job.next_run_time if job else None
-                    ScheduledTask.objects.filter(pk=task.pk).update(next_run_time=next_run_time)
+                    ScheduledTask.objects.filter(pk=task.pk).update(
+                        next_run_time=next_run_time
+                    )
 
                     if task.status == ScheduledTask.STATUS_PAUSED:
                         self.scheduler.pause_job(task.job_id)
@@ -115,7 +119,9 @@ class TestScheduler:
             except Exception:
                 logger.exception("暂停调度任务失败: task_id=%s", task.id)
                 raise
-        ScheduledTask.objects.filter(pk=task.pk).update(status=ScheduledTask.STATUS_PAUSED)
+        ScheduledTask.objects.filter(pk=task.pk).update(
+            status=ScheduledTask.STATUS_PAUSED
+        )
 
     def resume_task(self, task: ScheduledTask):
         with self._op_lock:
@@ -124,7 +130,9 @@ class TestScheduler:
             except Exception:
                 logger.exception("恢复调度任务失败: task_id=%s", task.id)
                 raise
-        ScheduledTask.objects.filter(pk=task.pk).update(status=ScheduledTask.STATUS_ACTIVE)
+        ScheduledTask.objects.filter(pk=task.pk).update(
+            status=ScheduledTask.STATUS_ACTIVE
+        )
 
 
 def execute_scheduled_task(task_id: str):
@@ -160,7 +168,9 @@ def execute_scheduled_task(task_id: str):
         log.message = f"投递失败: {err}"
         log.detail = {"error": err}
         log.end_time = end_time
-        log.save(update_fields=["status", "message", "detail", "end_time", "update_time"])
+        log.save(
+            update_fields=["status", "message", "detail", "end_time", "update_time"]
+        )
         ScheduledTask.objects.filter(pk=task.pk).update(
             last_run_time=end_time,
             last_status=ScheduledTask.LAST_FAILED,

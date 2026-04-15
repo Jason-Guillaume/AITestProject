@@ -5,7 +5,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from execution.models import K6LoadTestSession
-from execution.serialize import K6LoadTestSessionCreateSerializer, K6LoadTestSessionDetailSerializer
+from execution.serialize import (
+    K6LoadTestSessionCreateSerializer,
+    K6LoadTestSessionDetailSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +19,9 @@ def _enqueue_k6_task(session_pk: int) -> None:
     run_k6_load_test.delay(session_pk)
 
 
-class K6LoadTestSessionViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+class K6LoadTestSessionViewSet(
+    mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet
+):
     """
     创建压测会话并异步执行 k6；通过 WebSocket 订阅 ws/k6/<run_id>/ 获取实时指标。
     """
@@ -50,7 +55,9 @@ class K6LoadTestSessionViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixi
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         instance = serializer.instance
-        out = K6LoadTestSessionDetailSerializer(instance, context={"request": request}).data
+        out = K6LoadTestSessionDetailSerializer(
+            instance, context={"request": request}
+        ).data
         return Response(
             {
                 **out,

@@ -27,6 +27,7 @@ def on_org_projects_changed(sender, instance: Organization, action, **kwargs):
         return
     _sync_org_project_members(instance)
 
+
 from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver

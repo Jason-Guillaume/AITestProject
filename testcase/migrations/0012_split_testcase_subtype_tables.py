@@ -9,70 +9,58 @@ def forwards_create_subtype_tables_mysql(apps, schema_editor):
     if schema_editor.connection.vendor != "mysql":
         return
     with schema_editor.connection.cursor() as cursor:
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS testcase_perftestcase (
                 testcase_ptr_id bigint NOT NULL PRIMARY KEY,
                 concurrency int unsigned NOT NULL,
                 duration_seconds int unsigned NOT NULL,
                 target_rps int unsigned NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """
-        )
-        cursor.execute(
-            """
+            """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS testcase_securitytestcase (
                 testcase_ptr_id bigint NOT NULL PRIMARY KEY,
                 attack_surface varchar(512) NOT NULL,
                 tool_preset varchar(128) NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """
-        )
-        cursor.execute(
-            """
+            """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS testcase_uitestcase (
                 testcase_ptr_id bigint NOT NULL PRIMARY KEY,
                 app_under_test varchar(255) NOT NULL,
                 primary_locator varchar(512) NOT NULL,
                 automation_framework varchar(64) NOT NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """
-        )
+            """)
 
 
 def forwards_create_subtype_tables_sqlite(apps, schema_editor):
     if schema_editor.connection.vendor != "sqlite":
         return
     with schema_editor.connection.cursor() as cursor:
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS testcase_perftestcase (
                 testcase_ptr_id integer NOT NULL PRIMARY KEY REFERENCES test_case(id),
                 concurrency integer NOT NULL,
                 duration_seconds integer NOT NULL,
                 target_rps integer NULL
             )
-            """
-        )
-        cursor.execute(
-            """
+            """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS testcase_securitytestcase (
                 testcase_ptr_id integer NOT NULL PRIMARY KEY REFERENCES test_case(id),
                 attack_surface varchar(512) NOT NULL,
                 tool_preset varchar(128) NOT NULL
             )
-            """
-        )
-        cursor.execute(
-            """
+            """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS testcase_uitestcase (
                 testcase_ptr_id integer NOT NULL PRIMARY KEY REFERENCES test_case(id),
                 app_under_test varchar(255) NOT NULL,
                 primary_locator varchar(512) NOT NULL,
                 automation_framework varchar(64) NOT NULL
             )
-            """
-        )
+            """)
 
 
 def forwards_fill_perf_security_ui(apps, schema_editor):
@@ -108,30 +96,24 @@ def forwards_fill_perf_security_ui(apps, schema_editor):
                 ["ui-automation"],
             )
         else:
-            cursor.execute(
-                """
+            cursor.execute("""
                 INSERT OR IGNORE INTO testcase_perftestcase (
                     testcase_ptr_id, concurrency, duration_seconds, target_rps
                 )
                 SELECT id, 1, 60, NULL FROM test_case WHERE test_type = 'performance'
-                """
-            )
-            cursor.execute(
-                """
+                """)
+            cursor.execute("""
                 INSERT OR IGNORE INTO testcase_securitytestcase (
                     testcase_ptr_id, attack_surface, tool_preset
                 )
                 SELECT id, '', '' FROM test_case WHERE test_type = 'security'
-                """
-            )
-            cursor.execute(
-                """
+                """)
+            cursor.execute("""
                 INSERT OR IGNORE INTO testcase_uitestcase (
                     testcase_ptr_id, app_under_test, primary_locator, automation_framework
                 )
                 SELECT id, '', '', '' FROM test_case WHERE test_type = 'ui-automation'
-                """
-            )
+                """)
 
 
 def backwards_noop(apps, schema_editor):
@@ -143,8 +125,7 @@ def forwards_api_table_copy_and_drop_parent_cols(apps, schema_editor):
     vendor = connection.vendor
     with connection.cursor() as cursor:
         if vendor == "mysql":
-            cursor.execute(
-                """
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS testcase_apitestcase (
                     testcase_ptr_id bigint NOT NULL PRIMARY KEY,
                     api_url varchar(2048) NOT NULL,
@@ -153,37 +134,29 @@ def forwards_api_table_copy_and_drop_parent_cols(apps, schema_editor):
                     api_body longtext NOT NULL,
                     api_expected_status smallint unsigned NULL
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                """
-            )
-            cursor.execute(
-                """
+                """)
+            cursor.execute("""
                 INSERT IGNORE INTO testcase_apitestcase (
                     testcase_ptr_id, api_url, api_method, api_headers, api_body, api_expected_status
                 )
                 SELECT id, api_url, api_method, api_headers, api_body, api_expected_status
                 FROM test_case WHERE test_type = 'api'
-                """
-            )
-            cursor.execute(
-                """
+                """)
+            cursor.execute("""
                 SELECT COUNT(*) FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'test_case' AND COLUMN_NAME = 'api_url'
-                """
-            )
+                """)
             if cursor.fetchone()[0]:
-                cursor.execute(
-                    """
+                cursor.execute("""
                     ALTER TABLE test_case
                         DROP COLUMN api_url,
                         DROP COLUMN api_method,
                         DROP COLUMN api_headers,
                         DROP COLUMN api_body,
                         DROP COLUMN api_expected_status
-                    """
-                )
+                    """)
         elif vendor == "sqlite":
-            cursor.execute(
-                """
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS testcase_apitestcase (
                     testcase_ptr_id integer NOT NULL PRIMARY KEY REFERENCES test_case(id),
                     api_url varchar(2048) NOT NULL,
@@ -192,17 +165,14 @@ def forwards_api_table_copy_and_drop_parent_cols(apps, schema_editor):
                     api_body text NOT NULL,
                     api_expected_status integer NULL
                 )
-                """
-            )
-            cursor.execute(
-                """
+                """)
+            cursor.execute("""
                 INSERT OR IGNORE INTO testcase_apitestcase (
                     testcase_ptr_id, api_url, api_method, api_headers, api_body, api_expected_status
                 )
                 SELECT id, api_url, api_method, api_headers, api_body, api_expected_status
                 FROM test_case WHERE test_type = 'api'
-                """
-            )
+                """)
             cursor.execute("PRAGMA table_info(test_case)")
             colnames = {row[1] for row in cursor.fetchall()}
             if "api_url" in colnames:

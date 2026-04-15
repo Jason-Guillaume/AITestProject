@@ -37,17 +37,30 @@ class Migration(migrations.Migration):
                     "is_deleted",
                     models.BooleanField(default=False, verbose_name="是否已删除"),
                 ),
-                ("task_name", models.CharField(max_length=255, verbose_name="任务名称")),
+                (
+                    "task_name",
+                    models.CharField(max_length=255, verbose_name="任务名称"),
+                ),
                 (
                     "method",
-                    models.CharField(default="GET", max_length=16, verbose_name="请求方法"),
+                    models.CharField(
+                        default="GET", max_length=16, verbose_name="请求方法"
+                    ),
                 ),
                 ("url", models.CharField(max_length=2048, verbose_name="请求URL")),
-                ("headers", models.JSONField(blank=True, default=dict, verbose_name="请求头")),
-                ("body", models.JSONField(blank=True, null=True, verbose_name="请求体")),
+                (
+                    "headers",
+                    models.JSONField(blank=True, default=dict, verbose_name="请求头"),
+                ),
+                (
+                    "body",
+                    models.JSONField(blank=True, null=True, verbose_name="请求体"),
+                ),
                 (
                     "timeout_seconds",
-                    models.PositiveIntegerField(default=30, verbose_name="请求超时(秒)"),
+                    models.PositiveIntegerField(
+                        default=30, verbose_name="请求超时(秒)"
+                    ),
                 ),
                 (
                     "expected_status",
@@ -80,11 +93,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "started_at",
-                    models.DateTimeField(blank=True, null=True, verbose_name="开始执行时间"),
+                    models.DateTimeField(
+                        blank=True, null=True, verbose_name="开始执行时间"
+                    ),
                 ),
                 (
                     "finished_at",
-                    models.DateTimeField(blank=True, null=True, verbose_name="结束执行时间"),
+                    models.DateTimeField(
+                        blank=True, null=True, verbose_name="结束执行时间"
+                    ),
                 ),
                 (
                     "duration_ms",
@@ -95,11 +112,20 @@ class Migration(migrations.Migration):
                 (
                     "celery_task_id",
                     models.CharField(
-                        blank=True, default="", max_length=64, verbose_name="Celery任务ID"
+                        blank=True,
+                        default="",
+                        max_length=64,
+                        verbose_name="Celery任务ID",
                     ),
                 ),
-                ("error_message", models.TextField(blank=True, default="", verbose_name="错误信息")),
-                ("report", models.JSONField(blank=True, default=dict, verbose_name="执行报告")),
+                (
+                    "error_message",
+                    models.TextField(blank=True, default="", verbose_name="错误信息"),
+                ),
+                (
+                    "report",
+                    models.JSONField(blank=True, default=dict, verbose_name="执行报告"),
+                ),
                 (
                     "creator",
                     models.ForeignKey(

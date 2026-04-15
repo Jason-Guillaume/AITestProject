@@ -89,7 +89,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "duration_ms",
-                    models.PositiveIntegerField(blank=True, null=True, verbose_name="耗时(ms)"),
+                    models.PositiveIntegerField(
+                        blank=True, null=True, verbose_name="耗时(ms)"
+                    ),
                 ),
                 (
                     "execution_status",
@@ -162,7 +164,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="apitestcase",
             name="api_body_json",
-            field=models.JSONField(blank=True, default=dict, verbose_name="请求体JSON临时"),
+            field=models.JSONField(
+                blank=True, default=dict, verbose_name="请求体JSON临时"
+            ),
         ),
         migrations.RunPython(forwards_api_body_to_json, migrations.RunPython.noop),
         migrations.RemoveField(

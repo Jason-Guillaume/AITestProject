@@ -1,6 +1,9 @@
 import json
 import logging
 import socket
+import time
+from difflib import SequenceMatcher
+import re
 from urllib.parse import urljoin
 
 import requests
@@ -88,6 +91,7 @@ class TestCasePagination(PageNumberPagination):
 
 # Create your views here.
 
+
 class TestModuleViewSet(BaseModelViewSet):
     queryset = TestModule.objects.all()
     serializer_class = TestModuleSerializer
@@ -137,7 +141,10 @@ class TestEnvironmentViewSet(BaseModelViewSet):
 
         base = (env_obj.base_url or "").strip()
         if not base:
-            result["http"] = {"ok": False, "error": "未配置 Base URL，无法执行 HTTP 探测"}
+            result["http"] = {
+                "ok": False,
+                "error": "未配置 Base URL，无法执行 HTTP 探测",
+            }
             result["ok"] = False
         else:
             full_url = _environment_http_probe_url(base, probe_path)
@@ -164,7 +171,12 @@ class TestEnvironmentViewSet(BaseModelViewSet):
                 result["db"] = {"ok": True, "host": db_host, "port": db_port}
             except Exception as exc:
                 logger.warning("环境 DB 校验失败: env_id=%s, err=%s", env_obj.id, exc)
-                result["db"] = {"ok": False, "error": str(exc), "host": db_host, "port": db_port}
+                result["db"] = {
+                    "ok": False,
+                    "error": str(exc),
+                    "host": db_host,
+                    "port": db_port,
+                }
                 result["ok"] = False
         elif db_cfg:
             result["db"] = {"ok": False, "error": "db_config 缺少 host/port"}
@@ -176,6 +188,7 @@ class TestEnvironmentViewSet(BaseModelViewSet):
 class EnvironmentVariableViewSet(BaseModelViewSet):
     queryset = EnvironmentVariable.objects.select_related("environment").all()
     serializer_class = EnvironmentVariableSerializer
+
 
 class TestCaseViewSet(BaseModelViewSet):
     queryset = TestCase.objects.all()
@@ -215,7 +228,9 @@ class TestCaseViewSet(BaseModelViewSet):
         # 相似用例推荐：创建时基于标题到知识库检索模板/实践。
         try:
             payload["knowledge_recommendations"] = (
-                KnowledgeSearcher.search_similar(case_title, top_k=5) if case_title else []
+                KnowledgeSearcher.search_similar(case_title, top_k=5)
+                if case_title
+                else []
             )
         except Exception:
             payload["knowledge_recommendations"] = []
@@ -300,6 +315,372 @@ class TestCaseViewSet(BaseModelViewSet):
             return qs.order_by("-deleted_at", "-id")
         return qs.order_by("-id")
 
+    @action(detail=False, methods=["post"], url_path="ai-import")
+    def ai_import(self, request):
+        """
+        AI 批量导入测试用例（后端事务 + 逐条结果）：
+        POST /api/testcase/cases/ai-import/
+
+        body:
+        - project_id: 必填
+        - test_type: 必填（functional/api/performance/security/ui-automation）
+        - run_id: 可选（assistant.AiCaseGenerationRun id）
+        - default_module_id: 可选
+        - items: [{ case_name, level, expected_result, precondition, steps, module_name, ...typed fields }]
+        """
+        if not isinstance(request.data, dict):
+            raise ValidationError({"message": "请求体必须为 JSON 对象"})
+
+        project_id = request.data.get("project_id")
+        test_type = (request.data.get("test_type") or "").strip()
+        run_id = request.data.get("run_id")
+        default_module_id = request.data.get("default_module_id")
+        strict = request.data.get("strict", False)
+        items = request.data.get("items")
+
+        try:
+            project_id = int(project_id)
+        except (TypeError, ValueError):
+            raise ValidationError({"project_id": "project_id 必填且必须为整数"})
+
+        allowed = {c[0] for c in TEST_CASE_TYPE_CHOICES}
+        if test_type not in allowed:
+            raise ValidationError({"test_type": "test_type 无效"})
+
+        if items is None:
+            raise ValidationError({"items": "items 必填"})
+        if not isinstance(items, list):
+            raise ValidationError({"items": "items 必须为数组"})
+        if not items:
+            return Response(
+                {"success": True, "imported": [], "failed": [], "skipped": 0}
+            )
+
+        s_flag = str(strict).strip().lower()
+        strict = s_flag in ("1", "true", "yes")
+
+        if default_module_id not in (None, ""):
+            try:
+                default_module_id = int(default_module_id)
+            except (TypeError, ValueError):
+                default_module_id = None
+        else:
+            default_module_id = None
+
+        if run_id not in (None, ""):
+            try:
+                run_id = int(run_id)
+            except (TypeError, ValueError):
+                run_id = None
+        else:
+            run_id = None
+
+        module_qs = TestModule.objects.filter(
+            project_id=project_id, is_deleted=False, test_type=test_type
+        )
+
+        def _norm_module_key(name: str) -> str:
+            return (name or "").strip().lower()
+
+        module_names = list(module_qs.values_list("id", "name"))
+        module_cache = {_norm_module_key(name): mid for (mid, name) in module_names}
+        created_module_cache: dict[str, int] = {}
+
+        module_match_threshold = request.data.get("module_match_threshold", 0.92)
+        try:
+            module_match_threshold = float(module_match_threshold)
+        except (TypeError, ValueError):
+            module_match_threshold = 0.92
+        module_match_threshold = max(0.70, min(module_match_threshold, 0.99))
+
+        def _best_module_match(name: str):
+            """
+            返回 (matched_id, matched_name, score)；当 score 不足阈值时 matched_id 为 None。
+            """
+            raw = (name or "").strip()
+            if not raw:
+                return None, "", 0.0
+            k = _norm_module_key(raw)
+            if k in module_cache:
+                return module_cache[k], raw, 1.0
+            best = (None, "", 0.0)
+            for mid, mname in module_names:
+                try:
+                    score = SequenceMatcher(None, raw, str(mname or "")).ratio()
+                except Exception:
+                    score = 0.0
+                if score > best[2]:
+                    best = (mid, str(mname or ""), float(score))
+            if best[0] is not None and best[2] >= module_match_threshold:
+                return best
+            return None, best[1], best[2]
+
+        def _get_or_create_module_id(module_name: str):
+            raw = (module_name or "").strip()
+            if not raw:
+                return None
+            k = _norm_module_key(raw)
+            if k in created_module_cache:
+                return created_module_cache[k], "created", raw, 1.0
+            if k in module_cache:
+                return module_cache[k], "exact", raw, 1.0
+
+            matched_id, matched_name, score = _best_module_match(raw)
+            if matched_id is not None:
+                module_cache[k] = matched_id
+                return matched_id, "fuzzy", matched_name, score
+
+            user = getattr(request, "user", None)
+            m = TestModule.objects.create(
+                project_id=project_id,
+                name=raw,
+                parent_id=None,
+                test_type=test_type,
+                creator=user if getattr(user, "is_authenticated", False) else None,
+                updater=user if getattr(user, "is_authenticated", False) else None,
+            )
+            module_cache[k] = m.id
+            created_module_cache[k] = m.id
+            module_names.append((m.id, raw))
+            return m.id, "created", raw, 1.0
+
+        def _build_step_desc(row: dict) -> str:
+            parts = []
+            pre = str(row.get("precondition") or "").strip()
+            if pre:
+                parts.append(f"【前置条件】\n{pre}")
+            steps = str(row.get("steps") or "").strip()
+            if steps:
+                parts.append(f"【操作步骤】\n{steps}")
+            return "\n\n".join(parts) or "（无详细步骤，请编辑补充）"
+
+        def _normalize_steps(row: dict):
+            """
+            支持两种导入模式：
+            1) 兼容旧字段：precondition/steps/expected_result -> 单 step
+            2) 结构化 steps：steps_list / steps（数组） -> 多 step
+
+            每个 step:
+            - step_desc: string（必填）
+            - expected_result: string（可选，默认 '—'）
+            """
+            # 结构化数组优先
+            sl = row.get("steps_list")
+            if sl is None:
+                sl = row.get("stepsList")
+            if sl is None and isinstance(row.get("steps"), list):
+                sl = row.get("steps")
+            if isinstance(sl, list) and sl:
+                out = []
+                for it in sl:
+                    if not isinstance(it, dict):
+                        continue
+                    desc = str(
+                        it.get("step_desc") or it.get("desc") or it.get("action") or ""
+                    ).strip()
+                    if not desc:
+                        continue
+                    exp = (
+                        str(
+                            it.get("expected_result") or it.get("expected") or ""
+                        ).strip()
+                        or "—"
+                    )
+                    out.append({"step_desc": desc, "expected_result": exp})
+                if out:
+                    return out
+            # fallback: 单 step
+            exp = str(row.get("expected_result") or "").strip() or "—"
+            return [{"step_desc": _build_step_desc(row), "expected_result": exp}]
+
+        imported = []
+        failed = []
+        skipped = 0
+
+        with transaction.atomic():
+            for idx, raw in enumerate(items):
+                sp = transaction.savepoint()
+                try:
+                    if not isinstance(raw, dict):
+                        raise ValidationError("item 必须为对象")
+                    case_name = str(raw.get("case_name") or "").strip()
+                    if not case_name:
+                        raise ValidationError("case_name 必填")
+                    level = str(raw.get("level") or "").strip() or "P2"
+
+                    module_name = str(
+                        raw.get("module_name") or raw.get("moduleName") or ""
+                    ).strip()
+                    raw_mid = raw.get("module_id") or raw.get("moduleId")
+                    mid = None
+                    module_resolution = None
+                    if raw_mid not in (None, ""):
+                        try:
+                            mid = int(raw_mid)
+                        except (TypeError, ValueError):
+                            mid = None
+                        if mid is not None:
+                            # 校验 module_id 属于本 project + test_type
+                            if not module_qs.filter(id=mid).exists():
+                                raise ValidationError(
+                                    "module_id 不存在或不属于当前项目/测试类型"
+                                )
+                            module_resolution = {
+                                "mode": "explicit",
+                                "matched_name": "",
+                                "score": 1.0,
+                            }
+                    if mid is None:
+                        resolved = (
+                            _get_or_create_module_id(module_name)
+                            if module_name
+                            else None
+                        )
+                        mid = resolved[0] if resolved else None
+                        module_resolution = (
+                            {
+                                "mode": resolved[1],
+                                "matched_name": resolved[2],
+                                "score": resolved[3],
+                            }
+                            if resolved
+                            else None
+                        )
+                    if not mid and default_module_id:
+                        mid = default_module_id
+                    if not mid:
+                        skipped += 1
+                        raise ValidationError(
+                            "缺少模块归属（module_name/default_module_id）"
+                        )
+
+                    payload: dict = {
+                        "case_name": case_name,
+                        "level": level,
+                        "module": mid,
+                        "test_type": test_type,
+                        "ai_run": run_id,
+                    }
+
+                    if test_type == TEST_CASE_TYPE_API:
+                        url = str(raw.get("api_url") or "").strip()
+                        method = (
+                            str(raw.get("api_method") or "GET").strip().upper()[:16]
+                        )
+                        if url:
+                            payload["api_url"] = url
+                        if method:
+                            payload["api_method"] = method
+                        if strict:
+                            if not url:
+                                raise ValidationError("API 用例缺少 api_url")
+                            if not method:
+                                raise ValidationError("API 用例缺少 api_method")
+                        if isinstance(raw.get("api_headers"), dict):
+                            payload["api_headers"] = raw.get("api_headers")
+                        if raw.get("api_body") is not None:
+                            payload["api_body"] = raw.get("api_body")
+                        if raw.get("api_expected_status") not in (None, ""):
+                            try:
+                                payload["api_expected_status"] = int(
+                                    raw.get("api_expected_status")
+                                )
+                            except (TypeError, ValueError):
+                                pass
+                        if raw.get("api_source_curl"):
+                            payload["api_source_curl"] = str(
+                                raw.get("api_source_curl") or ""
+                            )[:2000]
+
+                    if test_type == TEST_CASE_TYPE_SECURITY:
+                        if raw.get("attack_surface"):
+                            payload["attack_surface"] = str(
+                                raw.get("attack_surface") or ""
+                            )[:512]
+                        if raw.get("tool_preset"):
+                            payload["tool_preset"] = str(raw.get("tool_preset") or "")[
+                                :128
+                            ]
+                        rl = str(raw.get("risk_level") or "").strip()
+                        if rl in ("高", "中", "低"):
+                            payload["risk_level"] = rl
+
+                    serializer = TestCaseSerializer(
+                        data=payload, context={"request": request}
+                    )
+                    try:
+                        serializer.is_valid(raise_exception=True)
+                    except ValidationError as exc:
+                        detail = getattr(exc, "detail", None)
+                        code = None
+                        if isinstance(detail, dict):
+                            raw_code = detail.get("code")
+                            if isinstance(raw_code, list) and raw_code:
+                                code = str(raw_code[0])
+                            elif raw_code is not None:
+                                code = str(raw_code)
+                        if code == "RECYCLE_CONFLICT":
+                            base = case_name or "用例"
+                            suffix = f"·{int(time.time())}"
+                            next_name = (base + suffix)[:255]
+                            payload["case_name"] = next_name
+                            serializer = TestCaseSerializer(
+                                data=payload, context={"request": request}
+                            )
+                            serializer.is_valid(raise_exception=True)
+                        else:
+                            raise
+                    case_obj = serializer.save()
+
+                    user = getattr(request, "user", None)
+                    steps = _normalize_steps(raw)
+                    if strict and not steps:
+                        raise ValidationError("用例缺少可导入的步骤")
+                    for sidx, st in enumerate(steps, start=1):
+                        TestCaseStep.objects.create(
+                            testcase_id=case_obj.id,
+                            step_number=sidx,
+                            step_desc=str(st.get("step_desc") or "").strip()[:4000]
+                            or "（无详细步骤，请编辑补充）",
+                            expected_result=str(
+                                st.get("expected_result") or ""
+                            ).strip()[:2000]
+                            or "—",
+                            creator=(
+                                user
+                                if getattr(user, "is_authenticated", False)
+                                else None
+                            ),
+                            updater=(
+                                user
+                                if getattr(user, "is_authenticated", False)
+                                else None
+                            ),
+                        )
+
+                    imported.append(
+                        {
+                            "index": idx,
+                            "case_id": case_obj.id,
+                            "case_name": case_obj.case_name,
+                            "steps_created": len(steps),
+                            "module_resolution": module_resolution,
+                        }
+                    )
+                    transaction.savepoint_commit(sp)
+                except Exception as e:
+                    transaction.savepoint_rollback(sp)
+                    failed.append({"index": idx, "error": str(e)})
+
+        return Response(
+            {
+                "success": True,
+                "imported": imported,
+                "failed": failed,
+                "skipped": skipped,
+            }
+        )
+
     def _parse_id_list(self, raw_ids):
         if not isinstance(raw_ids, list) or not raw_ids:
             return None, Response(
@@ -329,7 +710,12 @@ class TestCaseViewSet(BaseModelViewSet):
         # 不得沿用「回收站列表」语义：若请求 URL 误带 recycle=1，get_queryset 只剩已删行，id 匹配为 0
         qs = TestCase.objects.filter(is_deleted=False, id__in=id_list)
         user = getattr(request, "user", None)
-        if self.enable_data_scope and user and user.is_authenticated and not self._is_admin_user(user):
+        if (
+            self.enable_data_scope
+            and user
+            and user.is_authenticated
+            and not self._is_admin_user(user)
+        ):
             qs = self._apply_member_scope(qs, user)
         params = request.query_params
         proj = params.get("project")
@@ -395,9 +781,7 @@ class TestCaseViewSet(BaseModelViewSet):
         POST /api/testcase/cases/<id>/run-api/
         """
         ov = request.data if isinstance(request.data, dict) else {}
-        return self._run_api_core(
-            request, overrides=ov, write_legacy_apilog=False
-        )
+        return self._run_api_core(request, overrides=ov, write_legacy_apilog=False)
 
     @action(detail=True, methods=["post"], url_path="preview-run-api")
     def preview_run_api(self, request, pk=None):
@@ -424,6 +808,167 @@ class TestCaseViewSet(BaseModelViewSet):
         except ValueError as exc:
             return Response({"msg": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(data)
+
+    @action(detail=False, methods=["post"], url_path="batch-preview-run-api")
+    def batch_preview_run_api(self, request):
+        """
+        批量预览 API 用例执行前最终请求（不发网络请求）：
+        POST /api/testcase/cases/batch-preview-run-api/
+
+        body:
+        - ids: number[]（必填）
+        - overrides: object（可选，透传给 preview_resolved_request，例如 environment_id / variables）
+        """
+        if not isinstance(request.data, dict):
+            return Response({"msg": "请求体必须为 JSON 对象"}, status=status.HTTP_400_BAD_REQUEST)
+        id_list, err = self._parse_id_list(request.data.get("ids"))
+        if err is not None:
+            return err
+        overrides = request.data.get("overrides") if isinstance(request.data.get("overrides"), dict) else {}
+
+        # 只处理 API 用例
+        qs = TestCase.objects.filter(is_deleted=False, id__in=id_list, test_type=TestCase.TEST_TYPE_API)
+
+        # 保持结果顺序与 ids 一致
+        by_id = {c.id: c for c in qs}
+
+        var_pat = re.compile(r"\$\{[^}]+\}")
+
+        def _find_unresolved_vars(obj):
+            hits = set()
+            try:
+                text = json.dumps(obj, ensure_ascii=False)
+            except Exception:
+                text = str(obj)
+            for m in var_pat.findall(text or ""):
+                hits.add(m)
+            return sorted(hits)[:50]
+
+        results = []
+        for cid in id_list:
+            case = by_id.get(cid)
+            if not case:
+                results.append({"id": cid, "ok": False, "error": "用例不存在/非 API/已删除"})
+                continue
+            api_prof = get_api_profile_for_execute(case)
+            if api_prof is None:
+                results.append({"id": cid, "ok": False, "error": "API 用例扩展数据缺失"})
+                continue
+            try:
+                data = preview_resolved_request(api_prof, overrides=overrides)
+                req = (data or {}).get("request") or {}
+                unresolved = _find_unresolved_vars(req)
+                ok = not unresolved
+                results.append(
+                    {
+                        "id": cid,
+                        "case_name": case.case_name,
+                        "ok": ok,
+                        "request": req,
+                        "unresolved_vars": unresolved,
+                    }
+                )
+            except ValueError as exc:
+                results.append({"id": cid, "case_name": case.case_name, "ok": False, "error": str(exc)})
+            except Exception as exc:
+                results.append({"id": cid, "case_name": case.case_name, "ok": False, "error": str(exc)})
+
+        return Response({"success": True, "results": results})
+
+    @action(detail=False, methods=["post"], url_path="ai-import-precheck")
+    def ai_import_precheck(self, request):
+        """
+        AI 导入前批量预检（草稿 items，不要求已落库）：
+        POST /api/testcase/cases/ai-import-precheck/
+
+        body:
+        - test_type: 必填（目前主要用于 api）
+        - overrides: 可选（environment_id / variables 等）
+        - items: [{ case_name, api_url, api_method, api_headers, api_body, ... }]
+
+        返回：
+        - results: [{ index, ok, unresolved_vars, request:{method,url,...}, error }]
+        """
+        if not isinstance(request.data, dict):
+            return Response({"msg": "请求体必须为 JSON 对象"}, status=status.HTTP_400_BAD_REQUEST)
+        test_type = (request.data.get("test_type") or "").strip()
+        items = request.data.get("items")
+        overrides = request.data.get("overrides") if isinstance(request.data.get("overrides"), dict) else {}
+        if not isinstance(items, list) or not items:
+            return Response({"success": True, "results": []})
+        allowed = {c[0] for c in TEST_CASE_TYPE_CHOICES}
+        if test_type and test_type not in allowed:
+            return Response({"msg": "test_type 无效"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 仅对 API 类型做静态预览（不发请求）
+        if test_type and test_type != TestCase.TEST_TYPE_API:
+            return Response({"success": True, "results": [{"index": i, "ok": True} for i in range(len(items))]})
+
+        from testcase.services.api_execution import (
+            case_api_headers_to_dict,
+            load_environment_runtime_variables,
+            normalize_api_body,
+            resolve_url_with_environment,
+            validate_before_request,
+        )
+        from testcase.services.variable_runtime import VariableResolver
+
+        var_pat = re.compile(r"\$\{[^}]+\}")
+
+        def _find_unresolved_vars(obj):
+            try:
+                text = json.dumps(obj, ensure_ascii=False)
+            except Exception:
+                text = str(obj)
+            return sorted(set(var_pat.findall(text or "")))[:50]
+
+        env_id = overrides.get("environment_id")
+        try:
+            env_id = int(env_id) if env_id is not None else None
+        except (TypeError, ValueError):
+            env_id = None
+        runtime_vars = overrides.get("variables") or overrides.get("runtime_variables")
+        if not isinstance(runtime_vars, dict):
+            runtime_vars = {}
+        env_runtime_vars = load_environment_runtime_variables(env_id)
+        merged_vars = {**env_runtime_vars, **runtime_vars}
+        resolver = VariableResolver(missing_policy="keep")
+
+        results = []
+        for i, it in enumerate(items):
+            if not isinstance(it, dict):
+                results.append({"index": i, "ok": False, "error": "item 必须为对象"})
+                continue
+            url = str(it.get("api_url") or it.get("url") or "").strip()
+            method = str(it.get("api_method") or it.get("method") or "GET").strip().upper()[:16] or "GET"
+            headers = case_api_headers_to_dict(it.get("api_headers"))
+            body = normalize_api_body(it.get("api_body"))
+            if env_id:
+                url = resolve_url_with_environment(url, env_id)
+            final_url = resolver.resolve(url, merged_vars)
+            final_headers = resolver.resolve(headers, merged_vars)
+            final_body = resolver.resolve(body, merged_vars)
+            req = {
+                "method": method,
+                "url": final_url,
+                "headers": final_headers,
+                "body": final_body,
+                "environment_id": env_id,
+            }
+            err = validate_before_request(final_url, method)
+            unresolved = _find_unresolved_vars(req)
+            ok = (not err) and (not unresolved)
+            results.append(
+                {
+                    "index": i,
+                    "case_name": str(it.get("case_name") or "").strip(),
+                    "ok": ok,
+                    "error": err or "",
+                    "unresolved_vars": unresolved,
+                    "request": req,
+                }
+            )
+        return Response({"success": True, "results": results})
 
     def _run_api_core(self, request, overrides, write_legacy_apilog: bool):
         case = self.get_object()
@@ -468,14 +1013,12 @@ class TestCaseViewSet(BaseModelViewSet):
     def execution_logs(self, request, pk=None):
         """分页列出该用例的 ExecutionLog。"""
         case = self.get_object()
-        qs = ExecutionLog.objects.filter(
-            test_case=case, is_deleted=False
-        ).order_by("-create_time")
+        qs = ExecutionLog.objects.filter(test_case=case, is_deleted=False).order_by(
+            "-create_time"
+        )
         page = self.paginate_queryset(qs)
         if page is not None:
-            ser = ExecutionLogSerializer(
-                page, many=True, context={"request": request}
-            )
+            ser = ExecutionLogSerializer(page, many=True, context={"request": request})
             return self.get_paginated_response(ser.data)
         ser = ExecutionLogSerializer(qs, many=True, context={"request": request})
         return Response({"results": ser.data, "count": qs.count()})
@@ -491,7 +1034,9 @@ class TestCaseViewSet(BaseModelViewSet):
         )
         page = self.paginate_queryset(qs)
         if page is not None:
-            ser = TestCaseVersionSerializer(page, many=True, context={"request": request})
+            ser = TestCaseVersionSerializer(
+                page, many=True, context={"request": request}
+            )
             return self.get_paginated_response(ser.data)
         ser = TestCaseVersionSerializer(qs, many=True, context={"request": request})
         return Response({"results": ser.data, "count": qs.count()})
@@ -507,7 +1052,9 @@ class TestCaseViewSet(BaseModelViewSet):
         try:
             version_id = int(raw_vid)
         except (TypeError, ValueError):
-            return Response({"msg": "version_id 必须为整数"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"msg": "version_id 必须为整数"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         version = TestCaseVersion.objects.filter(
             id=version_id, test_case=case, is_deleted=False
@@ -537,6 +1084,7 @@ class TestCaseStepViewSet(BaseModelViewSet):
     queryset = TestCaseStep.objects.all()
     serializer_class = TestCaseStepSerializer
 
+
 class TestDesignViewSet(BaseModelViewSet):
     queryset = TestDesign.objects.all()
     serializer_class = TestDesignSerializer
@@ -550,7 +1098,9 @@ class TestApproachViewSet(BaseModelViewSet):
     def list_images(self, request, pk=None):
         approach = self.get_object()
         qs = approach.images.all().order_by("sort_order", "-create_time")
-        serializer = TestApproachImageSerializer(qs, many=True, context={"request": request})
+        serializer = TestApproachImageSerializer(
+            qs, many=True, context={"request": request}
+        )
         return Response({"results": serializer.data, "count": qs.count()})
 
     @action(methods=["post"], detail=True, url_path="images/upload")
@@ -569,7 +1119,9 @@ class TestApproachViewSet(BaseModelViewSet):
                 files = [single]
 
         if not files:
-            return Response({"msg": "未接收到图片文件"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"msg": "未接收到图片文件"}, status=status.HTTP_400_BAD_REQUEST
+            )
         if len(files) > _MAX_UPLOAD_IMAGE_COUNT:
             return Response(
                 {"msg": f"单次最多上传 {_MAX_UPLOAD_IMAGE_COUNT} 张图片"},
@@ -580,7 +1132,9 @@ class TestApproachViewSet(BaseModelViewSet):
             ext = (str(getattr(f, "name", "")).rsplit(".", 1)[-1] or "").lower()
             if ext not in _ALLOWED_IMAGE_EXTENSIONS:
                 return Response(
-                    {"msg": f"仅支持图片格式：{', '.join(sorted(_ALLOWED_IMAGE_EXTENSIONS))}"},
+                    {
+                        "msg": f"仅支持图片格式：{', '.join(sorted(_ALLOWED_IMAGE_EXTENSIONS))}"
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if int(getattr(f, "size", 0) or 0) > _MAX_UPLOAD_IMAGE_SIZE:
@@ -589,9 +1143,7 @@ class TestApproachViewSet(BaseModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        last_order = (
-            approach.images.aggregate(m=Max("sort_order")).get("m") or 0
-        )
+        last_order = approach.images.aggregate(m=Max("sort_order")).get("m") or 0
 
         user = request.user
         created = []
@@ -615,7 +1167,10 @@ class TestApproachViewSet(BaseModelViewSet):
         serializer = TestApproachImageSerializer(
             created, many=True, context={"request": request}
         )
-        return Response({"results": serializer.data, "count": len(created)}, status=status.HTTP_201_CREATED)
+        return Response(
+            {"results": serializer.data, "count": len(created)},
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(
         methods=["delete"],
@@ -634,11 +1189,7 @@ class TestApproachViewSet(BaseModelViewSet):
             img.image.delete(save=False)
         img.delete()
 
-        first = (
-            approach.images.all()
-            .order_by("sort_order", "-create_time")
-            .first()
-        )
+        first = approach.images.all().order_by("sort_order", "-create_time").first()
         if first and first.image:
             approach.cover_image = first.image.url
         else:
@@ -651,11 +1202,7 @@ class TestApproachViewSet(BaseModelViewSet):
 def _user_can_write_module_cases(user, module) -> bool:
     if not user or not user.is_authenticated:
         return False
-    if (
-        user.is_superuser
-        or user.is_staff
-        or getattr(user, "is_system_admin", False)
-    ):
+    if user.is_superuser or user.is_staff or getattr(user, "is_system_admin", False):
         return True
     proj = module.project
     if getattr(proj, "creator_id", None) == user.pk:
@@ -677,8 +1224,7 @@ class AiFillTestDataAPIView(APIView):
         data, err = ai_fill_test_data(
             fields,
             api_key=request.data.get("api_key"),
-            base_url=request.data.get("base_url")
-            or request.data.get("api_base_url"),
+            base_url=request.data.get("base_url") or request.data.get("api_base_url"),
             model=request.data.get("model"),
         )
         if err:
@@ -721,11 +1267,7 @@ class ApiImportFromSpecAPIView(APIView):
 
     def post(self, request):
         source_type = request.data.get("source_type") or request.data.get("type")
-        content = (
-            request.data.get("content")
-            or request.data.get("text")
-            or ""
-        )
+        content = request.data.get("content") or request.data.get("text") or ""
         raw_mod = request.data.get("module") or request.data.get("module_id")
         if raw_mod in (None, ""):
             return Response(
@@ -744,7 +1286,9 @@ class ApiImportFromSpecAPIView(APIView):
         if module is None:
             return Response({"msg": "模块不存在"}, status=status.HTTP_404_NOT_FOUND)
         if not _user_can_write_module_cases(request.user, module):
-            return Response({"msg": "无权在该模块下创建用例"}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"msg": "无权在该模块下创建用例"}, status=status.HTTP_403_FORBIDDEN
+            )
         if module.test_type != TEST_CASE_TYPE_API:
             return Response(
                 {"msg": "目标模块的测试类型须为 API 测试"},
@@ -755,8 +1299,7 @@ class ApiImportFromSpecAPIView(APIView):
             str(source_type or ""),
             str(content),
             api_key=request.data.get("api_key"),
-            base_url=request.data.get("base_url")
-            or request.data.get("api_base_url"),
+            base_url=request.data.get("base_url") or request.data.get("api_base_url"),
             model=request.data.get("model"),
         )
         if err:
@@ -815,4 +1358,3 @@ class ApiImportFromSpecAPIView(APIView):
             created_ids.append(case.id)
 
         return Response({"created": len(created_ids), "ids": created_ids})
-

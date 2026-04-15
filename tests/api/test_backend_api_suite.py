@@ -66,7 +66,10 @@ def test_public_endpoints_accessible_without_token(api_client, method, path):
     payload = {}
     if path.endswith("/register/"):
         # 缺少验证码是预期非法输入，目标是验证“非 401/403 且可返回业务错误”
-        payload = {"username": f"u_{datetime.utcnow().timestamp()}", "password": "123456"}
+        payload = {
+            "username": f"u_{datetime.utcnow().timestamp()}",
+            "password": "123456",
+        }
     if path.endswith("/login/"):
         payload = {"username": "invalid", "password": "invalid"}
     resp = req(_url(api_client, path), json=payload or None, timeout=20)
@@ -132,10 +135,14 @@ def test_sys_ai_config_endpoints(admin_client):
     )
     _assert_status(put_resp, (200,))
 
-    disconnect_resp = admin_client.post(_url(admin_client, "/sys/ai-config/disconnect/"), json={}, timeout=20)
+    disconnect_resp = admin_client.post(
+        _url(admin_client, "/sys/ai-config/disconnect/"), json={}, timeout=20
+    )
     _assert_status(disconnect_resp, (200,))
 
-    reconnect_resp = admin_client.post(_url(admin_client, "/sys/ai-config/reconnect/"), json={}, timeout=20)
+    reconnect_resp = admin_client.post(
+        _url(admin_client, "/sys/ai-config/reconnect/"), json={}, timeout=20
+    )
     _assert_status(reconnect_resp, (200,))
 
 
@@ -149,7 +156,9 @@ def test_project_crud_and_invalid(authed_client, user_context):
         "progress": 1,
         "members": [uid],
     }
-    create_resp = authed_client.post(_url(authed_client, "/project/projects/"), json=payload, timeout=20)
+    create_resp = authed_client.post(
+        _url(authed_client, "/project/projects/"), json=payload, timeout=20
+    )
     _assert_status(create_resp, (200, 201))
     project_id = create_resp.json()["id"]
 
@@ -170,7 +179,9 @@ def test_project_crud_and_invalid(authed_client, user_context):
     )
     _assert_status(invalid_resp, (400,))
 
-    delete_resp = authed_client.delete(_url(authed_client, f"/project/projects/{project_id}/"), timeout=20)
+    delete_resp = authed_client.delete(
+        _url(authed_client, f"/project/projects/{project_id}/"), timeout=20
+    )
     _assert_status(delete_resp, (204,))
 
 
@@ -181,12 +192,16 @@ def test_release_filter_boundary(authed_client, seed_objects):
         timeout=20,
     )
     _assert_status(ok, (200,))
-    bad = authed_client.get(_url(authed_client, "/project/releases/?project=not-a-number"), timeout=20)
+    bad = authed_client.get(
+        _url(authed_client, "/project/releases/?project=not-a-number"), timeout=20
+    )
     _assert_status(bad, (200,))
 
 
 @pytest.mark.regression
-def test_testcase_module_case_step_design_approach_happy_paths(authed_client, seed_objects):
+def test_testcase_module_case_step_design_approach_happy_paths(
+    authed_client, seed_objects
+):
     module_id = seed_objects["module_id"]
     case_id = seed_objects["case_id"]
     step_id = seed_objects["step_id"]
@@ -203,21 +218,33 @@ def test_testcase_module_case_step_design_approach_happy_paths(authed_client, se
         resp = authed_client.get(_url(authed_client, path), timeout=20)
         _assert_status(resp, (200,))
 
-    mod_detail = authed_client.get(_url(authed_client, f"/testcase/modules/{module_id}/"), timeout=20)
+    mod_detail = authed_client.get(
+        _url(authed_client, f"/testcase/modules/{module_id}/"), timeout=20
+    )
     _assert_status(mod_detail, (200,))
-    case_detail = authed_client.get(_url(authed_client, f"/testcase/cases/{case_id}/"), timeout=20)
+    case_detail = authed_client.get(
+        _url(authed_client, f"/testcase/cases/{case_id}/"), timeout=20
+    )
     _assert_status(case_detail, (200,))
-    step_detail = authed_client.get(_url(authed_client, f"/testcase/steps/{step_id}/"), timeout=20)
+    step_detail = authed_client.get(
+        _url(authed_client, f"/testcase/steps/{step_id}/"), timeout=20
+    )
     _assert_status(step_detail, (200,))
-    design_detail = authed_client.get(_url(authed_client, f"/testcase/designs/{design_id}/"), timeout=20)
+    design_detail = authed_client.get(
+        _url(authed_client, f"/testcase/designs/{design_id}/"), timeout=20
+    )
     _assert_status(design_detail, (200,))
-    approach_detail = authed_client.get(_url(authed_client, f"/testcase/approaches/{approach_id}/"), timeout=20)
+    approach_detail = authed_client.get(
+        _url(authed_client, f"/testcase/approaches/{approach_id}/"), timeout=20
+    )
     _assert_status(approach_detail, (200,))
 
 
 @pytest.mark.regression
 def test_testcase_case_invalid_inputs(authed_client, seed_objects):
-    bad_query = authed_client.get(_url(authed_client, "/testcase/cases/?project=abc"), timeout=20)
+    bad_query = authed_client.get(
+        _url(authed_client, "/testcase/cases/?project=abc"), timeout=20
+    )
     _assert_status(bad_query, (200,))
 
     bad_method = authed_client.post(
@@ -305,7 +332,11 @@ def test_suggest_extractions_api(authed_client):
     assert "$.data.requestId" in paths
     assert "$.code" not in paths
     token_item = next(
-        (x for x in suggestions if isinstance(x, dict) and x.get("json_path") == "$.data.token"),
+        (
+            x
+            for x in suggestions
+            if isinstance(x, dict) and x.get("json_path") == "$.data.token"
+        ),
         None,
     )
     assert token_item is not None
@@ -320,31 +351,55 @@ def test_execution_endpoints_happy_and_invalid(authed_client, seed_objects):
     report_id = seed_objects["report_id"]
     perf_task_id = seed_objects["perf_task_id"]
 
-    for path in ["/execution/plans/", "/execution/reports/", "/execution/tasks/", "/perf/tasks/"]:
+    for path in [
+        "/execution/plans/",
+        "/execution/reports/",
+        "/execution/tasks/",
+        "/perf/tasks/",
+    ]:
         resp = authed_client.get(_url(authed_client, path), timeout=20)
         _assert_status(resp, (200,))
 
-    plan_detail = authed_client.get(_url(authed_client, f"/execution/plans/{plan_id}/"), timeout=20)
+    plan_detail = authed_client.get(
+        _url(authed_client, f"/execution/plans/{plan_id}/"), timeout=20
+    )
     _assert_status(plan_detail, (200,))
-    report_detail = authed_client.get(_url(authed_client, f"/execution/reports/{report_id}/"), timeout=20)
+    report_detail = authed_client.get(
+        _url(authed_client, f"/execution/reports/{report_id}/"), timeout=20
+    )
     _assert_status(report_detail, (200,))
-    perf_detail = authed_client.get(_url(authed_client, f"/execution/tasks/{perf_task_id}/"), timeout=20)
+    perf_detail = authed_client.get(
+        _url(authed_client, f"/execution/tasks/{perf_task_id}/"), timeout=20
+    )
     _assert_status(perf_detail, (200,))
 
-    run_ok = authed_client.post(_url(authed_client, f"/execution/tasks/{perf_task_id}/run/"), json={}, timeout=20)
+    run_ok = authed_client.post(
+        _url(authed_client, f"/execution/tasks/{perf_task_id}/run/"),
+        json={},
+        timeout=20,
+    )
     _assert_status(run_ok, (200, 400))
 
     invalid_perf = authed_client.post(
         _url(authed_client, "/execution/tasks/"),
-        json={"task_name": "", "scenario": "invalid", "concurrency": -1, "duration": "oops"},
+        json={
+            "task_name": "",
+            "scenario": "invalid",
+            "concurrency": -1,
+            "duration": "oops",
+        },
         timeout=20,
     )
     _assert_status(invalid_perf, (400,))
 
-    dashboard = authed_client.get(_url(authed_client, "/execution/dashboard/summary/"), timeout=20)
+    dashboard = authed_client.get(
+        _url(authed_client, "/execution/dashboard/summary/"), timeout=20
+    )
     _assert_status(dashboard, (200,))
 
-    quality = authed_client.get(_url(authed_client, "/execution/dashboard/quality/"), timeout=20)
+    quality = authed_client.get(
+        _url(authed_client, "/execution/dashboard/quality/"), timeout=20
+    )
     _assert_status(quality, (200,))
     quality_body = quality.json()
     assert "trendChart" in quality_body
@@ -364,7 +419,9 @@ def test_defect_endpoints_happy_and_invalid(authed_client, seed_objects):
     list_resp = authed_client.get(_url(authed_client, "/defect/defects/"), timeout=20)
     _assert_status(list_resp, (200,))
 
-    detail_resp = authed_client.get(_url(authed_client, f"/defect/defects/{defect_id}/"), timeout=20)
+    detail_resp = authed_client.get(
+        _url(authed_client, f"/defect/defects/{defect_id}/"), timeout=20
+    )
     _assert_status(detail_resp, (200,))
 
     filter_bad = authed_client.get(
@@ -388,10 +445,14 @@ def test_ai_endpoints_invalid_and_optional_happy(authed_client):
         resp = authed_client.post(_url(authed_client, path), json={}, timeout=30)
         _assert_status(resp, (400, 200))
 
-    gen_bad = authed_client.post(_url(authed_client, "/ai/generate-cases/"), json={}, timeout=30)
+    gen_bad = authed_client.post(
+        _url(authed_client, "/ai/generate-cases/"), json={}, timeout=30
+    )
     _assert_status(gen_bad, (400,))
 
-    stream_bad = authed_client.post(_url(authed_client, "/ai/generate-cases-stream/"), json={}, timeout=30)
+    stream_bad = authed_client.post(
+        _url(authed_client, "/ai/generate-cases-stream/"), json={}, timeout=30
+    )
     _assert_status(stream_bad, (400,))
 
     # 可选 happy path：仅当显式提供可用 key 时执行

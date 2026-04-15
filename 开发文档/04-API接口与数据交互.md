@@ -87,6 +87,49 @@ Authorization: Token <token>
 - 删除：`DELETE /resource/{id}/`
 - 扩展动作：`POST/GET /resource/{id}/{action}/` 或 `/resource/{action}/`
 
+---
+
+## 9. AI 与用例模块交互（补充）
+
+### 9.1 AI 生成接口回传 run_id
+
+- 同步：`POST /api/ai/generate-cases/` 响应新增 `run_id`
+- 流式：`POST /api/ai/generate-cases-stream/` 的 SSE `done` 事件新增 `run_id`
+
+### 9.2 AI 批量导入用例
+
+- `POST /api/testcase/cases/ai-import/`
+  - 用途：将 AI 预览结果一次性导入到用例库（事务 + 逐条结果）
+  - 关键参数：`project_id/test_type/run_id/default_module_id/items[]`
+  - 返回：`imported[]/failed[]/skipped`
+
+参考开发文档：
+- `开发文档/26-AI生成用例-Run追溯与批量导入开发文档.md`
+
+### 9.3 AI 导入后批量预检（API）
+
+- `POST /api/testcase/cases/batch-preview-run-api/`
+  - 用途：导入后对 API 用例做静态预检（最终请求预览 + 未替换变量检测），不发网络请求
+
+参考开发文档：
+- `开发文档/28-AI导入后批量预检（API Preview-Run）开发文档.md`
+
+### 9.4 AI 导入前质量闸门（前端）与 strict（后端）
+
+- 前端：AI 生成预览表会对问题行标红，并可选择是否阻断导入
+- 后端：`POST /api/testcase/cases/ai-import/` 支持 `strict=true`，对关键字段做严格校验
+
+参考开发文档：
+- `开发文档/29-AI导入前质量闸门开发文档.md`
+
+### 9.5 AI 导入前批量预检（草稿 items）
+
+- `POST /api/testcase/cases/ai-import-precheck/`
+  - 用途：对 AI 生成的草稿 API items 做静态预检（URL 拼接 + 变量替换 + 未替换变量检测），不要求落库
+
+参考开发文档：
+- `开发文档/30-AI导入前批量预检（草稿 API 用例）开发文档.md`
+
 ### 3.2 请求体格式
 
 | 场景 | Content-Type | 说明 |

@@ -38,8 +38,14 @@ class Migration(migrations.Migration):
                     "is_deleted",
                     models.BooleanField(default=False, verbose_name="是否已删除"),
                 ),
-                ("version_label", models.CharField(max_length=64, verbose_name="版本标签")),
-                ("case_snapshot", models.JSONField(blank=True, default=dict, verbose_name="用例快照")),
+                (
+                    "version_label",
+                    models.CharField(max_length=64, verbose_name="版本标签"),
+                ),
+                (
+                    "case_snapshot",
+                    models.JSONField(blank=True, default=dict, verbose_name="用例快照"),
+                ),
                 (
                     "creator",
                     models.ForeignKey(

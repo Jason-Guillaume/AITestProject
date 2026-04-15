@@ -6,7 +6,10 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("testcase", "0022_rename_environmen_check_t_fed64f_idx_environment_check_t_7d05e0_idx_and_more"),
+        (
+            "testcase",
+            "0022_rename_environmen_check_t_fed64f_idx_environment_check_t_7d05e0_idx_and_more",
+        ),
     ]
 
     operations = [

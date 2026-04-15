@@ -18,7 +18,12 @@ class MetricCalculator:
         return {"project_id": project_id if project_id is not None else "all"}
 
     def _upsert_metric(
-        self, *, metric_date, metric_type: str, metric_value: Decimal, project_id: Optional[int]
+        self,
+        *,
+        metric_date,
+        metric_type: str,
+        metric_value: Decimal,
+        project_id: Optional[int],
     ):
         dimension = self._dimension(project_id)
         TestQualityMetric.objects.update_or_create(
@@ -31,10 +36,14 @@ class MetricCalculator:
     def calc_pass_rate(self, project_id: Optional[int], metric_date=None) -> Decimal:
         if metric_date is None:
             metric_date = timezone.localdate()
-        qs = ExecutionLog.objects.filter(is_deleted=False, create_time__date=metric_date)
+        qs = ExecutionLog.objects.filter(
+            is_deleted=False, create_time__date=metric_date
+        )
         if project_id is not None:
             qs = qs.filter(test_case__module__project_id=project_id)
-        agg = qs.aggregate(total=Count("id"), passed=Count("id", filter=Q(is_passed=True)))
+        agg = qs.aggregate(
+            total=Count("id"), passed=Count("id", filter=Q(is_passed=True))
+        )
         total = int(agg.get("total") or 0)
         passed = int(agg.get("passed") or 0)
         rate = Decimal("0.0")
@@ -49,7 +58,9 @@ class MetricCalculator:
         )
         return rate
 
-    def calc_defect_density(self, project_id: Optional[int], metric_date=None) -> Decimal:
+    def calc_defect_density(
+        self, project_id: Optional[int], metric_date=None
+    ) -> Decimal:
         if metric_date is None:
             metric_date = timezone.localdate()
         defects = TestDefect.objects.filter(
@@ -73,17 +84,23 @@ class MetricCalculator:
         )
         return density
 
-    def calc_requirement_coverage(self, project_id: Optional[int], metric_date=None) -> Decimal:
+    def calc_requirement_coverage(
+        self, project_id: Optional[int], metric_date=None
+    ) -> Decimal:
         if metric_date is None:
             metric_date = timezone.localdate()
         plans = TestPlan.objects.filter(is_deleted=False, create_time__date=metric_date)
         if project_id is not None:
             plans = plans.filter(version__project_id=project_id)
-        rows = plans.values("version_id").annotate(req=Avg("req_count"), cov=Avg("coverage_rate"))
+        rows = plans.values("version_id").annotate(
+            req=Avg("req_count"), cov=Avg("coverage_rate")
+        )
         total_req = Decimal(sum(int(row["req"] or 0) for row in rows))
         covered_req = Decimal("0.0")
         for row in rows:
-            covered_req += Decimal(row["req"] or 0) * Decimal(row["cov"] or 0) / Decimal("100")
+            covered_req += (
+                Decimal(row["req"] or 0) * Decimal(row["cov"] or 0) / Decimal("100")
+            )
         coverage = Decimal("0.0")
         if total_req > 0:
             coverage = (covered_req / total_req) * Decimal("100")

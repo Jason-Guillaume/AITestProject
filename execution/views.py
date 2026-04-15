@@ -87,9 +87,11 @@ class DashboardStreamView(View):
         response["X-Accel-Buffering"] = "no"
         return response
 
+
 class TestPlanViewSet(BaseModelViewSet):
     queryset = TestPlan.objects.all().prefetch_related("testers")
     serializer_class = TestPlanSerializer
+
 
 class TestReportViewSet(BaseModelViewSet):
     queryset = TestReport.objects.all()
@@ -192,7 +194,8 @@ class DashboardSummaryAPIView(APIView):
         day_expr = TruncDate(field_name, output_field=DateField())
         rows = (
             model_cls.objects.filter(
-                is_deleted=False, **{f"{field_name}__gte": start, f"{field_name}__lte": end}
+                is_deleted=False,
+                **{f"{field_name}__gte": start, f"{field_name}__lte": end},
             )
             .annotate(day=day_expr)
             .values("day")
@@ -211,7 +214,11 @@ class DashboardSummaryAPIView(APIView):
         is_admin = bool(
             user
             and getattr(user, "is_authenticated", False)
-            and (getattr(user, "is_superuser", False) or getattr(user, "is_staff", False) or bool(getattr(user, "is_system_admin", False)))
+            and (
+                getattr(user, "is_superuser", False)
+                or getattr(user, "is_staff", False)
+                or bool(getattr(user, "is_system_admin", False))
+            )
         )
 
         def _case_scope_qs():
@@ -223,7 +230,9 @@ class DashboardSummaryAPIView(APIView):
                     return qs.none()
                 return qs.filter(module__project_id=pid)
             if user and getattr(user, "is_authenticated", False) and not is_admin:
-                return qs.filter(Q(module__project__members=user) | Q(creator=user)).distinct()
+                return qs.filter(
+                    Q(module__project__members=user) | Q(creator=user)
+                ).distinct()
             return qs
 
         def _defect_scope_qs():
@@ -243,7 +252,11 @@ class DashboardSummaryAPIView(APIView):
                 return qs
             if user and getattr(user, "is_authenticated", False) and not is_admin:
                 if hasattr(TestDefect, "creator_id"):
-                    return qs.filter(Q(creator=user) | Q(testcase__module__project__members=user) | Q(test_case__module__project__members=user)).distinct()
+                    return qs.filter(
+                        Q(creator=user)
+                        | Q(testcase__module__project__members=user)
+                        | Q(test_case__module__project__members=user)
+                    ).distinct()
             return qs
 
         # --------------------------
@@ -267,7 +280,9 @@ class DashboardSummaryAPIView(APIView):
                 if hasattr(TestReport, "project_id"):
                     today_reports_qs = today_reports_qs.filter(project_id=pid)
                 else:
-                    today_reports_qs = today_reports_qs.filter(plan__version__project_id=pid)
+                    today_reports_qs = today_reports_qs.filter(
+                        plan__version__project_id=pid
+                    )
         today_reports = today_reports_qs.count()
 
         # 未解决缺陷：状态非“已关闭”(4)
@@ -275,7 +290,10 @@ class DashboardSummaryAPIView(APIView):
 
         completed_plans = TestPlan.objects.filter(is_deleted=False, plan_status=3)
         if completed_plans.exists():
-            pass_rate = float(completed_plans.aggregate(avg_rate=Avg("pass_rate")).get("avg_rate") or 0.0)
+            pass_rate = float(
+                completed_plans.aggregate(avg_rate=Avg("pass_rate")).get("avg_rate")
+                or 0.0
+            )
         else:
             pass_rate = 0.0
 
@@ -284,7 +302,9 @@ class DashboardSummaryAPIView(APIView):
         start_yesterday = timezone.make_aware(datetime.combine(yesterday, time.min))
         end_yesterday = start_yesterday + timedelta(days=1)
         yesterday_reports_qs = TestReport.objects.filter(
-            is_deleted=False, create_time__gte=start_yesterday, create_time__lt=end_yesterday
+            is_deleted=False,
+            create_time__gte=start_yesterday,
+            create_time__lt=end_yesterday,
         )
         if project_id:
             try:
@@ -295,7 +315,9 @@ class DashboardSummaryAPIView(APIView):
                 if hasattr(TestReport, "project_id"):
                     yesterday_reports_qs = yesterday_reports_qs.filter(project_id=pid)
                 else:
-                    yesterday_reports_qs = yesterday_reports_qs.filter(plan__version__project_id=pid)
+                    yesterday_reports_qs = yesterday_reports_qs.filter(
+                        plan__version__project_id=pid
+                    )
         yesterday_reports = yesterday_reports_qs.count()
         yesterday_unresolved_new = (
             _defect_scope_qs()
@@ -305,12 +327,16 @@ class DashboardSummaryAPIView(APIView):
         )
 
         # 总用例：对比“昨日新增用例数”
-        yesterday_new_cases = _case_scope_qs().filter(
-            create_time__gte=start_yesterday, create_time__lt=end_yesterday
-        ).count()
-        today_new_cases = _case_scope_qs().filter(
-            create_time__gte=start_today, create_time__lt=end_today
-        ).count()
+        yesterday_new_cases = (
+            _case_scope_qs()
+            .filter(create_time__gte=start_yesterday, create_time__lt=end_yesterday)
+            .count()
+        )
+        today_new_cases = (
+            _case_scope_qs()
+            .filter(create_time__gte=start_today, create_time__lt=end_today)
+            .count()
+        )
 
         total_cases_delta = today_new_cases - yesterday_new_cases
         today_reports_delta = today_reports - yesterday_reports
@@ -328,18 +354,10 @@ class DashboardSummaryAPIView(APIView):
         last7 = self._last_n_days(7)
         last30 = self._last_n_days(30)
 
-        week_executed = self._count_by_day(
-            TestReport, "create_time", last7
-        )
-        week_defects = self._count_by_day(
-            TestDefect, "create_time", last7
-        )
-        month_executed = self._count_by_day(
-            TestReport, "create_time", last30
-        )
-        month_defects = self._count_by_day(
-            TestDefect, "create_time", last30
-        )
+        week_executed = self._count_by_day(TestReport, "create_time", last7)
+        week_defects = self._count_by_day(TestDefect, "create_time", last7)
+        month_executed = self._count_by_day(TestReport, "create_time", last30)
+        month_defects = self._count_by_day(TestDefect, "create_time", last30)
 
         week_x = [d.strftime("%m/%d") for d in last7]
         month_x = [d.strftime("%m/%d") for d in last30]
@@ -361,49 +379,65 @@ class DashboardSummaryAPIView(APIView):
         # --------------------------
         activities = []
         # 运行中测试计划
-        running_plans = TestPlan.objects.filter(is_deleted=False, plan_status=2).order_by("-update_time")[:2]
+        running_plans = TestPlan.objects.filter(
+            is_deleted=False, plan_status=2
+        ).order_by("-update_time")[:2]
         for p in running_plans:
-            activities.append({
-                "id": f"plan-{p.id}",
-                "tag": "进行中",
-                "tagType": "warning",
-                "text": p.plan_name,
-                "time": self._humanize_delta(p.update_time),
-            })
+            activities.append(
+                {
+                    "id": f"plan-{p.id}",
+                    "tag": "进行中",
+                    "tagType": "warning",
+                    "text": p.plan_name,
+                    "time": self._humanize_delta(p.update_time),
+                }
+            )
 
         # 新缺陷
-        new_defects = TestDefect.objects.filter(is_deleted=False, status=1).order_by("-update_time")[:2]
+        new_defects = TestDefect.objects.filter(is_deleted=False, status=1).order_by(
+            "-update_time"
+        )[:2]
         for d in new_defects:
-            activities.append({
-                "id": f"defect-{d.id}",
-                "tag": "新缺陷",
-                "tagType": "danger",
-                "text": f"{d.defect_name}",
-                "time": self._humanize_delta(d.update_time),
-            })
+            activities.append(
+                {
+                    "id": f"defect-{d.id}",
+                    "tag": "新缺陷",
+                    "tagType": "danger",
+                    "text": f"{d.defect_name}",
+                    "time": self._humanize_delta(d.update_time),
+                }
+            )
 
         # 运行中性能任务
-        perf_running = PerfTask.objects.filter(is_deleted=False, status=PerfTask.STATUS_RUNNING).order_by("-update_time")[:1]
+        perf_running = PerfTask.objects.filter(
+            is_deleted=False, status=PerfTask.STATUS_RUNNING
+        ).order_by("-update_time")[:1]
         for t in perf_running:
-            activities.append({
-                "id": f"perftask-{t.id}",
-                "tag": "进行中",
-                "tagType": "info",
-                "text": f"性能任务：{t.task_name}",
-                "time": self._humanize_delta(t.update_time),
-            })
+            activities.append(
+                {
+                    "id": f"perftask-{t.id}",
+                    "tag": "进行中",
+                    "tagType": "info",
+                    "text": f"性能任务：{t.task_name}",
+                    "time": self._humanize_delta(t.update_time),
+                }
+            )
 
         # 补齐：用已完成测试计划
         if len(activities) < 6:
-            finished = TestPlan.objects.filter(is_deleted=False, plan_status=3).order_by("-update_time")[: (6 - len(activities))]
+            finished = TestPlan.objects.filter(
+                is_deleted=False, plan_status=3
+            ).order_by("-update_time")[: (6 - len(activities))]
             for p in finished:
-                activities.append({
-                    "id": f"plan-done-{p.id}",
-                    "tag": "已完成",
-                    "tagType": "success",
-                    "text": p.plan_name,
-                    "time": self._humanize_delta(p.update_time),
-                })
+                activities.append(
+                    {
+                        "id": f"plan-done-{p.id}",
+                        "tag": "已完成",
+                        "tagType": "success",
+                        "text": p.plan_name,
+                        "time": self._humanize_delta(p.update_time),
+                    }
+                )
 
         # --------------------------
         # 返回
@@ -445,8 +479,16 @@ class DashboardSummaryAPIView(APIView):
                     },
                 },
                 "lineChart": {
-                    "week": {"x": week_x, "executed": week_executed, "defects": week_defects},
-                    "month": {"x": month_x, "executed": month_executed, "defects": month_defects},
+                    "week": {
+                        "x": week_x,
+                        "executed": week_executed,
+                        "defects": week_defects,
+                    },
+                    "month": {
+                        "x": month_x,
+                        "executed": month_executed,
+                        "defects": month_defects,
+                    },
                 },
                 "pieChart": {"items": pie_items},
                 "barChart": {"x": bar_x, "values": bar_values},
@@ -516,7 +558,9 @@ class QualityDashboardView(APIView):
             metric_date__gte=start_date,
             metric_date__lte=end_date,
         )
-        metrics_qs = metrics_qs.filter(dimension__project_id=(pid if pid is not None else None))
+        metrics_qs = metrics_qs.filter(
+            dimension__project_id=(pid if pid is not None else None)
+        )
 
         metric_map = {
             TestQualityMetric.METRIC_PASS_RATE: {},
@@ -524,12 +568,25 @@ class QualityDashboardView(APIView):
             TestQualityMetric.METRIC_REQUIREMENT_COVERAGE: {},
         }
         for item in metrics_qs:
-            metric_map.setdefault(item.metric_type, {})[item.metric_date] = float(item.metric_value)
+            metric_map.setdefault(item.metric_type, {})[item.metric_date] = float(
+                item.metric_value
+            )
 
         x_axis = [d.strftime("%m/%d") for d in days]
-        pass_rate_series = [round(metric_map[TestQualityMetric.METRIC_PASS_RATE].get(d, 0.0), 4) for d in days]
-        defect_density_series = [round(metric_map[TestQualityMetric.METRIC_DEFECT_DENSITY].get(d, 0.0), 4) for d in days]
-        req_cov_series = [round(metric_map[TestQualityMetric.METRIC_REQUIREMENT_COVERAGE].get(d, 0.0), 4) for d in days]
+        pass_rate_series = [
+            round(metric_map[TestQualityMetric.METRIC_PASS_RATE].get(d, 0.0), 4)
+            for d in days
+        ]
+        defect_density_series = [
+            round(metric_map[TestQualityMetric.METRIC_DEFECT_DENSITY].get(d, 0.0), 4)
+            for d in days
+        ]
+        req_cov_series = [
+            round(
+                metric_map[TestQualityMetric.METRIC_REQUIREMENT_COVERAGE].get(d, 0.0), 4
+            )
+            for d in days
+        ]
 
         payload = {
             "filters": {
@@ -564,21 +621,32 @@ class QualityDashboardView(APIView):
             "latestMetrics": {
                 "date": end_date.isoformat(),
                 "pass_rate": pass_rate_series[-1] if pass_rate_series else 0.0,
-                "defect_density": defect_density_series[-1] if defect_density_series else 0.0,
+                "defect_density": (
+                    defect_density_series[-1] if defect_density_series else 0.0
+                ),
                 "requirement_coverage": req_cov_series[-1] if req_cov_series else 0.0,
             },
             "raw": {
                 "pass_rate": {
                     "metric_type": TestQualityMetric.METRIC_PASS_RATE,
-                    "points": [{"date": d.isoformat(), "value": pass_rate_series[idx]} for idx, d in enumerate(days)],
+                    "points": [
+                        {"date": d.isoformat(), "value": pass_rate_series[idx]}
+                        for idx, d in enumerate(days)
+                    ],
                 },
                 "defect_density": {
                     "metric_type": TestQualityMetric.METRIC_DEFECT_DENSITY,
-                    "points": [{"date": d.isoformat(), "value": defect_density_series[idx]} for idx, d in enumerate(days)],
+                    "points": [
+                        {"date": d.isoformat(), "value": defect_density_series[idx]}
+                        for idx, d in enumerate(days)
+                    ],
                 },
                 "requirement_coverage": {
                     "metric_type": TestQualityMetric.METRIC_REQUIREMENT_COVERAGE,
-                    "points": [{"date": d.isoformat(), "value": req_cov_series[idx]} for idx, d in enumerate(days)],
+                    "points": [
+                        {"date": d.isoformat(), "value": req_cov_series[idx]}
+                        for idx, d in enumerate(days)
+                    ],
                 },
             },
             "chartsCompat": {

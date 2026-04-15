@@ -33,9 +33,13 @@ class Command(BaseCommand):
         ).order_by("deleted_at", "id")
 
         total = qs.count()
-        self.stdout.write(self.style.NOTICE(f"待清理数量: {total} (cutoff={cutoff.isoformat()})"))
+        self.stdout.write(
+            self.style.NOTICE(f"待清理数量: {total} (cutoff={cutoff.isoformat()})")
+        )
         if dry_run or total == 0:
-            self.stdout.write(self.style.SUCCESS("dry-run 完成" if dry_run else "无需清理"))
+            self.stdout.write(
+                self.style.SUCCESS("dry-run 完成" if dry_run else "无需清理")
+            )
             return
 
         deleted = 0

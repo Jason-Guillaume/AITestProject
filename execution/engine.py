@@ -76,7 +76,9 @@ class APIExecutor:
             except Exception:
                 pass
 
-    def _build_request_payload(self, task: ExecutionTask, method: str) -> Dict[str, Any]:
+    def _build_request_payload(
+        self, task: ExecutionTask, method: str
+    ) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
             "method": method,
             "url": task.url,

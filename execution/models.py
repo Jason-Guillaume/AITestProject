@@ -131,9 +131,7 @@ class PerfTask(BaseModel):
         max_length=32, choices=SCENARIO_CHOICES, verbose_name="测试场景"
     )
     concurrency = models.PositiveIntegerField(default=1, verbose_name="并发数")
-    duration = models.CharField(
-        max_length=32, default="10m", verbose_name="持续时间"
-    )
+    duration = models.CharField(max_length=32, default="10m", verbose_name="持续时间")
     status = models.CharField(
         max_length=16,
         choices=STATUS_CHOICES,
@@ -177,9 +175,13 @@ class K6LoadTestSession(BaseModel):
         default=STATUS_PENDING,
         verbose_name="状态",
     )
-    test_case_ids = models.JSONField(default=list, verbose_name="API 用例 ID 列表(有序)")
+    test_case_ids = models.JSONField(
+        default=list, verbose_name="API 用例 ID 列表(有序)"
+    )
     vus = models.PositiveIntegerField(default=5, verbose_name="虚拟用户数")
-    duration = models.CharField(max_length=32, default="30s", verbose_name="持续时间(k6 格式)")
+    duration = models.CharField(
+        max_length=32, default="30s", verbose_name="持续时间(k6 格式)"
+    )
     use_ai = models.BooleanField(default=True, verbose_name="是否使用大模型生成脚本")
     target_base_url = models.CharField(
         max_length=2048,
@@ -195,10 +197,16 @@ class K6LoadTestSession(BaseModel):
         verbose_name="脚本相对路径",
         help_text="相对于 MEDIA_ROOT 的 k6 脚本路径",
     )
-    script_body = models.TextField(blank=True, default="", verbose_name="生成的脚本内容快照")
-    summary = models.JSONField(null=True, blank=True, verbose_name="k6 summary-export JSON")
+    script_body = models.TextField(
+        blank=True, default="", verbose_name="生成的脚本内容快照"
+    )
+    summary = models.JSONField(
+        null=True, blank=True, verbose_name="k6 summary-export JSON"
+    )
     error_message = models.TextField(blank=True, default="", verbose_name="错误信息")
-    celery_task_id = models.CharField(max_length=64, blank=True, default="", verbose_name="Celery 任务 ID")
+    celery_task_id = models.CharField(
+        max_length=64, blank=True, default="", verbose_name="Celery 任务 ID"
+    )
     generation_source = models.CharField(
         max_length=32,
         blank=True,
@@ -256,15 +264,21 @@ class ScheduledTask(BaseModel):
         verbose_name="关联用例",
         blank=True,
     )
-    next_run_time = models.DateTimeField(null=True, blank=True, verbose_name="下次执行时间")
-    last_run_time = models.DateTimeField(null=True, blank=True, verbose_name="最近执行时间")
+    next_run_time = models.DateTimeField(
+        null=True, blank=True, verbose_name="下次执行时间"
+    )
+    last_run_time = models.DateTimeField(
+        null=True, blank=True, verbose_name="最近执行时间"
+    )
     last_status = models.CharField(
         max_length=16,
         choices=LAST_STATUS_CHOICES,
         default=LAST_IDLE,
         verbose_name="最近执行状态",
     )
-    last_message = models.CharField(max_length=255, blank=True, default="", verbose_name="最近执行摘要")
+    last_message = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="最近执行摘要"
+    )
 
     class Meta:
         db_table = "scheduled_task"
@@ -300,7 +314,9 @@ class ScheduledTaskLog(BaseModel):
         default=STATUS_RUNNING,
         verbose_name="执行状态",
     )
-    message = models.CharField(max_length=255, blank=True, default="", verbose_name="执行摘要")
+    message = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="执行摘要"
+    )
     detail = models.JSONField(default=dict, blank=True, verbose_name="执行明细")
 
     class Meta:
@@ -327,7 +343,9 @@ class ExecutionTask(BaseModel):
     url = models.CharField(max_length=2048, verbose_name="请求URL")
     headers = models.JSONField(default=dict, blank=True, verbose_name="请求头")
     body = models.JSONField(null=True, blank=True, verbose_name="请求体")
-    timeout_seconds = models.PositiveIntegerField(default=30, verbose_name="请求超时(秒)")
+    timeout_seconds = models.PositiveIntegerField(
+        default=30, verbose_name="请求超时(秒)"
+    )
     expected_status = models.PositiveIntegerField(
         null=True, blank=True, verbose_name="期望HTTP状态码"
     )
@@ -340,8 +358,12 @@ class ExecutionTask(BaseModel):
         default=STATUS_PENDING,
         verbose_name="执行状态",
     )
-    started_at = models.DateTimeField(null=True, blank=True, verbose_name="开始执行时间")
-    finished_at = models.DateTimeField(null=True, blank=True, verbose_name="结束执行时间")
+    started_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="开始执行时间"
+    )
+    finished_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="结束执行时间"
+    )
     duration_ms = models.PositiveIntegerField(
         null=True, blank=True, verbose_name="执行耗时(ms)"
     )

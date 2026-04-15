@@ -39,5 +39,6 @@ class Command(BaseCommand):
                     u.set_unusable_password()
                     u.save(update_fields=["password"])
 
-        self.stdout.write(self.style.SUCCESS(f"scanned={total}, changed={changed}, dry_run={dry_run}"))
-
+        self.stdout.write(
+            self.style.SUCCESS(f"scanned={total}, changed={changed}, dry_run={dry_run}")
+        )

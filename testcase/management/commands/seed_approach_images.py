@@ -10,13 +10,19 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         approaches = list(TestApproach.objects.order_by("id")[:3])
         if not approaches:
-            self.stdout.write(self.style.WARNING("No TestApproach records found; skip seeding."))
+            self.stdout.write(
+                self.style.WARNING("No TestApproach records found; skip seeding.")
+            )
             return
 
         # 如果已经有图片则不重复创建（避免每次运行都刷数据）
         total_images = TestApproachImage.objects.count()
         if total_images > 0:
-            self.stdout.write(self.style.SUCCESS(f"TestApproachImage already exists: {total_images}, skip."))
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"TestApproachImage already exists: {total_images}, skip."
+                )
+            )
             return
 
         # 动态生成几张简单占位图
@@ -59,4 +65,3 @@ class Command(BaseCommand):
                 app.save(update_fields=["cover_image"])
 
         self.stdout.write(self.style.SUCCESS("Seed TestApproachImage finished."))
-

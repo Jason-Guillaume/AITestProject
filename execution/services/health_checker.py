@@ -36,7 +36,9 @@ class HealthChecker:
             dimension=dimension or {},
         )
 
-    def check_db(self, config: Optional[Dict[str, Any]] = None, *, dimension=None) -> Dict[str, Any]:
+    def check_db(
+        self, config: Optional[Dict[str, Any]] = None, *, dimension=None
+    ) -> Dict[str, Any]:
         start = time.perf_counter()
         target = "default-db"
         try:
@@ -69,7 +71,12 @@ class HealthChecker:
                 error_log=str(exc),
                 dimension=dimension,
             )
-            return {"ok": False, "check_type": "db", "response_time_ms": elapsed, "error": str(exc)}
+            return {
+                "ok": False,
+                "check_type": "db",
+                "response_time_ms": elapsed,
+                "error": str(exc),
+            }
 
     def check_api(self, url: str, *, dimension=None) -> Dict[str, Any]:
         start = time.perf_counter()
@@ -85,7 +92,11 @@ class HealthChecker:
             ok = 200 <= resp.status_code < 400
             self._record(
                 check_type=EnvironmentHealthCheck.CHECK_API,
-                status=EnvironmentHealthCheck.STATUS_HEALTHY if ok else EnvironmentHealthCheck.STATUS_UNHEALTHY,
+                status=(
+                    EnvironmentHealthCheck.STATUS_HEALTHY
+                    if ok
+                    else EnvironmentHealthCheck.STATUS_UNHEALTHY
+                ),
                 response_time_ms=elapsed,
                 target=target,
                 error_log="" if ok else f"status_code={resp.status_code}",
@@ -107,7 +118,12 @@ class HealthChecker:
                 error_log=str(exc),
                 dimension=dimension,
             )
-            return {"ok": False, "check_type": "api", "response_time_ms": elapsed, "error": str(exc)}
+            return {
+                "ok": False,
+                "check_type": "api",
+                "response_time_ms": elapsed,
+                "error": str(exc),
+            }
 
     def check_redis(self, *, dimension=None) -> Dict[str, Any]:
         start = time.perf_counter()
@@ -136,7 +152,12 @@ class HealthChecker:
                 error_log=str(exc),
                 dimension=dimension,
             )
-            return {"ok": False, "check_type": "redis", "response_time_ms": elapsed, "error": str(exc)}
+            return {
+                "ok": False,
+                "check_type": "redis",
+                "response_time_ms": elapsed,
+                "error": str(exc),
+            }
 
     def check_before_task(
         self,
@@ -154,9 +175,15 @@ class HealthChecker:
         return {"ok": len(unhealthy) == 0, "results": results, "unhealthy": unhealthy}
 
     def send_alert_email(self, *, task_name: str, summary: Dict[str, Any]):
-        admins = [x.strip() for x in (getattr(settings, "USER_CENTER_ADMIN_EMAIL", "") or "").split(",") if x.strip()]
+        admins = [
+            x.strip()
+            for x in (getattr(settings, "USER_CENTER_ADMIN_EMAIL", "") or "").split(",")
+            if x.strip()
+        ]
         if not admins:
-            admins = [email for _, email in (getattr(settings, "ADMINS", []) or []) if email]
+            admins = [
+                email for _, email in (getattr(settings, "ADMINS", []) or []) if email
+            ]
         if not admins:
             return
         subject = f"[AITest] 环境健康检查告警 - {task_name}"

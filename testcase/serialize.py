@@ -99,6 +99,7 @@ class EnvironmentVariableSerializer(BaseModelSerializers):
         data["display_value"] = self.get_display_value(instance)
         return data
 
+
 class TestCaseSerializer(BaseModelSerializers):
     """
     多表继承统一出口：通用字段落在 TestCase，类型专属字段读写子表，API 仍为扁平 JSON。
@@ -236,7 +237,9 @@ class TestCaseSerializer(BaseModelSerializers):
     def validate(self, attrs):
         module = attrs.get("module", getattr(self.instance, "module", None))
         test_type = attrs.get("test_type", getattr(self.instance, "test_type", None))
-        case_number = attrs.get("case_number", getattr(self.instance, "case_number", None))
+        case_number = attrs.get(
+            "case_number", getattr(self.instance, "case_number", None)
+        )
         case_name = (
             attrs.get("case_name", getattr(self.instance, "case_name", "")) or ""
         ).strip()
@@ -262,12 +265,16 @@ class TestCaseSerializer(BaseModelSerializers):
                     }
                 )
         if test_type and case_number is not None:
-            dup_qs = TestCase.objects.filter(test_type=test_type, case_number=case_number)
+            dup_qs = TestCase.objects.filter(
+                test_type=test_type, case_number=case_number
+            )
             if self.instance is not None:
                 dup_qs = dup_qs.exclude(pk=self.instance.pk)
             if dup_qs.exists():
                 raise serializers.ValidationError(
-                    {"case_number": "该测试类型下业务编号已存在，请更换编号或留空自动生成。"}
+                    {
+                        "case_number": "该测试类型下业务编号已存在，请更换编号或留空自动生成。"
+                    }
                 )
         return attrs
 

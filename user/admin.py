@@ -13,7 +13,14 @@ from user.models import (
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
-    list_display = ("username", "email", "real_name", "phone_number", "is_system_admin", "is_active")
+    list_display = (
+        "username",
+        "email",
+        "real_name",
+        "phone_number",
+        "is_system_admin",
+        "is_active",
+    )
     search_fields = ("username", "real_name", "email", "phone_number")
     fieldsets = DjangoUserAdmin.fieldsets + (
         (
@@ -33,7 +40,14 @@ class UserChangeRequestAdmin(admin.ModelAdmin):
 
 @admin.register(SystemMessage)
 class SystemMessageAdmin(admin.ModelAdmin):
-    list_display = ("id", "recipient", "title", "is_read", "related_request", "created_at")
+    list_display = (
+        "id",
+        "recipient",
+        "title",
+        "is_read",
+        "related_request",
+        "created_at",
+    )
     list_filter = ("is_read",)
     search_fields = ("title", "recipient__username")
     readonly_fields = ("created_at",)

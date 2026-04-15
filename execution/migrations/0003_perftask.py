@@ -38,7 +38,10 @@ class Migration(migrations.Migration):
                     "task_id",
                     models.CharField(max_length=32, unique=True, verbose_name="任务ID"),
                 ),
-                ("task_name", models.CharField(max_length=255, verbose_name="任务名称")),
+                (
+                    "task_name",
+                    models.CharField(max_length=255, verbose_name="任务名称"),
+                ),
                 (
                     "scenario",
                     models.CharField(
@@ -47,10 +50,15 @@ class Migration(migrations.Migration):
                         verbose_name="测试场景",
                     ),
                 ),
-                ("concurrency", models.PositiveIntegerField(default=1, verbose_name="并发数")),
+                (
+                    "concurrency",
+                    models.PositiveIntegerField(default=1, verbose_name="并发数"),
+                ),
                 (
                     "duration",
-                    models.CharField(default="10m", max_length=32, verbose_name="持续时间"),
+                    models.CharField(
+                        default="10m", max_length=32, verbose_name="持续时间"
+                    ),
                 ),
                 (
                     "status",
@@ -66,7 +74,10 @@ class Migration(migrations.Migration):
                         verbose_name="任务状态",
                     ),
                 ),
-                ("executor", models.CharField(blank=True, max_length=64, verbose_name="执行人")),
+                (
+                    "executor",
+                    models.CharField(blank=True, max_length=64, verbose_name="执行人"),
+                ),
                 (
                     "creator",
                     models.ForeignKey(

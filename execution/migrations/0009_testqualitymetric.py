@@ -53,7 +53,10 @@ class Migration(migrations.Migration):
                         decimal_places=4, max_digits=12, verbose_name="指标值"
                     ),
                 ),
-                ("dimension", models.JSONField(blank=True, default=dict, verbose_name="维度信息")),
+                (
+                    "dimension",
+                    models.JSONField(blank=True, default=dict, verbose_name="维度信息"),
+                ),
             ],
             options={
                 "db_table": "test_quality_metric",

@@ -225,9 +225,7 @@ def run_k6_load_test(session_pk: int) -> dict:
         session.error_message = (tail or f"k6 退出码 {code}")[:8000]
     else:
         session.error_message = ""
-    session.save(
-        update_fields=["summary", "status", "error_message", "update_time"]
-    )
+    session.save(update_fields=["summary", "status", "error_message", "update_time"])
 
     _broadcast(
         run_id_str,

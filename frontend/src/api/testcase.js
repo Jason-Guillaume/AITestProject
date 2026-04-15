@@ -65,3 +65,14 @@ export const rollbackCaseVersionApi = (id, data) =>
   request.post(`/testcase/cases/${id}/rollback-version/`, data);
 
 export const createCaseStepApi = (data) => request.post("/testcase/steps/", data);
+
+/** AI 批量导入用例（事务 + 逐条结果） */
+export const aiImportCasesApi = (data) => request.post("/testcase/cases/ai-import/", data);
+
+/** 批量预检：预览 API 用例最终请求（不发请求） */
+export const batchPreviewRunApiCaseApi = (data) =>
+  request.post("/testcase/cases/batch-preview-run-api/", data);
+
+/** AI 导入前批量预检（草稿 items，不要求已落库） */
+export const aiImportPrecheckApi = (data) =>
+  request.post("/testcase/cases/ai-import-precheck/", data);

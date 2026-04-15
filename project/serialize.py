@@ -133,7 +133,9 @@ class TestTaskSerializer(BaseModelSerializers):
 
 class ReleasePlanSerializer(BaseModelSerializers):
     creator_name = serializers.CharField(source="creator.real_name", read_only=True)
-    updater_name = serializers.CharField(source="updater.real_name", read_only=True, allow_null=True)
+    updater_name = serializers.CharField(
+        source="updater.real_name", read_only=True, allow_null=True
+    )
     project_name = serializers.CharField(
         source="project.project_name", read_only=True, allow_null=True
     )

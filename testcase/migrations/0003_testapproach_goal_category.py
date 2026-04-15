@@ -11,9 +11,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="testapproach",
             name="test_goal",
-            field=models.TextField(
-                blank=True, null=True, verbose_name="测试目标"
-            ),
+            field=models.TextField(blank=True, null=True, verbose_name="测试目标"),
         ),
         migrations.AddField(
             model_name="testapproach",

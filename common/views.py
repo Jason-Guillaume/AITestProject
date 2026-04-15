@@ -39,7 +39,9 @@ class BaseModelViewSet(viewsets.ModelViewSet):
             f = self.queryset.model._meta.get_field(field_name)
         except Exception:
             return False
-        if isinstance(f, (models.ForeignKey, models.OneToOneField, models.ManyToManyField)):
+        if isinstance(
+            f, (models.ForeignKey, models.OneToOneField, models.ManyToManyField)
+        ):
             return True
         return False
 
@@ -59,7 +61,9 @@ class BaseModelViewSet(viewsets.ModelViewSet):
                 | Q(creator=user)
             ).distinct()
         if self._has_rel_field("module"):
-            return qs.filter(Q(module__project__members=user) | Q(creator=user)).distinct()
+            return qs.filter(
+                Q(module__project__members=user) | Q(creator=user)
+            ).distinct()
         if self._has_rel_field("testcase"):
             return qs.filter(
                 Q(testcase__module__project__members=user) | Q(creator=user)
@@ -73,7 +77,9 @@ class BaseModelViewSet(viewsets.ModelViewSet):
                 Q(release_version__project__members=user) | Q(creator=user)
             ).distinct()
         if self._has_rel_field("version"):
-            return qs.filter(Q(version__project__members=user) | Q(creator=user)).distinct()
+            return qs.filter(
+                Q(version__project__members=user) | Q(creator=user)
+            ).distinct()
         if self._has_rel_field("plan"):
             return qs.filter(
                 Q(plan__version__project__members=user)

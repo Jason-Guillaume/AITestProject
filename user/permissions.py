@@ -26,7 +26,5 @@ class IsApprovalAdmin(BasePermission):
         if not u or not u.is_authenticated:
             return False
         return bool(
-            u.is_superuser
-            or u.is_staff
-            or getattr(u, "is_system_admin", False)
+            u.is_superuser or u.is_staff or getattr(u, "is_system_admin", False)
         )

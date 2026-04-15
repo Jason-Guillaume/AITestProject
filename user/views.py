@@ -29,8 +29,8 @@ from user.permissions import IsSystemAdmin, IsApprovalAdmin
 from user.models import UserChangeRequest, SystemMessage
 from user.change_request_actions import approve_change_request, reject_change_request
 
-
 # Create your views here.
+
 
 class UserViewSet(BaseModelViewSet):
     queryset = User.objects.filter(is_deleted=False)
@@ -157,7 +157,9 @@ class CaptchaAPIView(APIView):
         except (TypeError, ValueError):
             cur = 0
         if cur >= 10:
-            return Response({"code": 429, "msg": "请求过于频繁", "data": None}, status=429)
+            return Response(
+                {"code": 429, "msg": "请求过于频繁", "data": None}, status=429
+            )
         cache.set(limit_key, cur + 1, timeout=60)
 
         # 1.生产四位随机字符（使用 secrets）
@@ -206,35 +208,34 @@ class CaptchaAPIView(APIView):
             }
         )
 
+
 class UserRegisterAPIView(APIView):
     """
     用户注册接口
     """
-    #注册接口必须对外开放,取消认证和权限校验
+
+    # 注册接口必须对外开放,取消认证和权限校验
     authentication_classes = []
     permission_classes = []
 
-    def post(self,request):
-        #1.实例化序列化器
+    def post(self, request):
+        # 1.实例化序列化器
         serializer = UserRegisterSerializer(data=request.data)
 
-        #2.触发校验,失败自动抛出异常
+        # 2.触发校验,失败自动抛出异常
         serializer.is_valid(raise_exception=True)
 
-        #3.校验通过,保存数据,触发序列化器的拦截加密
+        # 3.校验通过,保存数据,触发序列化器的拦截加密
         serializer.save()
 
-        return Response({
-            'code':200,
-            'msg':'注册成功',
-            'data':None
-        })
+        return Response({"code": 200, "msg": "注册成功", "data": None})
 
 
 class UserLoginAPIView(APIView):
     """
     用户登录接口
     """
+
     # 登录接口必须对外开放，取消认证和权限校验
     authentication_classes = []
     permission_classes = []
@@ -244,7 +245,7 @@ class UserLoginAPIView(APIView):
         serializer.is_valid(raise_exception=True)
 
         # 从刚才序列化器 validate 方法里拿到真正的用户对象
-        user = serializer.validated_data['user']
+        user = serializer.validated_data["user"]
         try:
             user.refresh_from_db()
         except Exception:
@@ -254,17 +255,19 @@ class UserLoginAPIView(APIView):
         # 如果该用户之前登录过，就会取出旧Token；如果是首次登录，会生成新Token
         token, created = Token.objects.get_or_create(user=user)
 
-        return Response({
-            'code': 200,
-            'msg': '登录成功',
-            'data': {
-                'token': token.key,  # 前端需要的凭证
-                'username': user.username,
-                'real_name': user.real_name,
-                'user_id': user.id,
-                'is_system_admin': bool(getattr(user, 'is_system_admin', False)),
+        return Response(
+            {
+                "code": 200,
+                "msg": "登录成功",
+                "data": {
+                    "token": token.key,  # 前端需要的凭证
+                    "username": user.username,
+                    "real_name": user.real_name,
+                    "user_id": user.id,
+                    "is_system_admin": bool(getattr(user, "is_system_admin", False)),
+                },
             }
-        })
+        )
 
 
 class CurrentUserAPIView(APIView):
@@ -287,9 +290,7 @@ class CurrentUserAPIView(APIView):
                     "user_id": user.id,
                     "username": user.username,
                     "real_name": getattr(user, "real_name", None) or "",
-                    "is_system_admin": bool(
-                        getattr(user, "is_system_admin", False)
-                    ),
+                    "is_system_admin": bool(getattr(user, "is_system_admin", False)),
                 },
             }
         )
@@ -308,13 +309,21 @@ class ChangePasswordAPIView(APIView):
         new_password = request.data.get("new_password") or ""
         confirm_password = request.data.get("confirm_password") or ""
         if len(new_password) < 8:
-            return Response({"code": 400, "msg": "密码长度至少 8 位", "data": None}, status=400)
+            return Response(
+                {"code": 400, "msg": "密码长度至少 8 位", "data": None}, status=400
+            )
         if not re.search(r"[A-Z]", new_password):
-            return Response({"code": 400, "msg": "密码需包含大写字母", "data": None}, status=400)
+            return Response(
+                {"code": 400, "msg": "密码需包含大写字母", "data": None}, status=400
+            )
         if not re.search(r"[a-z]", new_password):
-            return Response({"code": 400, "msg": "密码需包含小写字母", "data": None}, status=400)
+            return Response(
+                {"code": 400, "msg": "密码需包含小写字母", "data": None}, status=400
+            )
         if not re.search(r"\d", new_password):
-            return Response({"code": 400, "msg": "密码需包含数字", "data": None}, status=400)
+            return Response(
+                {"code": 400, "msg": "密码需包含数字", "data": None}, status=400
+            )
 
         if not old_password:
             return Response(
@@ -359,9 +368,7 @@ class UserProfileAPIView(APIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get(self, request):
-        serializer = UserProfileSerializer(
-            request.user, context={"request": request}
-        )
+        serializer = UserProfileSerializer(request.user, context={"request": request})
         return Response({"code": 200, "msg": "ok", "data": serializer.data})
 
     def patch(self, request):
@@ -373,9 +380,7 @@ class UserProfileAPIView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(
-            {"code": 200, "msg": "资料已更新", "data": serializer.data}
-        )
+        return Response({"code": 200, "msg": "资料已更新", "data": serializer.data})
 
 
 class UserMyPendingSensitiveStatusAPIView(APIView):
@@ -462,9 +467,9 @@ class SystemMessageMarkReadAPIView(APIView):
 
     def patch(self, request, pk):
         try:
-            n = SystemMessage.objects.filter(
-                pk=pk, recipient=request.user
-            ).update(is_read=True)
+            n = SystemMessage.objects.filter(pk=pk, recipient=request.user).update(
+                is_read=True
+            )
             if not n:
                 return Response(
                     {"code": 404, "msg": "消息不存在", "data": None},
@@ -492,9 +497,7 @@ class AdminUserChangeRequestListAPIView(APIView):
 
     def get(self, request):
         status = request.query_params.get("status")
-        qs = UserChangeRequest.objects.select_related("user").order_by(
-            "-created_at"
-        )
+        qs = UserChangeRequest.objects.select_related("user").order_by("-created_at")
         if status:
             qs = qs.filter(status=status)
         serializer = UserChangeRequestListSerializer(qs, many=True)
@@ -554,9 +557,7 @@ class AdminChangeRequestRejectAPIView(APIView):
                 {"code": 400, "msg": str(e), "data": None},
                 status=400,
             )
-        return Response(
-            {"code": 200, "msg": "已拒绝", "data": {"id": cr.id}}
-        )
+        return Response({"code": 200, "msg": "已拒绝", "data": {"id": cr.id}})
 
 
 class AdminUserChangeRequestDecisionAPIView(APIView):

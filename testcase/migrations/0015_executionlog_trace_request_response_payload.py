@@ -6,7 +6,10 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("testcase", "0014_rename_api_exec_case_ctime_idx_api_executi_test_ca_0661b3_idx_and_more"),
+        (
+            "testcase",
+            "0014_rename_api_exec_case_ctime_idx_api_executi_test_ca_0661b3_idx_and_more",
+        ),
     ]
 
     operations = [

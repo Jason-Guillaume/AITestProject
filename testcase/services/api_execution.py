@@ -28,7 +28,9 @@ from testcase.services.variable_runtime import VariableExtractor, VariableResolv
 
 logger = logging.getLogger(__name__)
 
-_ALLOWED_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
+_ALLOWED_METHODS = frozenset(
+    {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+)
 _LOG_BODY_MAX = 200_000
 
 
@@ -149,11 +151,8 @@ def merge_execute_params(
     if env_id:
         url = resolve_url_with_environment(url, env_id)
     method = (
-        (o.get("method") or o.get("api_method") or api_prof.api_method or "GET")
-        .strip()
-        .upper()
-        or "GET"
-    )
+        o.get("method") or o.get("api_method") or api_prof.api_method or "GET"
+    ).strip().upper() or "GET"
     if o.get("headers") is not None or o.get("api_headers") is not None:
         raw_h = o.get("headers")
         if raw_h is None:
@@ -195,7 +194,11 @@ def load_environment_runtime_variables(environment_id: Optional[int]) -> Dict[st
         if not key:
             continue
         try:
-            value = row.get_decrypted_value() if getattr(row, "is_secret", False) else (row.value or "")
+            value = (
+                row.get_decrypted_value()
+                if getattr(row, "is_secret", False)
+                else (row.value or "")
+            )
         except EnvironmentVariableDecryptionError:
             logger.warning(
                 "环境变量解密失败，已跳过注入: env_id=%s key=%s",
@@ -210,12 +213,15 @@ def load_environment_runtime_variables(environment_id: Optional[int]) -> Dict[st
 def build_requests_kwargs(
     method: str, url: str, headers: Dict[str, str], body: Any
 ) -> Dict[str, Any]:
-    req: Dict[str, Any] = {"method": method, "url": url, "headers": headers, "timeout": 30}
+    req: Dict[str, Any] = {
+        "method": method,
+        "url": url,
+        "headers": headers,
+        "timeout": 30,
+    }
     if method in ("GET", "HEAD") or body is None:
         return req
-    ct = str(
-        headers.get("Content-Type") or headers.get("content-type") or ""
-    ).lower()
+    ct = str(headers.get("Content-Type") or headers.get("content-type") or "").lower()
     if "application/json" in ct or isinstance(body, (dict, list)):
         if isinstance(body, str):
             try:
@@ -342,8 +348,7 @@ def build_response_payload_from_response(resp: requests.Response) -> Dict[str, A
     truncated = text
     if len(truncated) > _LOG_BODY_MAX:
         truncated = (
-            truncated[:_LOG_BODY_MAX]
-            + f"\n…(truncated, total {len(text)} chars)"
+            truncated[:_LOG_BODY_MAX] + f"\n…(truncated, total {len(text)} chars)"
         )
     out: Dict[str, Any] = {
         "status_code": resp.status_code,
@@ -413,7 +418,9 @@ def run_api_case(
     """
     执行 API 用例并写入 ExecutionLog；可选同步写入 ApiTestLog。
     """
-    url, method, headers, body, expected_status, env_id = merge_execute_params(api_prof, overrides)
+    url, method, headers, body, expected_status, env_id = merge_execute_params(
+        api_prof, overrides
+    )
     runtime_vars, extraction_rules = prepare_runtime_variable_context(overrides)
     env_runtime_vars = load_environment_runtime_variables(env_id)
     merged_runtime_vars = {**env_runtime_vars, **(runtime_vars or {})}
@@ -433,9 +440,7 @@ def run_api_case(
         base_log_user["creator"] = user
         base_log_user["updater"] = user
 
-    step = (
-        case.steps.filter(is_deleted=False).order_by("step_number").first()
-    )
+    step = case.steps.filter(is_deleted=False).order_by("step_number").first()
     expected_sub = (step.expected_result or "").strip() if step else ""
 
     if err:
@@ -457,9 +462,7 @@ def run_api_case(
             response_body_text="",
             duration_ms=0,
             execution_status=ExecutionLog.ExecutionStatus.REQUEST_ERROR,
-            assertion_results=[
-                {"name": "validation", "passed": False, "detail": err}
-            ],
+            assertion_results=[{"name": "validation", "passed": False, "detail": err}],
             is_passed=False,
             error_message=err,
             trace_id=trace_id,
@@ -535,9 +538,7 @@ def run_api_case(
                 **base_log_user,
             )
         TestCase.objects.filter(pk=case.pk).update(exec_count=F("exec_count") + 1)
-        return RunApiResult(
-            log_ex, legacy, "请求失败（网络或超时）", extracted_vars
-        )
+        return RunApiResult(log_ex, legacy, "请求失败（网络或超时）", extracted_vars)
 
     elapsed_ms = int((time.perf_counter() - t0) * 1000)
     assertions, passed = collect_assertions(
@@ -553,9 +554,11 @@ def run_api_case(
     extracted_vars: Dict[str, Any] = {}
     if extraction_rules:
         response_data = {
-            "body": resp_payload.get("body_json")
-            if "body_json" in resp_payload
-            else (resp.text or ""),
+            "body": (
+                resp_payload.get("body_json")
+                if "body_json" in resp_payload
+                else (resp.text or "")
+            ),
             "headers": resp_headers,
         }
         extracted_vars = extractor.extract(response_data, extraction_rules)
@@ -609,7 +612,9 @@ def preview_resolved_request(
     - 注入环境变量 + 运行时变量
     - 替换 URL/Headers/Body 中的 ${var}
     """
-    url, method, headers, body, expected_status, env_id = merge_execute_params(api_prof, overrides)
+    url, method, headers, body, expected_status, env_id = merge_execute_params(
+        api_prof, overrides
+    )
     runtime_vars, _ = prepare_runtime_variable_context(overrides)
     env_runtime_vars = load_environment_runtime_variables(env_id)
     merged_runtime_vars = {**env_runtime_vars, **(runtime_vars or {})}

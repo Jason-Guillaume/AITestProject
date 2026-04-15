@@ -32,9 +32,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(
-                        auto_now_add=True, verbose_name="创建时间"
-                    ),
+                    models.DateTimeField(auto_now_add=True, verbose_name="创建时间"),
                 ),
                 (
                     "recipient",

@@ -77,7 +77,9 @@ class Command(BaseCommand):
                 lines.append(f"{'id':>6} | {'type':<14} | {'old':>8} | {'new':>8}")
                 lines.append("-" * 46)
                 for case, expected in to_update[:preview_limit]:
-                    old_val = "None" if case.case_number is None else str(case.case_number)
+                    old_val = (
+                        "None" if case.case_number is None else str(case.case_number)
+                    )
                     lines.append(
                         f"{case.id:>6} | {str(case.test_type):<14} | {old_val:>8} | {str(expected):>8}"
                     )

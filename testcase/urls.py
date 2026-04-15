@@ -9,13 +9,13 @@ router = DefaultRouter()
 # 2. 注册视图集
 # 参数1: URL前缀 (如 projects)
 # 参数2: 对应的 ViewSet
-router.register(r'cases', TestCaseViewSet)
-router.register(r'modules', TestModuleViewSet)
-router.register(r'environments', TestEnvironmentViewSet)
-router.register(r'environment-variables', EnvironmentVariableViewSet)
+router.register(r"cases", TestCaseViewSet)
+router.register(r"modules", TestModuleViewSet)
+router.register(r"environments", TestEnvironmentViewSet)
+router.register(r"environment-variables", EnvironmentVariableViewSet)
 router.register(r"approaches", TestApproachViewSet)
-router.register(r'steps', TestCaseStepViewSet)
-router.register(r'designs', TestDesignViewSet)
+router.register(r"steps", TestCaseStepViewSet)
+router.register(r"designs", TestDesignViewSet)
 
 # 3. 暴露路由（含 AI 数据增强与 Swagger/cURL 导入）
 urlpatterns = [

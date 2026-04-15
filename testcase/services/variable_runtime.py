@@ -45,9 +45,7 @@ class VariableExtractor:
             var_name = (item.get("var_name") or "").strip()
             source = (item.get("source") or "").strip().lower()
             expression = (
-                item.get("expression")
-                or item.get("rule")  # 兼容旧字段名
-                or ""
+                item.get("expression") or item.get("rule") or ""  # 兼容旧字段名
             ).strip()
 
             if not var_name or not source or not expression:
@@ -61,7 +59,9 @@ class VariableExtractor:
             if source == "body":
                 value = self._extract_from_body(body, expression)
                 if value is None:
-                    self._on_error(out, var_name, f"JSONPath 未命中或表达式非法：{expression}")
+                    self._on_error(
+                        out, var_name, f"JSONPath 未命中或表达式非法：{expression}"
+                    )
                 else:
                     out[var_name] = value
                 continue
@@ -159,7 +159,11 @@ def suggest_extractions(json_data: Any) -> List[Dict[str, str]]:
 
         seen_paths.add(path)
         # 生成可直接用于 VariableExtractor 的规则草案
-        var_name = _to_var_name(key_name) or _to_var_name(path.replace("$.", "")) or "extracted_var"
+        var_name = (
+            _to_var_name(key_name)
+            or _to_var_name(path.replace("$.", ""))
+            or "extracted_var"
+        )
         suggestions.append(
             {
                 "field_name": key_name,
@@ -249,4 +253,3 @@ class VariableResolver:
             return match.group(0)
 
         return _VAR_PATTERN.sub(repl, text)
-

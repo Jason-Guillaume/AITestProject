@@ -11,17 +11,37 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ("execution", "0011_rename_test_qualit_metric__a06e6d_idx_test_qualit_metric__46ec22_idx_and_more"),
+        (
+            "execution",
+            "0011_rename_test_qualit_metric__a06e6d_idx_test_qualit_metric__46ec22_idx_and_more",
+        ),
     ]
 
     operations = [
         migrations.CreateModel(
             name="K6LoadTestSession",
             fields=[
-                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("create_time", models.DateTimeField(auto_now_add=True, verbose_name="创建时间")),
-                ("update_time", models.DateTimeField(auto_now=True, verbose_name="更新时间")),
-                ("is_deleted", models.BooleanField(default=False, verbose_name="是否已删除")),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "create_time",
+                    models.DateTimeField(auto_now_add=True, verbose_name="创建时间"),
+                ),
+                (
+                    "update_time",
+                    models.DateTimeField(auto_now=True, verbose_name="更新时间"),
+                ),
+                (
+                    "is_deleted",
+                    models.BooleanField(default=False, verbose_name="是否已删除"),
+                ),
                 (
                     "run_id",
                     models.UUIDField(
@@ -46,10 +66,28 @@ class Migration(migrations.Migration):
                         verbose_name="状态",
                     ),
                 ),
-                ("test_case_ids", models.JSONField(default=list, verbose_name="API 用例 ID 列表(有序)")),
-                ("vus", models.PositiveIntegerField(default=5, verbose_name="虚拟用户数")),
-                ("duration", models.CharField(default="30s", max_length=32, verbose_name="持续时间(k6 格式)")),
-                ("use_ai", models.BooleanField(default=True, verbose_name="是否使用大模型生成脚本")),
+                (
+                    "test_case_ids",
+                    models.JSONField(
+                        default=list, verbose_name="API 用例 ID 列表(有序)"
+                    ),
+                ),
+                (
+                    "vus",
+                    models.PositiveIntegerField(default=5, verbose_name="虚拟用户数"),
+                ),
+                (
+                    "duration",
+                    models.CharField(
+                        default="30s", max_length=32, verbose_name="持续时间(k6 格式)"
+                    ),
+                ),
+                (
+                    "use_ai",
+                    models.BooleanField(
+                        default=True, verbose_name="是否使用大模型生成脚本"
+                    ),
+                ),
                 (
                     "target_base_url",
                     models.CharField(
@@ -70,10 +108,31 @@ class Migration(migrations.Migration):
                         verbose_name="脚本相对路径",
                     ),
                 ),
-                ("script_body", models.TextField(blank=True, default="", verbose_name="生成的脚本内容快照")),
-                ("summary", models.JSONField(blank=True, null=True, verbose_name="k6 summary-export JSON")),
-                ("error_message", models.TextField(blank=True, default="", verbose_name="错误信息")),
-                ("celery_task_id", models.CharField(blank=True, default="", max_length=64, verbose_name="Celery 任务 ID")),
+                (
+                    "script_body",
+                    models.TextField(
+                        blank=True, default="", verbose_name="生成的脚本内容快照"
+                    ),
+                ),
+                (
+                    "summary",
+                    models.JSONField(
+                        blank=True, null=True, verbose_name="k6 summary-export JSON"
+                    ),
+                ),
+                (
+                    "error_message",
+                    models.TextField(blank=True, default="", verbose_name="错误信息"),
+                ),
+                (
+                    "celery_task_id",
+                    models.CharField(
+                        blank=True,
+                        default="",
+                        max_length=64,
+                        verbose_name="Celery 任务 ID",
+                    ),
+                ),
                 (
                     "generation_source",
                     models.CharField(

@@ -166,7 +166,9 @@ class TestEnvironment(BaseModel):
         default=TYPE_TEST,
         verbose_name="环境类型",
     )
-    base_url = models.CharField(max_length=2048, blank=True, default="", verbose_name="基础地址")
+    base_url = models.CharField(
+        max_length=2048, blank=True, default="", verbose_name="基础地址"
+    )
     health_check_path = models.CharField(
         max_length=512,
         blank=True,
@@ -212,9 +214,13 @@ class EnvironmentHealthCheck(BaseModel):
     status = models.CharField(
         max_length=16, choices=STATUS_CHOICES, verbose_name="健康状态"
     )
-    response_time_ms = models.PositiveIntegerField(default=0, verbose_name="响应时间(ms)")
+    response_time_ms = models.PositiveIntegerField(
+        default=0, verbose_name="响应时间(ms)"
+    )
     error_log = models.TextField(blank=True, default="", verbose_name="错误日志")
-    target = models.CharField(max_length=255, blank=True, default="", verbose_name="检查目标")
+    target = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="检查目标"
+    )
     dimension = models.JSONField(default=dict, blank=True, verbose_name="维度信息")
 
     class Meta:
@@ -242,13 +248,17 @@ class EnvironmentVariable(BaseModel):
     key = models.CharField(max_length=128, verbose_name="变量名")
     value = models.TextField(blank=True, default="", verbose_name="变量值")
     is_secret = models.BooleanField(default=False, verbose_name="是否敏感变量")
-    description = models.CharField(max_length=255, blank=True, default="", verbose_name="变量说明")
+    description = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="变量说明"
+    )
 
     class Meta:
         db_table = "environment_variable"
         ordering = ("id",)
         constraints = [
-            models.UniqueConstraint(fields=["environment", "key"], name="uniq_env_var_key")
+            models.UniqueConstraint(
+                fields=["environment", "key"], name="uniq_env_var_key"
+            )
         ]
 
     @classmethod
@@ -267,7 +277,7 @@ class EnvironmentVariable(BaseModel):
             return ""
         if not encrypted_text.startswith(cls.ENV_VALUE_PREFIX):
             return encrypted_text
-        token = encrypted_text[len(cls.ENV_VALUE_PREFIX):]
+        token = encrypted_text[len(cls.ENV_VALUE_PREFIX) :]
         try:
             return _ENV_CIPHER.decrypt(token.encode("utf-8")).decode("utf-8")
         except InvalidToken:
@@ -297,7 +307,11 @@ class EnvironmentVariable(BaseModel):
         - 仅 is_secret=True 且当前非密文格式时执行加密
         """
         raw_value = self.value or ""
-        if self.is_secret and raw_value and not raw_value.startswith(self.ENV_VALUE_PREFIX):
+        if (
+            self.is_secret
+            and raw_value
+            and not raw_value.startswith(self.ENV_VALUE_PREFIX)
+        ):
             try:
                 self.value = self.encrypt_text(raw_value)
             except Exception:
@@ -320,6 +334,14 @@ class TestCase(BaseModel):
         null=True,
         related_name="testcases",
         verbose_name="所属模块",
+    )
+    ai_run = models.ForeignKey(
+        "assistant.AiCaseGenerationRun",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="imported_testcases",
+        verbose_name="AI 生成批次（可选）",
     )
     case_name = models.CharField(max_length=255, verbose_name="用例名称")
     case_number = models.IntegerField(
@@ -380,9 +402,9 @@ class TestCase(BaseModel):
                 # 编号按测试类型独立递增；用 all_objects 取 Max，避免与回收站中仍占用的编号冲突。
                 scope = {"test_type": self.test_type}
                 scoped_qs = TestCase.all_objects.select_for_update().filter(**scope)
-                max_case_number = scoped_qs.aggregate(max_case_number=Max("case_number"))[
-                    "max_case_number"
-                ]
+                max_case_number = scoped_qs.aggregate(
+                    max_case_number=Max("case_number")
+                )["max_case_number"]
                 self.case_number = (max_case_number or 0) + 1
                 return super().save(*args, **kwargs)
         return super().save(*args, **kwargs)
@@ -540,7 +562,9 @@ class TestCaseVersion(BaseModel):
         ]
 
     @classmethod
-    def create_version(cls, *, test_case, release_plan, creator=None, source_version=None):
+    def create_version(
+        cls, *, test_case, release_plan, creator=None, source_version=None
+    ):
         """
         生成并保存用例快照版本。
         """
@@ -571,14 +595,20 @@ class TestCaseVersion(BaseModel):
 class ApiTestCase(TestCase):
     """API 测试用例扩展表（多表继承）：请求定义仅在此存储。"""
 
-    api_url = models.CharField(max_length=2048, blank=True, default="", verbose_name="API 地址")
-    api_method = models.CharField(max_length=16, default="GET", verbose_name="HTTP 方法")
-    api_headers = models.JSONField(default=dict, blank=True, verbose_name="请求头(JSON)")
+    api_url = models.CharField(
+        max_length=2048, blank=True, default="", verbose_name="API 地址"
+    )
+    api_method = models.CharField(
+        max_length=16, default="GET", verbose_name="HTTP 方法"
+    )
+    api_headers = models.JSONField(
+        default=dict, blank=True, verbose_name="请求头(JSON)"
+    )
     api_body = models.JSONField(
         default=dict,
         blank=True,
         verbose_name="请求体(JSON)",
-        help_text="JSON 对象或数组；历史纯文本会迁移为 {\"_legacy_text\": \"...\"}",
+        help_text='JSON 对象或数组；历史纯文本会迁移为 {"_legacy_text": "..."}',
     )
     api_expected_status = models.PositiveSmallIntegerField(
         null=True,
@@ -608,7 +638,9 @@ class ApiTestCase(TestCase):
         self.api_method = subtype.get("api_method", self.api_method)
         self.api_headers = subtype.get("api_headers", self.api_headers)
         self.api_body = subtype.get("api_body", self.api_body)
-        self.api_expected_status = subtype.get("api_expected_status", self.api_expected_status)
+        self.api_expected_status = subtype.get(
+            "api_expected_status", self.api_expected_status
+        )
         self.api_source_curl = subtype.get("api_source_curl", self.api_source_curl)
         self.save()
 
@@ -620,7 +652,9 @@ class PerfTestCase(TestCase):
     """性能测试用例扩展表。"""
 
     concurrency = models.PositiveIntegerField(default=1, verbose_name="并发数")
-    duration_seconds = models.PositiveIntegerField(default=60, verbose_name="持续时间(秒)")
+    duration_seconds = models.PositiveIntegerField(
+        default=60, verbose_name="持续时间(秒)"
+    )
     target_rps = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -636,7 +670,9 @@ class PerfTestCase(TestCase):
 
     def _apply_subtype_snapshot(self, subtype: dict) -> None:
         self.concurrency = int(subtype.get("concurrency", self.concurrency))
-        self.duration_seconds = int(subtype.get("duration_seconds", self.duration_seconds))
+        self.duration_seconds = int(
+            subtype.get("duration_seconds", self.duration_seconds)
+        )
         self.target_rps = subtype.get("target_rps", self.target_rps)
         self.save()
 
@@ -763,13 +799,19 @@ class ExecutionLog(BaseModel):
     request_url = models.CharField(max_length=2048, verbose_name="请求 URL")
     request_method = models.CharField(max_length=16, verbose_name="HTTP 方法")
     request_headers = models.JSONField(default=dict, blank=True, verbose_name="请求头")
-    request_body_text = models.TextField(blank=True, default="", verbose_name="请求体全文")
+    request_body_text = models.TextField(
+        blank=True, default="", verbose_name="请求体全文"
+    )
     response_status_code = models.PositiveIntegerField(
         null=True, blank=True, verbose_name="响应状态码"
     )
     response_headers = models.JSONField(default=dict, blank=True, verbose_name="响应头")
-    response_body_text = models.TextField(blank=True, default="", verbose_name="响应体全文")
-    duration_ms = models.PositiveIntegerField(null=True, blank=True, verbose_name="耗时(ms)")
+    response_body_text = models.TextField(
+        blank=True, default="", verbose_name="响应体全文"
+    )
+    duration_ms = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="耗时(ms)"
+    )
     execution_status = models.CharField(
         max_length=32,
         choices=ExecutionStatus.choices,
@@ -780,7 +822,7 @@ class ExecutionLog(BaseModel):
         default=list,
         blank=True,
         verbose_name="断言结果",
-        help_text="示例: [{\"name\":\"status\",\"passed\":true,\"detail\":\"...\"}]",
+        help_text='示例: [{"name":"status","passed":true,"detail":"..."}]',
     )
     is_passed = models.BooleanField(default=False, verbose_name="总是否通过")
     error_message = models.TextField(blank=True, default="", verbose_name="错误信息")

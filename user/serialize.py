@@ -41,40 +41,50 @@ class UserSerializer(BaseModelSerializers):
             user.user_permissions.set(user_permissions)
         return user
 
+
 class UserRegisterSerializer(serializers.Serializer):
     """
     用户注册使用的序列化器
     """
+
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(max_length=128)
     email = serializers.EmailField(required=False, allow_blank=True)
-    phone_number = serializers.CharField(max_length=32, required=False, allow_blank=True)
-    captcha_code = serializers.CharField(max_length=4, write_only=True, help_text="用户输入的验证码")
-    captcha_uuid = serializers.CharField(write_only=True, help_text="获取验证码时返回的UUID")
+    phone_number = serializers.CharField(
+        max_length=32, required=False, allow_blank=True
+    )
+    captcha_code = serializers.CharField(
+        max_length=4, write_only=True, help_text="用户输入的验证码"
+    )
+    captcha_uuid = serializers.CharField(
+        write_only=True, help_text="获取验证码时返回的UUID"
+    )
 
     def validate(self, attrs):
-        #1.取出前端传来的验证码和UUID
-        user_code = attrs.get('captcha_code')
-        uuid = attrs.get('captcha_uuid')
+        # 1.取出前端传来的验证码和UUID
+        user_code = attrs.get("captcha_code")
+        uuid = attrs.get("captcha_uuid")
 
-        #2,从缓存中获取真实的验证码
+        # 2,从缓存中获取真实的验证码
         cache_key = f"captcha_{uuid}"
         real_code = cache.get(cache_key)
 
-        #3.检验逻辑
+        # 3.检验逻辑
         if not real_code:
-            raise serializers.ValidationError({"captcha_code": "验证码已过期或无效，请重新获取"})
+            raise serializers.ValidationError(
+                {"captcha_code": "验证码已过期或无效，请重新获取"}
+            )
 
-        #忽略大小写进行比对
+        # 忽略大小写进行比对
         if real_code.lower() != user_code.lower():
             raise serializers.ValidationError({"captcha_code": "验证码错误"})
 
-        #验证通过后,将缓存中的验证码删掉
+        # 验证通过后,将缓存中的验证码删掉
         cache.delete(cache_key)
 
-        #清理不需要存入数据库的字段
-        attrs.pop('captcha_code')
-        attrs.pop('captcha_uuid')
+        # 清理不需要存入数据库的字段
+        attrs.pop("captcha_code")
+        attrs.pop("captcha_uuid")
 
         email = (attrs.get("email") or "").strip()
         phone = (attrs.get("phone_number") or "").strip()
@@ -95,9 +105,9 @@ class UserRegisterSerializer(serializers.Serializer):
         # 注意：这里必须使用 User.objects.create_user，它会自动将 password 字段进行 Hash 加密
         # 如果使用 User.objects.create()，密码将是明文，导致后续无法登录
         user = User.objects.create_user(
-            username=validated_data['username'],
-            password=validated_data['password'],
-            real_name=validated_data.get('real_name', ''),
+            username=validated_data["username"],
+            password=validated_data["password"],
+            real_name=validated_data.get("real_name", ""),
             email=validated_data.get("email", "") or "",
             phone_number=validated_data.get("phone_number", "") or "",
         )
@@ -108,6 +118,7 @@ class UserLoginSerializer(serializers.Serializer):
     """
     用户登录使用的序列化器
     """
+
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(max_length=128)
 
@@ -207,7 +218,9 @@ class UserProfileSerializer(BaseModelSerializers):
 class UserSensitiveChangeRequestCreateSerializer(serializers.Serializer):
     """提交用户名或密码变更申请（密码仅接收明文，入库为 Django 哈希）。"""
 
-    request_type = serializers.ChoiceField(choices=UserChangeRequest.RequestType.choices)
+    request_type = serializers.ChoiceField(
+        choices=UserChangeRequest.RequestType.choices
+    )
     new_username = serializers.CharField(
         max_length=150, required=False, allow_blank=True
     )
@@ -221,24 +234,16 @@ class UserSensitiveChangeRequestCreateSerializer(serializers.Serializer):
         if rt == UserChangeRequest.RequestType.USERNAME:
             nu = (attrs.get("new_username") or "").strip()
             if not nu:
-                raise serializers.ValidationError(
-                    {"new_username": "请填写新用户名"}
-                )
+                raise serializers.ValidationError({"new_username": "请填写新用户名"})
             if nu == user.username:
-                raise serializers.ValidationError(
-                    {"new_username": "与当前用户名相同"}
-                )
+                raise serializers.ValidationError({"new_username": "与当前用户名相同"})
             if User.objects.filter(username=nu).exclude(pk=user.pk).exists():
-                raise serializers.ValidationError(
-                    {"new_username": "该用户名已被占用"}
-                )
+                raise serializers.ValidationError({"new_username": "该用户名已被占用"})
             attrs["new_username"] = nu
         elif rt == UserChangeRequest.RequestType.PASSWORD:
             pw = attrs.get("new_password") or ""
             if not pw:
-                raise serializers.ValidationError(
-                    {"new_password": "请填写新密码"}
-                )
+                raise serializers.ValidationError({"new_password": "请填写新密码"})
         return attrs
 
     def create(self, validated_data):
@@ -269,9 +274,7 @@ class UserSensitiveChangeRequestCreateSerializer(serializers.Serializer):
 class UserChangeRequestListSerializer(serializers.ModelSerializer):
     """管理员列表：密码类不返回具体哈希。"""
 
-    applicant_username = serializers.CharField(
-        source="user.username", read_only=True
-    )
+    applicant_username = serializers.CharField(source="user.username", read_only=True)
     safe_new_value = serializers.SerializerMethodField()
 
     class Meta:
@@ -364,9 +367,7 @@ class AIModelConfigReadSerializer(serializers.ModelSerializer):
 class AIModelConfigWriteSerializer(serializers.Serializer):
     model_type = serializers.CharField(max_length=64)
     api_key = serializers.CharField(required=False, allow_blank=True, write_only=True)
-    base_url = serializers.CharField(
-        required=False, allow_blank=True, default=""
-    )
+    base_url = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate_model_type(self, value):
         v = (value or "").strip()

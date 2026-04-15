@@ -69,4 +69,6 @@ class Command(BaseCommand):
         ]
         for row in demos:
             PerfTask.objects.create(**row)
-        self.stdout.write(self.style.SUCCESS(f"已创建 {len(demos)} 条性能任务演示数据。"))
+        self.stdout.write(
+            self.style.SUCCESS(f"已创建 {len(demos)} 条性能任务演示数据。")
+        )

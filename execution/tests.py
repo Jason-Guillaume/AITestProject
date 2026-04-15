@@ -151,7 +151,9 @@ class MetricCalculatorTestCase(TestCase):
         )
 
         # 同版本去重后：req=avg(10,10)=10, cov=avg(60,80)=70 => 覆盖率 70%
-        coverage = self.calculator.calc_requirement_coverage(self.project.id, self.today)
+        coverage = self.calculator.calc_requirement_coverage(
+            self.project.id, self.today
+        )
         self.assertEqual(coverage, Decimal("70.0000"))
 
         row = TestQualityMetric.objects.get(
@@ -248,7 +250,9 @@ class QualityDashboardViewTestCase(TestCase):
         self.assertIn("latestMetrics", data)
         self.assertIn("raw", data)
         self.assertIn("pass_rate", data["raw"])
-        self.assertEqual(len(data["raw"]["pass_rate"]["points"]), len(data["trendChart"]["xAxis"]))
+        self.assertEqual(
+            len(data["raw"]["pass_rate"]["points"]), len(data["trendChart"]["xAxis"])
+        )
 
     def test_quality_dashboard_view_supports_project_filter(self):
         request = self.factory.get(
@@ -330,7 +334,9 @@ class EnvironmentHealthCheckWorkflowTestCase(TestCase):
 
         mock_head.return_value = _Resp()
         checker = HealthChecker()
-        result = checker.check_api("https://example.com/health", dimension={"scene": "ut"})
+        result = checker.check_api(
+            "https://example.com/health", dimension={"scene": "ut"}
+        )
         self.assertFalse(result["ok"])
         row = EnvironmentHealthCheck.objects.filter(
             check_type=EnvironmentHealthCheck.CHECK_API
@@ -340,7 +346,9 @@ class EnvironmentHealthCheckWorkflowTestCase(TestCase):
 
     @patch("execution.services.health_checker.connections")
     def test_health_checker_db_default_connection_failure(self, mock_connections):
-        mock_connections.__getitem__.return_value.cursor.side_effect = Exception("db down")
+        mock_connections.__getitem__.return_value.cursor.side_effect = Exception(
+            "db down"
+        )
         checker = HealthChecker()
         result = checker.check_db(None, dimension={"scene": "ut"})
         self.assertFalse(result["ok"])

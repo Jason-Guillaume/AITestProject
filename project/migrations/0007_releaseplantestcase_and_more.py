@@ -80,15 +80,21 @@ class Migration(migrations.Migration):
                         ),
                         (
                             "create_time",
-                            models.DateTimeField(auto_now_add=True, verbose_name="创建时间"),
+                            models.DateTimeField(
+                                auto_now_add=True, verbose_name="创建时间"
+                            ),
                         ),
                         (
                             "update_time",
-                            models.DateTimeField(auto_now=True, verbose_name="更新时间"),
+                            models.DateTimeField(
+                                auto_now=True, verbose_name="更新时间"
+                            ),
                         ),
                         (
                             "is_deleted",
-                            models.BooleanField(default=False, verbose_name="是否已删除"),
+                            models.BooleanField(
+                                default=False, verbose_name="是否已删除"
+                            ),
                         ),
                         (
                             "release_plan",

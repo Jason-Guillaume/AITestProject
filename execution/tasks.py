@@ -68,7 +68,11 @@ def run_execution_task(self, execution_task_id: int) -> dict:
         err_text = str(exc)
         task.status = ExecutionTask.STATUS_FAILED
         task.finished_at = timezone.now()
-        task.error_message = "环境健康检查失败，任务已取消" if err_text.startswith("ENV_UNHEALTHY:") else err_text
+        task.error_message = (
+            "环境健康检查失败，任务已取消"
+            if err_text.startswith("ENV_UNHEALTHY:")
+            else err_text
+        )
         task.report = {
             "passed": False,
             "trace_id": trace_id,
@@ -124,7 +128,9 @@ def run_execution_task(self, execution_task_id: int) -> dict:
     soft_time_limit=300,
     time_limit=330,
 )
-def run_scheduled_api_case(self, *, scheduled_task_id: int, case_id: int, environment_id: int | None) -> dict:
+def run_scheduled_api_case(
+    self, *, scheduled_task_id: int, case_id: int, environment_id: int | None
+) -> dict:
     case = (
         TestCase.objects.filter(pk=case_id, is_deleted=False)
         .select_related("apitestcase")
@@ -133,10 +139,19 @@ def run_scheduled_api_case(self, *, scheduled_task_id: int, case_id: int, enviro
     if not case:
         return {"case_id": case_id, "skipped": True, "reason": "case_not_found"}
     if case.test_type != TestCase.TEST_TYPE_API:
-        return {"case_id": case_id, "skipped": True, "reason": f"non_api:{case.test_type}"}
+        return {
+            "case_id": case_id,
+            "skipped": True,
+            "reason": f"non_api:{case.test_type}",
+        }
     api_prof = get_api_profile_for_execute(case)
     if api_prof is None:
-        return {"case_id": case.id, "skipped": False, "passed": False, "error": "API 用例扩展数据缺失"}
+        return {
+            "case_id": case.id,
+            "skipped": False,
+            "passed": False,
+            "error": "API 用例扩展数据缺失",
+        }
     result = run_api_case(
         case,
         api_prof,
@@ -163,7 +178,9 @@ def run_scheduled_api_case(self, *, scheduled_task_id: int, case_id: int, enviro
     soft_time_limit=3600,
     time_limit=3660,
 )
-def run_scheduled_task(self, scheduled_task_id: int, *, scheduled_task_log_id: int | None = None) -> dict:
+def run_scheduled_task(
+    self, scheduled_task_id: int, *, scheduled_task_log_id: int | None = None
+) -> dict:
     task = ScheduledTask.objects.filter(pk=scheduled_task_id, is_deleted=False).first()
     if not task:
         return {"skipped": True, "reason": "scheduled_task_not_found"}
@@ -201,11 +218,18 @@ def run_scheduled_task(self, scheduled_task_id: int, *, scheduled_task_log_id: i
         for r in results:
             if r.get("skipped"):
                 api_failed += 1
-                detail["api_errors"].append({"case_id": r.get("case_id"), "error": r.get("reason")})
+                detail["api_errors"].append(
+                    {"case_id": r.get("case_id"), "error": r.get("reason")}
+                )
                 continue
             if not r.get("passed"):
                 api_failed += 1
-                detail["api_errors"].append({"case_id": r.get("case_id"), "error": r.get("message") or r.get("error") or "断言未通过"})
+                detail["api_errors"].append(
+                    {
+                        "case_id": r.get("case_id"),
+                        "error": r.get("message") or r.get("error") or "断言未通过",
+                    }
+                )
 
     end_time = timezone.now()
     api_count = len(api_ids)
@@ -236,7 +260,9 @@ def run_scheduled_task(self, scheduled_task_id: int, *, scheduled_task_log_id: i
         log.message = message
         log.detail = detail
         log.end_time = end_time
-        log.save(update_fields=["status", "message", "detail", "end_time", "update_time"])
+        log.save(
+            update_fields=["status", "message", "detail", "end_time", "update_time"]
+        )
 
     ScheduledTask.objects.filter(pk=task.pk).update(
         last_run_time=end_time,

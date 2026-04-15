@@ -111,7 +111,9 @@ def ai_fill_test_data(
         {"fields": fields_spec},
         ensure_ascii=False,
     )
-    text, err = chat_completion(system, user, api_key=api_key, base_url=base_url, model=model)
+    text, err = chat_completion(
+        system, user, api_key=api_key, base_url=base_url, model=model
+    )
     if err:
         return None, err
     try:

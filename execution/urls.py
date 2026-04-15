@@ -11,12 +11,12 @@ router = DefaultRouter()
 # 2. 注册视图集
 # 参数1: URL前缀 (如 projects)
 # 参数2: 对应的 ViewSet
-router.register(r'plans', TestPlanViewSet)
-router.register(r'reports', TestReportViewSet)
-router.register(r'tasks', PerfTaskViewSet)
-router.register(r'scheduled-tasks', ScheduledTaskViewSet)
-router.register(r'scheduled-task-logs', ScheduledTaskLogViewSet)
-router.register(r'k6-sessions', K6LoadTestSessionViewSet)
+router.register(r"plans", TestPlanViewSet)
+router.register(r"reports", TestReportViewSet)
+router.register(r"tasks", PerfTaskViewSet)
+router.register(r"scheduled-tasks", ScheduledTaskViewSet)
+router.register(r"scheduled-task-logs", ScheduledTaskLogViewSet)
+router.register(r"k6-sessions", K6LoadTestSessionViewSet)
 
 # 3. 暴露路由
 urlpatterns = router.urls + [

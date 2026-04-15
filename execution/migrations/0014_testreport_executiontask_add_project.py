@@ -51,4 +51,3 @@ class Migration(migrations.Migration):
         ),
         migrations.RunPython(backfill_testreport_project, migrations.RunPython.noop),
     ]
-

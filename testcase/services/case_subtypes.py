@@ -186,7 +186,9 @@ def sync_typed_children(
     if test_type == TEST_CASE_TYPE_PERFORMANCE:
         _merge_child(PerfTestCase, instance, perf, PERF_DEFAULTS, partial=partial)
     if test_type == TEST_CASE_TYPE_SECURITY:
-        _merge_child(SecurityTestCase, instance, sec, SECURITY_DEFAULTS, partial=partial)
+        _merge_child(
+            SecurityTestCase, instance, sec, SECURITY_DEFAULTS, partial=partial
+        )
     if test_type == TEST_CASE_TYPE_UI_AUTOMATION:
         _merge_child(UITestCase, instance, ui, UI_DEFAULTS, partial=partial)
 

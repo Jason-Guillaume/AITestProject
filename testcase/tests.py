@@ -24,9 +24,7 @@ class VariableRuntimeTests(SimpleTestCase):
             "body": {},
             "headers": {"Content-Type": "application/json"},
         }
-        rules = [
-            {"var_name": "ctype", "source": "header", "rule": "content-type"}
-        ]
+        rules = [{"var_name": "ctype", "source": "header", "rule": "content-type"}]
         result = extractor.extract(response_data, rules)
         self.assertEqual(result, {"ctype": "application/json"})
 
@@ -40,7 +38,9 @@ class VariableRuntimeTests(SimpleTestCase):
     def test_extract_support_expression_key(self):
         extractor = VariableExtractor()
         response_data = {"body": {"data": {"token": "abc123"}}, "headers": {}}
-        rules = [{"var_name": "my_token", "source": "body", "expression": "$.data.token"}]
+        rules = [
+            {"var_name": "my_token", "source": "body", "expression": "$.data.token"}
+        ]
         result = extractor.extract(response_data, rules)
         self.assertEqual(result, {"my_token": "abc123"})
 

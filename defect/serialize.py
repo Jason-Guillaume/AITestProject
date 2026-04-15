@@ -39,7 +39,9 @@ class TestDefectSerializer(BaseModelSerializers):
         if severity == 1 and priority != 1:
             raise serializers.ValidationError({"priority": "致命缺陷的优先级必须为高"})
         if severity == 4 and priority != 3:
-            raise serializers.ValidationError({"priority": "建议类缺陷的优先级必须为低"})
+            raise serializers.ValidationError(
+                {"priority": "建议类缺陷的优先级必须为低"}
+            )
 
         # 业务要求：缺陷必须归属模块（创建时强制，更新时不强制补齐历史数据）
         if not self.instance and not attrs.get("module"):

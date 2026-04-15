@@ -31,9 +31,8 @@ def collect_api_chain(
     if not case_ids:
         return [], "test_case_ids 不能为空"
 
-    qs = (
-        TestCase.objects.filter(id__in=case_ids, is_deleted=False)
-        .select_related("apitestcase")
+    qs = TestCase.objects.filter(id__in=case_ids, is_deleted=False).select_related(
+        "apitestcase"
     )
     by_id = {c.id: c for c in qs}
     ordered: List[TestCase] = []

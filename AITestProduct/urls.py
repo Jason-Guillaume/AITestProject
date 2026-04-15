@@ -6,19 +6,18 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    
     # 按照模块分发到各个子应用的 urls.py 中
     path("api/sys/", include("user.sys_urls")),
     path("api/change-requests/", include("user.approval_urls")),
-    path('api/user/', include('user.urls')),
-    path('api/project/', include('project.urls')),
-    path('api/testcase/', include('testcase.urls')),
-    path('api/environments/', include('testcase.environment_urls')),
-    path('api/execution/', include('execution.urls')),
-    path('api/perf/', include('execution.perf_urls')),
-    path('api/defect/', include('defect.urls')),
-    path('api/assistant/', include('assistant.urls')),
-    path('api/ai/', include('assistant.ai_urls')),
+    path("api/user/", include("user.urls")),
+    path("api/project/", include("project.urls")),
+    path("api/testcase/", include("testcase.urls")),
+    path("api/environments/", include("testcase.environment_urls")),
+    path("api/execution/", include("execution.urls")),
+    path("api/perf/", include("execution.perf_urls")),
+    path("api/defect/", include("defect.urls")),
+    path("api/assistant/", include("assistant.urls")),
+    path("api/ai/", include("assistant.ai_urls")),
     path("api/server-logs/", include("server_logs.urls")),
 ]
 

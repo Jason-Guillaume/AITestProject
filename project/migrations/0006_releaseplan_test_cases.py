@@ -7,7 +7,10 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("testcase", "0018_testenvironment_environmentvariable_and_more"),
-        ("project", "0005_alter_releaseplan_is_deleted_alter_testproject_icon_and_more"),
+        (
+            "project",
+            "0005_alter_releaseplan_is_deleted_alter_testproject_icon_and_more",
+        ),
     ]
 
     operations = [

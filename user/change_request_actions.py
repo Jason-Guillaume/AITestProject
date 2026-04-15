@@ -60,9 +60,7 @@ def create_inbox_messages_for_change_request(change_request):
 
 def mark_messages_for_request(change_request, *, is_read=True):
     """将某条申请关联的全部站内信标记为已读（审批处理后清理待办）。"""
-    SystemMessage.objects.filter(related_request=change_request).update(
-        is_read=is_read
-    )
+    SystemMessage.objects.filter(related_request=change_request).update(is_read=is_read)
 
 
 def approve_change_request(cr, *, approver=None):
@@ -75,11 +73,7 @@ def approve_change_request(cr, *, approver=None):
 
     u = cr.user
     if cr.request_type == UserChangeRequest.RequestType.USERNAME:
-        if (
-            User.objects.filter(username=cr.new_value)
-            .exclude(pk=u.pk)
-            .exists()
-        ):
+        if User.objects.filter(username=cr.new_value).exclude(pk=u.pk).exists():
             raise ValueError("目标用户名已被占用")
         u.username = cr.new_value
         u.save(update_fields=["username"])
