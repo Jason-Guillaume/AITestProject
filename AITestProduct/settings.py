@@ -20,6 +20,19 @@ from urllib.parse import quote_plus
 def _app_installed(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    v = os.environ.get(name)
+    if v is None:
+        return bool(default)
+    s = str(v).strip().lower()
+    if s in ("1", "true", "yes", "y", "on"):
+        return True
+    if s in ("0", "false", "no", "n", "off"):
+        return False
+    return bool(default)
+
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,14 +41,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-oc-#_d1n+y92e3n3y-agvr4l4t20ehs=i+d6vpwho^9_k%-lgv"
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# - 开发环境可缺省（自动生成临时 key），避免首次启动被阻塞
+# - 生产环境必须通过环境变量注入，并在启动时强校验
+DEBUG = _env_bool("DJANGO_DEBUG", default=True)
+SECRET_KEY = (os.environ.get("DJANGO_SECRET_KEY") or "").strip()
+if not SECRET_KEY and DEBUG:
+    # 开发环境：缺省 key 仅用于本机调试，不用于生产
+    SECRET_KEY = "dev-only-unsafe-secret-key"
+if not SECRET_KEY and not DEBUG:
+    raise RuntimeError(
+        "Missing DJANGO_SECRET_KEY while DJANGO_DEBUG=0 (production safety check)."
+    )
 
 # 逗号分隔；不设时 DEBUG 下 Django 仅允许 localhost / 127.0.0.1（局域网 IP 直连后端会 DisallowedHost）。
 _allowed = os.environ.get("DJANGO_ALLOWED_HOSTS", "").strip()
-ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()] if _allowed else []
+ALLOWED_HOSTS = (
+    [h.strip() for h in _allowed.split(",") if h.strip()] if _allowed else []
+)
 
 
 # Application definition
@@ -53,8 +75,8 @@ INSTALLED_APPS = _INSTALLED_PREFIX + [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    'rest_framework',
-    'rest_framework.authtoken',
+    "rest_framework",
+    "rest_framework.authtoken",
     "django_apscheduler",
     "user.apps.UserConfig",
     "project.apps.ProjectConfig",
@@ -106,30 +128,37 @@ ASGI_APPLICATION = "AITestProduct.asgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "ai_test_product",  # 刚刚第一步创建的数据库名称
-        "USER": "root",  # 您的 MySQL 用户名
-        "PASSWORD": "Jj123456.",  # 您的 MySQL 密码（请替换为实际密码）
-        "HOST": "127.0.0.1",  # 本地数据库地址
-        "PORT": "3306",  # MySQL 默认端口
+        "NAME": os.environ.get("DB_NAME", "ai_test_product"),
+        "USER": os.environ.get("DB_USER", "root"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+        "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
+        "PORT": os.environ.get("DB_PORT", "3306"),
         "OPTIONS": {
             "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",  # 严格模式，避免截断数据
         },
     }
 }
 
+if not DEBUG:
+    # 生产安全：数据库密码不得为空（开发环境允许空密码/本地免密）
+    if not str(DATABASES["default"].get("PASSWORD") or "").strip():
+        raise RuntimeError(
+            "Missing DB_PASSWORD while DJANGO_DEBUG=0 (production safety check)."
+        )
+
 
 REST_FRAMEWORK = {
     # 默认认证方式：Token认证
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.TokenAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework.authentication.TokenAuthentication",
     ),
     # 默认权限策略：必须是登录用户（IsAuthenticated）
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     # ScopedRateThrottle 的配额（仅对声明了 throttle_scope 的视图生效）
     "DEFAULT_THROTTLE_RATES": {
-        "server_logs_analyze": os.environ.get("SERVER_LOGS_ANALYZE_THROTTLE", "40/hour"),
+        "server_logs_analyze": os.environ.get(
+            "SERVER_LOGS_ANALYZE_THROTTLE", "40/hour"
+        ),
     },
 }
 
@@ -310,8 +339,11 @@ if _redis_is_available(_redis_host, _redis_port):
 else:
     _default_broker = _default_mysql_broker
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", _default_broker)
-# 若安装了 django-celery-results，则统一使用 django-db 作为结果后端。
-CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "django-db")
+# 若安装了 django-celery-results，则可用 django-db 作为结果后端；否则回退到 rpc://，避免配置为不可用的 backend。
+CELERY_RESULT_BACKEND = os.environ.get(
+    "CELERY_RESULT_BACKEND",
+    "django-db" if _app_installed("django_celery_results") else "rpc://",
+)
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_RESULT_SERIALIZER = "json"
@@ -345,6 +377,18 @@ AI_CASE_SEMANTIC_DUP_THRESHOLD = float(
 )
 
 # ---------------------------------------------------------------------------
+# AI 治理：配额/并发保护（最小可用版，按用户维度）
+# ---------------------------------------------------------------------------
+# 0 表示不启用每日配额（默认不限制，建议生产环境配置）
+AI_GUARD_DAILY_REQUESTS = int(os.environ.get("AI_GUARD_DAILY_REQUESTS", "0"))
+# 单用户最大并发（同步+流式算在一起）；0 表示不限制（不建议）
+AI_GUARD_MAX_CONCURRENCY = int(os.environ.get("AI_GUARD_MAX_CONCURRENCY", "2"))
+# 并发槽位 TTL：用于异常中断时自动释放（秒）
+AI_GUARD_CONCURRENCY_TTL_SECONDS = int(
+    os.environ.get("AI_GUARD_CONCURRENCY_TTL_SECONDS", "180")
+)
+
+# ---------------------------------------------------------------------------
 # 服务器日志模块（SSH / Loki）
 # ---------------------------------------------------------------------------
 # 独立 Fernet 密钥（url-safe base64 44 字符）；不设置则从 SECRET_KEY 派生（仅建议开发环境）。
@@ -354,10 +398,21 @@ SERVER_LOGS_LOKI_BASE = os.environ.get("SERVER_LOGS_LOKI_BASE", "")
 # Elasticsearch：server_logs 实时写入与历史检索。生产务必用环境变量覆盖 URL 与密码。
 ELASTICSEARCH_URL = os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")
 ELASTICSEARCH_USER = os.environ.get("ELASTICSEARCH_USER", "elastic")
-ELASTICSEARCH_PASSWORD = os.environ.get("ELASTICSEARCH_PASSWORD", "sH63gtmA*bU9P-5HBpEd")
+ELASTICSEARCH_PASSWORD = os.environ.get("ELASTICSEARCH_PASSWORD", "")
 _es_verify = os.environ.get("ELASTICSEARCH_VERIFY_CERTS", "").strip().lower()
 ELASTICSEARCH_VERIFY_CERTS = _es_verify in ("1", "true", "yes")
-ELASTICSEARCH_REQUEST_TIMEOUT = int(os.environ.get("ELASTICSEARCH_REQUEST_TIMEOUT", "5"))
+ELASTICSEARCH_REQUEST_TIMEOUT = int(
+    os.environ.get("ELASTICSEARCH_REQUEST_TIMEOUT", "5")
+)
 # 读写别名（与 ILM rollover 一致）；若自建集群改了别名，需同步改此项与模板中的物理索引前缀。
 SERVER_LOGS_ES_INDEX = os.environ.get("SERVER_LOGS_ES_INDEX", "server-logs")
 
+if not DEBUG:
+    # 生产安全：若配置了 ES 用户则要求密码不为空（允许匿名集群：用户为空时不做强校验）
+    if (
+        str(ELASTICSEARCH_USER or "").strip()
+        and not str(ELASTICSEARCH_PASSWORD or "").strip()
+    ):
+        raise RuntimeError(
+            "Missing ELASTICSEARCH_PASSWORD while DJANGO_DEBUG=0 (production safety check)."
+        )
