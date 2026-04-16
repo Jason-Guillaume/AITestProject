@@ -204,7 +204,8 @@ def acquire_ai_concurrency_slot_for_scope(
     except ValueError:
         cache.add(key, 0, timeout=ttl)
         cur = cache.incr(key, 1)
-    cache.expire(key, ttl)  # type: ignore[attr-defined]
+    # Note: cache.expire() is Redis-specific and not available in LocMemCache
+    # The timeout is already set via cache.add() above
     if cur > max_c:
         try:
             cache.decr(key, 1)
@@ -260,7 +261,8 @@ def acquire_ai_concurrency_slot(*, user_id: int) -> tuple[bool, int, int]:
     except ValueError:
         cache.add(key, 0, timeout=ttl)
         cur = cache.incr(key, 1)
-    cache.expire(key, ttl)  # type: ignore[attr-defined]
+    # Note: cache.expire() is Redis-specific and not available in LocMemCache
+    # The timeout is already set via cache.add() above
     if cur > max_c:
         # 释放本次占用
         try:

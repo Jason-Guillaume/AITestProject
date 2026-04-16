@@ -9,6 +9,7 @@ from execution.models import ApiScenarioRun, ApiScenarioStepRun
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.decorators import action
 from common.models import AuditEvent
 from common.services.audit import record_audit_event
 

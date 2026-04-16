@@ -4774,7 +4774,7 @@ class AiGenerateCasesStreamView(View):
                 write_ai_usage_event(
                     user=drf_request.user,
                     action="generate_cases_stream",
-                    endpoint=_request_path(request),
+                    endpoint=_request_path(drf_request),
                     success=bool(audit_success),
                     status_code=200 if audit_success else 500,
                     model_used=model_used,

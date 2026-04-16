@@ -20,7 +20,15 @@
       "Bash(pip install:*)",
       "Bash(python manage.py show_migrations)",
       "Bash(python manage.py showmigrations)",
-      "Bash(mkdir server_logs:*)"
+      "Bash(mkdir server_logs:*)",
+      "Bash(python manage.py runserver)",
+      "Bash(curl -I http://localhost:8000/api/)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8000)",
+      "Bash(taskkill /F /IM python.exe)",
+      "Bash(taskkill //F //PID 2196)",
+      "Bash(taskkill //F //PID 27280)",
+      "Bash(python -c \"from assistant.services.ai_governance import acquire_ai_concurrency_slot, acquire_ai_concurrency_slot_for_scope; print\\('导入成功'\\)\")"
     ]
   }
 }

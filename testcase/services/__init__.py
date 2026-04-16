@@ -1,4 +1,6 @@
-from .variable_runtime import VariableExtractor, VariableResolver
+"""
+Service 层初始化文件
+"""
+from .testcase_service import TestCaseService
 
-__all__ = ["VariableExtractor", "VariableResolver"]
-# Test case domain services (enterprise split)
+__all__ = ['TestCaseService']
