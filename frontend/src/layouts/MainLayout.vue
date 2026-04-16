@@ -461,6 +461,7 @@ const appContextStore = useAppContextStore()
 function onSideMenuSelect(index) {
   if (typeof index === 'string' && index.startsWith('/')) {
     router.push(index).catch(() => {})
+    return
   }
 }
 
@@ -1944,6 +1945,8 @@ onUnmounted(() => {
   color: #e8eaef !important;
   text-shadow: 0 0 12px rgba(0, 216, 255, 0.22);
 }
+
+/* 知识中心筛选：已迁移到页面内的 module-tree-dock 样式 */
 
 /* ===== 主内容 ===== */
 .main-content {

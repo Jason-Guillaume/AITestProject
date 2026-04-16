@@ -37,10 +37,10 @@ from assistant.views import (
     _prepare_ai_generate_context,
     _resolve_openai_target,
 )
-from user.models import AIModelConfig
+from user.models import AIModelConfig, Organization
 from project.models import TestProject
 from testcase.models import TestModule
-from assistant.models import KnowledgeArticle, AiPatch
+from assistant.models import GeneratedTestArtifact, KnowledgeArticle, KnowledgeDocument, AiPatch
 from testcase.models import (
     TEST_CASE_TYPE_FUNCTIONAL,
     ExecutionLog,
@@ -773,3 +773,78 @@ class AiPatchApplyRollbackTests(TestCase):
             )
         )
         self.assertEqual([s.step_desc for s in active2], ["旧步骤1", "旧步骤2"])
+
+
+class KnowledgeOrgSharingAndArtifactsTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.u1 = user_model.objects.create_user(
+            username="kb_u1",
+            password="pass123456",
+            real_name="KB U1",
+        )
+        self.u2 = user_model.objects.create_user(
+            username="kb_u2",
+            password="pass123456",
+            real_name="KB U2",
+        )
+        self.org = Organization.objects.create(org_name="OrgA", creator=self.u1, updater=self.u1)
+        self.org.members.add(self.u1, self.u2)
+        self.client1 = APIClient()
+        self.client1.force_authenticate(user=self.u1)
+        self.client2 = APIClient()
+        self.client2.force_authenticate(user=self.u2)
+
+    def test_document_list_includes_org_shared_docs(self):
+        private_doc = KnowledgeDocument.objects.create(
+            title="Private",
+            file_name="p.md",
+            document_type=KnowledgeDocument.DOC_TYPE_MD,
+            status=KnowledgeDocument.STATUS_COMPLETED,
+            visibility_scope=KnowledgeDocument.VISIBILITY_PRIVATE,
+            org=self.org,
+            creator=self.u1,
+            updater=self.u1,
+        )
+        org_doc = KnowledgeDocument.objects.create(
+            title="OrgShared",
+            file_name="o.md",
+            document_type=KnowledgeDocument.DOC_TYPE_MD,
+            status=KnowledgeDocument.STATUS_COMPLETED,
+            visibility_scope=KnowledgeDocument.VISIBILITY_ORG,
+            org=self.org,
+            creator=self.u1,
+            updater=self.u1,
+        )
+        r = self.client2.get("/api/assistant/knowledge/documents/?page=1&page_size=50")
+        self.assertEqual(r.status_code, 200)
+        ids = [x.get("id") for x in (r.data.get("results") or [])]
+        self.assertIn(org_doc.id, ids)
+        self.assertNotIn(private_doc.id, ids)
+
+    def test_create_generated_test_artifact_from_doc(self):
+        doc = KnowledgeDocument.objects.create(
+            title="OrgShared",
+            file_name="o.md",
+            document_type=KnowledgeDocument.DOC_TYPE_MD,
+            status=KnowledgeDocument.STATUS_COMPLETED,
+            visibility_scope=KnowledgeDocument.VISIBILITY_ORG,
+            org=self.org,
+            creator=self.u1,
+            updater=self.u1,
+        )
+        payload = {
+            "artifact_type": "test_plan",
+            "title": "Plan1",
+            "doc_id": doc.id,
+            "content": {"a": 1},
+            "citations": [{"index": 1, "text": "x"}],
+        }
+        r = self.client2.post("/api/assistant/knowledge/artifacts/", payload, format="json")
+        self.assertEqual(r.status_code, 201)
+        self.assertTrue(r.data.get("success"))
+        item_id = (r.data.get("data") or {}).get("id")
+        self.assertTrue(item_id)
+        self.assertTrue(
+            GeneratedTestArtifact.objects.filter(pk=item_id, is_deleted=False).exists()
+        )

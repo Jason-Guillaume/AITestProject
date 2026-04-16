@@ -4,6 +4,24 @@ export const getApproachsApi = (params) => request.get("/testcase/approaches/", 
 export const createApproachApi = (data) => request.post("/testcase/approaches/", data);
 export const updateApproachApi = (id, data) => request.patch(`/testcase/approaches/${id}/`, data);
 export const deleteApproachApi = (id) => request.delete(`/testcase/approaches/${id}/`);
+export const batchDeleteApproachsApi = (data) =>
+  request.post("/testcase/approaches/batch-delete/", data);
+export const batchCopyApproachsApi = (data) =>
+  request.post("/testcase/approaches/batch-copy/", data);
+
+// 测试方案：回收站/恢复/彻底删除（统一批量语义）
+export const getApproachsRecycleApi = (params) =>
+  request.get("/testcase/approaches/recycle/", { params });
+export const restoreApproachApi = (id) =>
+  request.post(`/testcase/approaches/${id}/restore/`);
+export const hardDeleteApproachApi = (id) =>
+  request.post(`/testcase/approaches/${id}/hard-delete/`);
+export const bulkSoftDeleteApproachsApi = (data) =>
+  request.post("/testcase/approaches/bulk-soft-delete/", data);
+export const bulkRestoreApproachsApi = (data) =>
+  request.post("/testcase/approaches/bulk-restore/", data);
+export const bulkHardDeleteApproachsApi = (data) =>
+  request.post("/testcase/approaches/bulk-hard-delete/", data);
 
 // 方案图片
 export const getApproachImagesApi = (id) =>
@@ -23,6 +41,24 @@ export const createDesignApi = (data) => request.post("/testcase/designs/", data
 export const updateDesignApi = (id, data) => request.patch(`/testcase/designs/${id}/`, data);
 export const deleteDesignApi = (id) => request.delete(`/testcase/designs/${id}/`);
 export const getDesignDetailApi = (id) => request.get(`/testcase/designs/${id}/`);
+export const batchDeleteDesignsApi = (data) =>
+  request.post("/testcase/designs/batch-delete/", data);
+export const batchUpdateDesignsApi = (data) =>
+  request.post("/testcase/designs/batch-update/", data);
+
+// 测试设计：回收站/恢复/彻底删除（统一批量语义）
+export const getDesignsRecycleApi = (params) =>
+  request.get("/testcase/designs/recycle/", { params });
+export const restoreDesignApi = (id) =>
+  request.post(`/testcase/designs/${id}/restore/`);
+export const hardDeleteDesignApi = (id) =>
+  request.post(`/testcase/designs/${id}/hard-delete/`);
+export const bulkSoftDeleteDesignsApi = (data) =>
+  request.post("/testcase/designs/bulk-soft-delete/", data);
+export const bulkRestoreDesignsApi = (data) =>
+  request.post("/testcase/designs/bulk-restore/", data);
+export const bulkHardDeleteDesignsApi = (data) =>
+  request.post("/testcase/designs/bulk-hard-delete/", data);
 
 export const getModulesApi = (params) => request.get("/testcase/modules/", { params });
 export const createModuleApi = (data) => request.post("/testcase/modules/", data);

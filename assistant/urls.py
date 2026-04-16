@@ -2,6 +2,9 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from assistant.views import (
+    GeneratedTestArtifactListCreateAPIView,
+    GeneratedTestArtifactImportAPIView,
+    GeneratedTestArtifactImportPreviewAPIView,
     KnowledgeArticleViewSet,
     KnowledgeArticleChunksPreviewAPIView,
     KnowledgeCategoryOptionsAPIView,
@@ -26,6 +29,15 @@ urlpatterns = [
     path("llm/test-connection/", LlmTestConnectionAPIView.as_view()),
     path("knowledge/search/", KnowledgeSearchAPIView.as_view()),
     path("knowledge/categories/", KnowledgeCategoryOptionsAPIView.as_view()),
+    path("knowledge/artifacts/", GeneratedTestArtifactListCreateAPIView.as_view()),
+    path(
+        "knowledge/artifacts/<int:artifact_id>/import/",
+        GeneratedTestArtifactImportAPIView.as_view(),
+    ),
+    path(
+        "knowledge/artifacts/<int:artifact_id>/import-preview/",
+        GeneratedTestArtifactImportPreviewAPIView.as_view(),
+    ),
     path("knowledge/extract-text/", KnowledgeExtractTextAPIView.as_view()),
     path("knowledge/autofill-from-file/", KnowledgeAutoFillFromFileAPIView.as_view()),
     path("knowledge/documents/upload/", KnowledgeDocumentUploadAPIView.as_view()),

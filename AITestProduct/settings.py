@@ -37,6 +37,44 @@ def _env_bool(name: str, default: bool = False) -> bool:
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+# ---------------------------------------------------------------------------
+# Local .env loader (dev convenience)
+# - 不依赖 python-dotenv，避免额外安装
+# - 仅在环境变量未设置时才从 .env 注入，保证生产环境可控
+# ---------------------------------------------------------------------------
+
+
+def _load_local_dotenv(path: Path) -> None:
+    try:
+        if not path.exists() or not path.is_file():
+            return
+        raw = path.read_text(encoding="utf-8")
+    except Exception:
+        return
+    for line in raw.splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        if "=" not in s:
+            continue
+        k, v = s.split("=", 1)
+        key = k.strip()
+        if not key:
+            continue
+        if key in os.environ:
+            continue
+        val = v.strip()
+        # strip optional quotes
+        if (val.startswith('"') and val.endswith('"')) or (
+            val.startswith("'") and val.endswith("'")
+        ):
+            val = val[1:-1]
+        os.environ[key] = val
+
+
+_load_local_dotenv(BASE_DIR / ".env")
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
@@ -130,6 +168,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.mysql",
         "NAME": os.environ.get("DB_NAME", "ai_test_product"),
         "USER": os.environ.get("DB_USER", "root"),
+        # 开发/生产均建议通过环境变量注入，避免把密码写死到仓库中。
         "PASSWORD": os.environ.get("DB_PASSWORD", ""),
         "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
         "PORT": os.environ.get("DB_PORT", "3306"),

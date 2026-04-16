@@ -6,27 +6,52 @@
           <el-button type="primary" @click="showDialog = true">
             <el-icon><Plus /></el-icon> 新增测试计划
           </el-button>
+          <el-button class="filter-btn" :type="isRecycleMode ? 'warning' : ''" @click="toggleRecycleMode">
+            {{ isRecycleMode ? '返回列表' : '回收站' }}
+          </el-button>
+          <el-button class="filter-btn" :type="isSelectMode ? 'info' : ''" @click="toggleSelectMode">
+            {{ isSelectMode ? '取消选择' : '选择' }}
+            <span v-if="isSelectMode && selectedIds.length" style="margin-left: 6px">（{{ selectedIds.length }}）</span>
+          </el-button>
           <el-button
+            v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0"
             type="danger"
             plain
-            :disabled="selectedIds.length === 0"
             :loading="batchDeleting"
-            @click="batchDeleteSelected"
+            @click="batchSoftDelete"
           >
             批量删除（{{ selectedIds.length }}）
           </el-button>
           <el-button
+            v-if="isSelectMode && isRecycleMode && selectedIds.length > 0"
+            type="success"
+            plain
+            :loading="batchRestoring"
+            @click="batchRestore"
+          >
+            批量恢复（{{ selectedIds.length }}）
+          </el-button>
+          <el-button
+            v-if="isSelectMode && isRecycleMode && selectedIds.length > 0"
+            type="danger"
+            plain
+            :loading="batchHardDeleting"
+            @click="batchHardDelete"
+          >
+            彻底删除（{{ selectedIds.length }}）
+          </el-button>
+          <el-button
+            v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0"
             type="warning"
             plain
-            :disabled="selectedIds.length === 0"
             @click="openBatchUpdateStatus"
           >
             批量修改状态
           </el-button>
           <el-button
+            v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0"
             type="success"
             plain
-            :disabled="selectedIds.length === 0"
             :loading="batchCopying"
             @click="batchCopySelected"
           >
@@ -55,7 +80,7 @@
           size="default"
           @selection-change="onSelectionChange"
         >
-          <el-table-column type="selection" width="44" fixed="left" />
+          <el-table-column v-if="isSelectMode" type="selection" width="44" fixed="left" />
           <el-table-column prop="plan_name" label="测试计划名称" min-width="168" align="left">
             <template #default="{ row }">
               <el-button link type="primary" @click="router.push(`/test-plan/${row.id}`)">{{ row.plan_name }}</el-button>
@@ -84,7 +109,16 @@
           <el-table-column prop="testers_display" label="测试人员" min-width="136" align="center" show-overflow-tooltip />
           <el-table-column label="操作" min-width="200" width="200" fixed="right" align="center">
             <template #default="{ row }">
-              <TableActionGroup :row="row" :actions="planTableActions(row)" @action="handlePlanTableAction" />
+              <div v-if="isRecycleMode" class="recycle-row-actions">
+                <el-button link type="success" size="small" :disabled="isSelectMode" @click="restoreRow(row)">恢复</el-button>
+                <el-button link type="danger" size="small" :disabled="isSelectMode" @click="hardDeleteRow(row)">彻底删除</el-button>
+              </div>
+              <TableActionGroup
+                v-else
+                :row="row"
+                :actions="planTableActions(row)"
+                @action="handlePlanTableAction"
+              />
             </template>
           </el-table-column>
         </el-table>
@@ -187,7 +221,19 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, Delete, Edit, FolderOpened, Plus, Search, View } from '@element-plus/icons-vue'
 import TableActionGroup from '@/components/common/TableActionGroup.vue'
-import { getPlansApi, createPlanApi, deletePlanApi, batchDeletePlansApi, batchUpdatePlansApi, batchCopyPlansApi } from '@/api/execution'
+import {
+  getPlansApi,
+  createPlanApi,
+  deletePlanApi,
+  batchUpdatePlansApi,
+  batchCopyPlansApi,
+  getPlansRecycleApi,
+  restorePlanApi,
+  hardDeletePlanApi,
+  bulkSoftDeletePlansApi,
+  bulkRestorePlansApi,
+  bulkHardDeletePlansApi,
+} from '@/api/execution'
 import { getReleasesApi } from '@/api/project'
 import { getUsersApi } from '@/api/system'
 
@@ -204,10 +250,14 @@ const page = ref(1)
 const PAGE_SIZE = 10
 const selectedIds = ref([])
 const batchDeleting = ref(false)
+const batchRestoring = ref(false)
+const batchHardDeleting = ref(false)
 const batchUpdateVisible = ref(false)
 const batchUpdating = ref(false)
 const batchStatus = ref(null)
 const batchCopying = ref(false)
+const isRecycleMode = ref(false)
+const isSelectMode = ref(false)
 function planTableActions(row) {
   if (row.plan_status === 3) {
     return [
@@ -300,7 +350,8 @@ function formatDate(dt) { return dt ? dt.slice(0, 10) : '-' }
 async function loadList() {
   loading.value = true
   try {
-    const { data } = await getPlansApi({ page: page.value, page_size: PAGE_SIZE })
+    const api = isRecycleMode.value ? getPlansRecycleApi : getPlansApi
+    const { data } = await api({ page: page.value, page_size: PAGE_SIZE })
     const rows = normalizeListResponse(data)
     list.value = rows
     total.value = normalizeTotal(data, rows)
@@ -314,15 +365,29 @@ async function loadList() {
   }
 }
 
+function toggleSelectMode() {
+  isSelectMode.value = !isSelectMode.value
+  if (!isSelectMode.value) selectedIds.value = []
+}
+
+function toggleRecycleMode() {
+  isRecycleMode.value = !isRecycleMode.value
+  selectedIds.value = []
+  isSelectMode.value = false
+  batchUpdateVisible.value = false
+  page.value = 1
+  loadList()
+}
+
 async function delItem(row) {
   try {
-    await ElMessageBox.confirm(`确定删除「${row.plan_name ?? row.id}」？`, '警告', { type: 'warning' })
+    await ElMessageBox.confirm(`确定将「${row.plan_name ?? row.id}」移入回收站？`, '警告', { type: 'warning' })
   } catch {
     return
   }
   try {
     await deletePlanApi(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success('已移入回收站')
     loadList()
   } catch (err) {
     const msg = err?.response?.data?.msg || err?.message || '删除失败'
@@ -331,22 +396,23 @@ async function delItem(row) {
 }
 
 function onSelectionChange(rows) {
+  if (!isSelectMode.value) return
   selectedIds.value = (rows || []).map((r) => r.id).filter((id) => id != null)
 }
 
-async function batchDeleteSelected() {
+async function batchSoftDelete() {
   if (!selectedIds.value.length) return
   try {
-    await ElMessageBox.confirm(`确定批量删除 ${selectedIds.value.length} 条测试计划？`, '警告', { type: 'warning' })
+    await ElMessageBox.confirm(`确定将选中的 ${selectedIds.value.length} 条测试计划移入回收站？`, '警告', { type: 'warning' })
   } catch {
     return
   }
   batchDeleting.value = true
   try {
-    const { data } = await batchDeletePlansApi({ ids: selectedIds.value })
+    const { data } = await bulkSoftDeletePlansApi({ ids: selectedIds.value })
     const deleted = Number(data?.deleted ?? data?.data?.deleted ?? 0)
     const skipped = Number(data?.skipped ?? data?.data?.skipped ?? 0)
-    ElMessage.success(`删除成功：${deleted}，跳过：${skipped}`)
+    ElMessage.success(`已删除 ${deleted} 条；跳过 ${skipped} 条`)
     selectedIds.value = []
     loadList()
   } catch (err) {
@@ -354,6 +420,73 @@ async function batchDeleteSelected() {
     ElMessage.error(typeof msg === 'string' ? msg : '批量删除失败')
   } finally {
     batchDeleting.value = false
+  }
+}
+
+async function batchRestore() {
+  if (!selectedIds.value.length) return
+  batchRestoring.value = true
+  try {
+    const { data } = await bulkRestorePlansApi({ ids: selectedIds.value })
+    const restored = Number(data?.restored ?? data?.data?.restored ?? 0)
+    const skipped = Number(data?.skipped ?? data?.data?.skipped ?? 0)
+    ElMessage.success(`已恢复 ${restored} 条；跳过 ${skipped} 条`)
+    selectedIds.value = []
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '批量恢复失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量恢复失败')
+  } finally {
+    batchRestoring.value = false
+  }
+}
+
+async function batchHardDelete() {
+  if (!selectedIds.value.length) return
+  try {
+    await ElMessageBox.confirm(`确定彻底删除选中的 ${selectedIds.value.length} 条测试计划？此操作不可恢复。`, '警告', { type: 'error' })
+  } catch {
+    return
+  }
+  batchHardDeleting.value = true
+  try {
+    const { data } = await bulkHardDeletePlansApi({ ids: selectedIds.value })
+    const count = Number(data?.count ?? data?.data?.count ?? 0)
+    ElMessage.success(`已彻底删除 ${count} 条`)
+    selectedIds.value = []
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '彻底删除失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '彻底删除失败')
+  } finally {
+    batchHardDeleting.value = false
+  }
+}
+
+async function restoreRow(row) {
+  try {
+    await restorePlanApi(row.id)
+    ElMessage.success('已恢复')
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '恢复失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '恢复失败')
+  }
+}
+
+async function hardDeleteRow(row) {
+  try {
+    await ElMessageBox.confirm(`确定彻底删除「${row.plan_name ?? row.id}」？此操作不可恢复。`, '警告', { type: 'error' })
+  } catch {
+    return
+  }
+  try {
+    await hardDeletePlanApi(row.id)
+    ElMessage.success('已彻底删除')
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '彻底删除失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '彻底删除失败')
   }
 }
 
@@ -472,6 +605,25 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   flex-shrink: 0;
+}
+
+.filter-btn {
+  border-color: rgba(0, 255, 255, 0.25);
+  color: #00d8ff;
+  background: rgba(20, 28, 47, 0.5);
+}
+
+.filter-btn:hover {
+  border-color: rgba(0, 216, 255, 0.45);
+  color: #5ee7ff;
+  background: rgba(0, 216, 255, 0.08);
+}
+
+.recycle-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
 /* flex 垂直居中时补全横向：表头 th / 表体 td 与 align 一致 */

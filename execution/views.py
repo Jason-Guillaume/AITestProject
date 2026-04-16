@@ -428,6 +428,30 @@ class TestPlanViewSet(BaseModelViewSet):
     queryset = TestPlan.objects.all().prefetch_related("testers")
     serializer_class = TestPlanSerializer
 
+    def get_queryset(self):
+        """
+        支持回收站模式：
+        - GET /api/execution/plans/?recycle=1
+        """
+        params = self.request.query_params
+        r = params.get("recycle")
+        recycle_mode = r is not None and str(r).strip().lower() in ("1", "true", "yes")
+        if not recycle_mode:
+            d = params.get("is_deleted")
+            recycle_mode = d is not None and str(d).strip().lower() in ("1", "true", "yes")
+        if recycle_mode:
+            qs = TestPlan.objects.filter(is_deleted=True).prefetch_related("testers")
+            user = getattr(self.request, "user", None)
+            if (
+                self.enable_data_scope
+                and user
+                and getattr(user, "is_authenticated", False)
+                and not self._is_admin_user(user)
+            ):
+                qs = self._apply_member_scope(qs, user)
+            return qs.order_by("-update_time", "-id")
+        return super().get_queryset()
+
     def _parse_id_list(self, raw_ids):
         if raw_ids is None:
             raise ValidationError({"msg": "ids 必填", "code": 400, "data": None})
@@ -600,10 +624,150 @@ class TestPlanViewSet(BaseModelViewSet):
             }
         )
 
+    @action(detail=False, methods=["get"], url_path="recycle")
+    def recycle(self, request):
+        """回收站列表：等价于 ?recycle=1。"""
+        qp = request.query_params
+        mutable = getattr(qp, "_mutable", False)
+        qp._mutable = True
+        qp["recycle"] = "1"
+        try:
+            return self.list(request)
+        finally:
+            qp.pop("recycle", None)
+            qp._mutable = mutable
+
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request, pk=None):
+        """回收站恢复：仅允许恢复 is_deleted=True 的记录。"""
+        obj = get_object_or_404(TestPlan.objects.filter(is_deleted=True), pk=pk)
+        obj.is_deleted = False
+        obj.save(update_fields=["is_deleted", "update_time"])
+        return Response({"success": True, "id": int(obj.id)})
+
+    @action(detail=False, methods=["post"], url_path="bulk-soft-delete")
+    def bulk_soft_delete(self, request):
+        """批量软删除：body { ids: [] }。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
+        found_ids = list(qs.values_list("id", flat=True))
+        if not found_ids:
+            return Response({"success": True, "deleted": 0, "skipped": len(ids), "missing_ids": ids})
+        with transaction.atomic():
+            updated = qs.update(is_deleted=True)
+        missing = [i for i in ids if i not in set(found_ids)]
+        return Response({"success": True, "deleted": int(updated), "skipped": len(missing), "missing_ids": missing})
+
+    @action(detail=False, methods=["post"], url_path="bulk-restore")
+    def bulk_restore(self, request):
+        """回收站批量恢复：body { ids: [] }。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        user = getattr(request, "user", None)
+        qs = TestPlan.objects.filter(id__in=ids, is_deleted=True)
+        if (
+            self.enable_data_scope
+            and user
+            and getattr(user, "is_authenticated", False)
+            and not self._is_admin_user(user)
+        ):
+            qs = self._apply_member_scope(qs, user)
+        found_ids = list(qs.values_list("id", flat=True))
+        if not found_ids:
+            return Response({"success": True, "restored": 0, "skipped": len(ids), "missing_ids": ids})
+        with transaction.atomic():
+            updated = qs.update(is_deleted=False)
+        missing = [i for i in ids if i not in set(found_ids)]
+        return Response({"success": True, "restored": int(updated), "skipped": len(missing), "missing_ids": missing})
+
+    @action(detail=True, methods=["post"], url_path="hard-delete")
+    def hard_delete(self, request, pk=None):
+        """回收站彻底删除：仅允许删除 is_deleted=True 的记录。"""
+        obj = get_object_or_404(TestPlan.objects.filter(is_deleted=True), pk=pk)
+        user = getattr(request, "user", None)
+        before = obj
+        obj.delete()
+        try:
+            record_audit_event(
+                action=AuditEvent.ACTION_DELETE,
+                actor=user,
+                instance=before,
+                request=request,
+                before=before,
+                after=None,
+            )
+        except Exception:
+            pass
+        return Response({"success": True})
+
+    @action(detail=False, methods=["post"], url_path="bulk-hard-delete")
+    def bulk_hard_delete(self, request):
+        """回收站批量彻底删除：body { ids: [] }，仅对 is_deleted=True 生效。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        user = getattr(request, "user", None)
+        qs = TestPlan.objects.filter(id__in=ids, is_deleted=True).order_by("id")
+        if (
+            self.enable_data_scope
+            and user
+            and getattr(user, "is_authenticated", False)
+            and not self._is_admin_user(user)
+        ):
+            qs = self._apply_member_scope(qs, user)
+        deleted = 0
+        errors = []
+        for obj in qs.iterator(chunk_size=200):
+            try:
+                before = obj
+                obj.delete()
+                deleted += 1
+                try:
+                    record_audit_event(
+                        action=AuditEvent.ACTION_DELETE,
+                        actor=user,
+                        instance=before,
+                        request=request,
+                        before=before,
+                        after=None,
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                errors.append({"id": int(getattr(obj, "id", 0) or 0), "error": str(e)})
+        return Response({"success": len(errors) == 0, "count": deleted, "errors": errors})
+
 
 class TestReportViewSet(BaseModelViewSet):
     queryset = TestReport.objects.all()
     serializer_class = TestReportSerializer
+
+    def get_queryset(self):
+        """
+        支持回收站模式：
+        - GET /api/execution/reports/?recycle=1
+        """
+        params = self.request.query_params
+        r = params.get("recycle")
+        recycle_mode = r is not None and str(r).strip().lower() in ("1", "true", "yes")
+        if not recycle_mode:
+            d = params.get("is_deleted")
+            recycle_mode = d is not None and str(d).strip().lower() in ("1", "true", "yes")
+        if recycle_mode:
+            qs = TestReport.objects.filter(is_deleted=True)
+            user = getattr(self.request, "user", None)
+            if (
+                self.enable_data_scope
+                and user
+                and getattr(user, "is_authenticated", False)
+                and not self._is_admin_user(user)
+            ):
+                qs = self._apply_member_scope(qs, user)
+            return qs.order_by("-update_time", "-id")
+        return super().get_queryset()
 
     def _parse_id_list(self, raw_ids):
         if raw_ids is None:
@@ -771,6 +935,237 @@ class TestReportViewSet(BaseModelViewSet):
                 "errors": errors,
             }
         )
+
+    @action(detail=False, methods=["post"], url_path="batch-refresh-from-plan")
+    def batch_refresh_from_plan(self, request):
+        """
+        批量“刷新/重算”测试报告的统计字段（从关联 TestPlan 同步）。
+        这是一个可运行的批量操作：执行后报告列表中的覆盖率/通过率/缺陷数等会按计划最新值刷新。
+
+        POST /api/execution/reports/batch-refresh-from-plan/
+        body: { ids: number[] }
+        """
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+
+        qs = (
+            self.get_queryset()
+            .filter(id__in=ids, is_deleted=False)
+            .select_related("plan")
+        )
+        found = list(qs)
+        found_ids = {int(o.id) for o in found}
+        missing = [i for i in ids if i not in found_ids]
+        if not found:
+            return Response({"success": True, "updated": 0, "updated_ids": [], "missing_ids": ids})
+
+        updated_ids = []
+        errors = []
+        with transaction.atomic():
+            for obj in found:
+                try:
+                    p = getattr(obj, "plan", None)
+                    if p is None:
+                        errors.append({"id": int(obj.id), "error": "缺少关联计划"})
+                        continue
+                    cleaned = {
+                        "environment": getattr(p, "environment", obj.environment),
+                        "req_count": int(getattr(p, "req_count", 0) or 0),
+                        "case_count": int(getattr(p, "case_count", 0) or 0),
+                        "coverage_rate": getattr(p, "coverage_rate", obj.coverage_rate),
+                        "pass_rate": getattr(p, "pass_rate", obj.pass_rate),
+                        "defect_count": int(getattr(p, "defect_count", 0) or 0),
+                    }
+                    ser = self.get_serializer(obj, data=cleaned, partial=True)
+                    ser.is_valid(raise_exception=True)
+                    self.perform_update(ser)
+                    updated_ids.append(int(obj.id))
+                except Exception as e:
+                    errors.append({"id": int(obj.id), "error": str(e)})
+        return Response(
+            {
+                "success": len(errors) == 0,
+                "updated": len(updated_ids),
+                "updated_ids": updated_ids,
+                "missing_ids": missing,
+                "errors": errors,
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="batch-execute")
+    def batch_execute(self, request):
+        """
+        批量执行测试报告（异步 Celery）：
+        - 按 report.plan.version(ReleasePlan) 关联的用例集执行（仅 API 类型）
+        - 汇总通过率/缺陷数回写报告
+
+        POST /api/execution/reports/batch-execute/
+        body: { ids: number[], environment_id?: number }
+        """
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        env_id = request.data.get("environment_id")
+        environment_id = None
+        if env_id not in (None, ""):
+            try:
+                environment_id = int(env_id)
+            except Exception:
+                environment_id = None
+
+        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
+        found = list(qs.values_list("id", flat=True))
+        found_ids = {int(x) for x in found}
+        missing = [i for i in ids if i not in found_ids]
+
+        from execution.tasks import run_test_report_execute
+
+        triggered = []
+        errors = []
+        for rid in found:
+            try:
+                async_result = run_test_report_execute.delay(int(rid), environment_id=environment_id)
+                triggered.append(
+                    {"id": int(rid), "celery_task_id": str(async_result.id or "")}
+                )
+                try:
+                    record_execute_audit(
+                        actor=request.user,
+                        instance=None,
+                        request=request,
+                        extra={"report_id": int(rid), "celery_task_id": str(async_result.id or "")},
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                errors.append({"id": int(rid), "error": str(e)})
+
+        return Response(
+            {
+                "success": len(errors) == 0,
+                "triggered": len(triggered),
+                "triggered_items": triggered,
+                "missing_ids": missing,
+                "errors": errors,
+            }
+        )
+
+    @action(detail=False, methods=["get"], url_path="recycle")
+    def recycle(self, request):
+        """回收站列表：等价于 ?recycle=1。"""
+        qp = request.query_params
+        mutable = getattr(qp, "_mutable", False)
+        qp._mutable = True
+        qp["recycle"] = "1"
+        try:
+            return self.list(request)
+        finally:
+            qp.pop("recycle", None)
+            qp._mutable = mutable
+
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request, pk=None):
+        """回收站恢复：仅允许恢复 is_deleted=True 的记录。"""
+        obj = get_object_or_404(TestReport.objects.filter(is_deleted=True), pk=pk)
+        obj.is_deleted = False
+        obj.save(update_fields=["is_deleted", "update_time"])
+        return Response({"success": True, "id": int(obj.id)})
+
+    @action(detail=False, methods=["post"], url_path="bulk-soft-delete")
+    def bulk_soft_delete(self, request):
+        """批量软删除：body { ids: [] }。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
+        found_ids = list(qs.values_list("id", flat=True))
+        if not found_ids:
+            return Response({"success": True, "deleted": 0, "skipped": len(ids), "missing_ids": ids})
+        with transaction.atomic():
+            updated = qs.update(is_deleted=True)
+        missing = [i for i in ids if i not in set(found_ids)]
+        return Response({"success": True, "deleted": int(updated), "skipped": len(missing), "missing_ids": missing})
+
+    @action(detail=False, methods=["post"], url_path="bulk-restore")
+    def bulk_restore(self, request):
+        """回收站批量恢复：body { ids: [] }。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        user = getattr(request, "user", None)
+        qs = TestReport.objects.filter(id__in=ids, is_deleted=True)
+        if (
+            self.enable_data_scope
+            and user
+            and getattr(user, "is_authenticated", False)
+            and not self._is_admin_user(user)
+        ):
+            qs = self._apply_member_scope(qs, user)
+        found_ids = list(qs.values_list("id", flat=True))
+        if not found_ids:
+            return Response({"success": True, "restored": 0, "skipped": len(ids), "missing_ids": ids})
+        with transaction.atomic():
+            updated = qs.update(is_deleted=False)
+        missing = [i for i in ids if i not in set(found_ids)]
+        return Response({"success": True, "restored": int(updated), "skipped": len(missing), "missing_ids": missing})
+
+    @action(detail=True, methods=["post"], url_path="hard-delete")
+    def hard_delete(self, request, pk=None):
+        """回收站彻底删除：仅允许删除 is_deleted=True 的记录。"""
+        obj = get_object_or_404(TestReport.objects.filter(is_deleted=True), pk=pk)
+        user = getattr(request, "user", None)
+        before = obj
+        obj.delete()
+        try:
+            record_audit_event(
+                action=AuditEvent.ACTION_DELETE,
+                actor=user,
+                instance=before,
+                request=request,
+                before=before,
+                after=None,
+            )
+        except Exception:
+            pass
+        return Response({"success": True})
+
+    @action(detail=False, methods=["post"], url_path="bulk-hard-delete")
+    def bulk_hard_delete(self, request):
+        """回收站批量彻底删除：body { ids: [] }，仅对 is_deleted=True 生效。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        user = getattr(request, "user", None)
+        qs = TestReport.objects.filter(id__in=ids, is_deleted=True).order_by("id")
+        if (
+            self.enable_data_scope
+            and user
+            and getattr(user, "is_authenticated", False)
+            and not self._is_admin_user(user)
+        ):
+            qs = self._apply_member_scope(qs, user)
+        deleted = 0
+        errors = []
+        for obj in qs.iterator(chunk_size=200):
+            try:
+                before = obj
+                obj.delete()
+                deleted += 1
+                try:
+                    record_audit_event(
+                        action=AuditEvent.ACTION_DELETE,
+                        actor=user,
+                        instance=before,
+                        request=request,
+                        before=before,
+                        after=None,
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                errors.append({"id": int(getattr(obj, "id", 0) or 0), "error": str(e)})
+        return Response({"success": len(errors) == 0, "count": deleted, "errors": errors})
 
 
 class PerfTaskPagination(PageNumberPagination):

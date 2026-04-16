@@ -88,6 +88,32 @@ def _load_documents_from_url(doc: KnowledgeDocument):
     if not _is_public_hostname(parsed.hostname or ""):
         raise ValueError("URL 主机不可访问或疑似内网地址，已拒绝抓取")
 
+    class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+        """
+        防止通过重定向绕过 SSRF 校验：
+        - 仅允许 http/https
+        - 每次重定向都重新校验 hostname 是否解析到公网地址
+        - 限制最大重定向次数
+        """
+
+        max_hops = 3
+
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            parsed_next = urlparse(newurl)
+            if parsed_next.scheme not in {"http", "https"}:
+                raise ValueError("URL 重定向协议不被允许")
+            if not _is_public_hostname(parsed_next.hostname or ""):
+                raise ValueError("URL 重定向目标疑似内网地址，已拒绝抓取")
+
+            hops = int(getattr(req, "_redirect_hops", 0) or 0) + 1
+            if hops > int(getattr(self, "max_hops", 3) or 3):
+                raise ValueError("URL 重定向次数过多，已拒绝抓取")
+
+            new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
+            if new_req is not None:
+                setattr(new_req, "_redirect_hops", hops)
+            return new_req
+
     timeout = float(getattr(settings, "KNOWLEDGE_URL_FETCH_TIMEOUT_SECONDS", 15.0))
     max_bytes = int(getattr(settings, "KNOWLEDGE_URL_MAX_BYTES", 2 * 1024 * 1024))
     req = urllib.request.Request(
@@ -98,7 +124,8 @@ def _load_documents_from_url(doc: KnowledgeDocument):
             "Accept": "text/html,application/json,text/plain,*/*;q=0.8",
         },
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    opener = urllib.request.build_opener(_SafeRedirectHandler())
+    with opener.open(req, timeout=timeout) as resp:
         raw_bytes = resp.read(max_bytes + 1)
         if len(raw_bytes) > max_bytes:
             raise ValueError(f"URL 内容过大，当前最大支持 {max_bytes // 1024}KB")
@@ -324,6 +351,8 @@ def process_document_rag(document_id: int) -> None:
                 **base_meta,
                 "doc_id": int(doc.id),
                 "module_id": int(doc.module_id) if doc.module_id else None,
+                "org_id": int(doc.org_id) if getattr(doc, "org_id", None) else None,
+                "visibility_scope": str(getattr(doc, "visibility_scope", "") or ""),
                 "chunk_index": idx,
                 "document_type": doc.document_type,
                 "file_name": doc.file_name or "",

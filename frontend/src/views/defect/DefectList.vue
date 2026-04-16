@@ -6,18 +6,41 @@
         <el-button type="primary" size="default" @click="router.push('/defect/detail')">
           <el-icon><Plus /></el-icon> 新增缺陷
         </el-button>
-        <el-dropdown trigger="click">
-          <el-button size="default">
-            更多操作<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="batchDelete">批量删除</el-dropdown-item>
-              <el-dropdown-item @click="onExportStub">批量导出</el-dropdown-item>
-              <el-dropdown-item @click="onBatchStatusStub">批量修改状态</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <el-button class="filter-btn" :type="isRecycleMode ? 'warning' : ''" @click="toggleRecycleMode">
+          {{ isRecycleMode ? '返回列表' : '回收站' }}
+        </el-button>
+        <el-button class="filter-btn" :type="isSelectMode ? 'info' : ''" @click="toggleSelectMode">
+          {{ isSelectMode ? '取消选择' : '选择' }}
+          <span v-if="isSelectMode && selectedIds.length" style="margin-left: 6px">（{{ selectedIds.length }}）</span>
+        </el-button>
+
+        <el-button
+          v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0"
+          type="danger"
+          plain
+          :loading="batchDeleting"
+          @click="batchSoftDelete"
+        >
+          批量删除（{{ selectedIds.length }}）
+        </el-button>
+        <el-button
+          v-if="isSelectMode && isRecycleMode && selectedIds.length > 0"
+          type="success"
+          plain
+          :loading="batchRestoring"
+          @click="batchRestore"
+        >
+          批量恢复（{{ selectedIds.length }}）
+        </el-button>
+        <el-button
+          v-if="isSelectMode && isRecycleMode && selectedIds.length > 0"
+          type="danger"
+          plain
+          :loading="batchHardDeleting"
+          @click="batchHardDelete"
+        >
+          彻底删除（{{ selectedIds.length }}）
+        </el-button>
       </div>
       <div class="defect-toolbar__filters">
         <el-select v-model="filters.severity" placeholder="严重程度" clearable size="default" class="filter-select filter-select--severity" @change="loadList">
@@ -51,11 +74,11 @@
     </div>
 
     <div class="table-card cyber-table-panel">
-      <el-table class="defect-table--cyber admin-data-table" :data="list" v-loading="loading" @selection-change="selected = $event">
+      <el-table class="defect-table--cyber admin-data-table" :data="list" v-loading="loading" @selection-change="onSelectionChange">
         <template #empty>
           <el-empty description="暂无缺陷数据" :image-size="88" />
         </template>
-        <el-table-column type="selection" width="48" align="center" />
+        <el-table-column v-if="isSelectMode" type="selection" width="48" align="center" />
         <el-table-column prop="defect_no" label="缺陷ID" min-width="100" width="100" align="left" />
         <el-table-column prop="defect_name" label="缺陷名称" min-width="168" align="left" show-overflow-tooltip>
           <template #default="{ row }">
@@ -81,6 +104,14 @@
         <el-table-column label="创建时间" min-width="176" width="176" align="center" class-name="col-datetime">
           <template #default="{ row }">{{ formatDate(row.create_time) }}</template>
         </el-table-column>
+        <el-table-column v-if="isRecycleMode" label="操作" min-width="160" width="160" fixed="right" align="center">
+          <template #default="{ row }">
+            <div class="recycle-row-actions">
+              <el-button link type="success" size="small" :disabled="isSelectMode" @click="restoreRow(row)">恢复</el-button>
+              <el-button link type="danger" size="small" :disabled="isSelectMode" @click="hardDeleteRow(row)">彻底删除</el-button>
+            </div>
+          </template>
+        </el-table-column>
       </el-table>
       <div class="pagination-wrap">
         <el-pagination
@@ -100,18 +131,32 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
-import { getDefectsApi, deleteDefectApi } from '@/api/defect'
+import { Plus, Search } from '@element-plus/icons-vue'
+import {
+  getDefectsApi,
+  getDefectsRecycleApi,
+  deleteDefectApi,
+  restoreDefectApi,
+  hardDeleteDefectApi,
+  bulkSoftDeleteDefectsApi,
+  bulkRestoreDefectsApi,
+  bulkHardDeleteDefectsApi,
+} from '@/api/defect'
 
 const PAGE_SIZE = 10
 
 const router = useRouter()
 const list = ref([])
-const selected = ref([])
 const loading = ref(false)
 const page = ref(1)
 const total = ref(0)
 const filters = ref({ severity: null, status: null, priority: null, keyword: '' })
+const isRecycleMode = ref(false)
+const isSelectMode = ref(false)
+const selectedIds = ref([])
+const batchDeleting = ref(false)
+const batchRestoring = ref(false)
+const batchHardDeleting = ref(false)
 
 function severityLabel(v) { return { 1: '致命', 2: '严重', 3: '一般', 4: '建议' }[v] || '-' }
 function priorityLabel(v) { return { 1: '高', 2: '中', 3: '低' }[v] || '-' }
@@ -132,27 +177,84 @@ function normalizeTotal(payload, rows) {
   return rows.length
 }
 
-function onExportStub() { ElMessage.info('批量导出功能开发中') }
-function onBatchStatusStub() { ElMessage.info('批量修改状态开发中') }
+function toggleSelectMode() {
+  isSelectMode.value = !isSelectMode.value
+  if (!isSelectMode.value) selectedIds.value = []
+}
 
-async function batchDelete() {
-  if (!selected.value.length) {
-    ElMessage.warning('请先勾选要删除的缺陷')
-    return
-  }
+function toggleRecycleMode() {
+  isRecycleMode.value = !isRecycleMode.value
+  selectedIds.value = []
+  isSelectMode.value = false
+  page.value = 1
+  loadList()
+}
+
+function onSelectionChange(rows) {
+  if (!isSelectMode.value) return
+  selectedIds.value = (rows || []).map((r) => r.id).filter((id) => id != null)
+}
+
+async function batchSoftDelete() {
+  if (!selectedIds.value.length) return
   try {
-    await ElMessageBox.confirm(`确定删除选中的 ${selected.value.length} 条缺陷？`, '警告', { type: 'warning' })
+    await ElMessageBox.confirm(`确定将选中的 ${selectedIds.value.length} 条缺陷移入回收站？`, '警告', { type: 'warning' })
   } catch {
     return
   }
+  batchDeleting.value = true
   try {
-    await Promise.all(selected.value.map((row) => deleteDefectApi(row.id)))
-    ElMessage.success('删除成功')
-    selected.value = []
+    const { data } = await bulkSoftDeleteDefectsApi({ ids: selectedIds.value })
+    const deleted = Number(data?.deleted ?? data?.data?.deleted ?? 0)
+    const skipped = Number(data?.skipped ?? data?.data?.skipped ?? 0)
+    ElMessage.success(`已删除 ${deleted} 条；跳过 ${skipped} 条`)
+    selectedIds.value = []
     loadList()
   } catch (err) {
-    const msg = err?.response?.data?.msg || err?.message || '删除失败'
-    ElMessage.error(typeof msg === 'string' ? msg : '删除失败')
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '批量删除失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量删除失败')
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function batchRestore() {
+  if (!selectedIds.value.length) return
+  batchRestoring.value = true
+  try {
+    const { data } = await bulkRestoreDefectsApi({ ids: selectedIds.value })
+    const restored = Number(data?.restored ?? data?.data?.restored ?? 0)
+    const skipped = Number(data?.skipped ?? data?.data?.skipped ?? 0)
+    ElMessage.success(`已恢复 ${restored} 条；跳过 ${skipped} 条`)
+    selectedIds.value = []
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '批量恢复失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量恢复失败')
+  } finally {
+    batchRestoring.value = false
+  }
+}
+
+async function batchHardDelete() {
+  if (!selectedIds.value.length) return
+  try {
+    await ElMessageBox.confirm(`确定彻底删除选中的 ${selectedIds.value.length} 条缺陷？此操作不可恢复。`, '警告', { type: 'error' })
+  } catch {
+    return
+  }
+  batchHardDeleting.value = true
+  try {
+    const { data } = await bulkHardDeleteDefectsApi({ ids: selectedIds.value })
+    const count = Number(data?.count ?? data?.data?.count ?? 0)
+    ElMessage.success(`已彻底删除 ${count} 条`)
+    selectedIds.value = []
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '彻底删除失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '彻底删除失败')
+  } finally {
+    batchHardDeleting.value = false
   }
 }
 
@@ -165,7 +267,8 @@ async function loadList() {
   const kw = (filters.value.keyword || '').trim()
   if (kw) params.search = kw
   try {
-    const { data } = await getDefectsApi(params)
+    const api = isRecycleMode.value ? getDefectsRecycleApi : getDefectsApi
+    const { data } = await api(params)
     const rows = normalizeListResponse(data)
     list.value = rows
     total.value = normalizeTotal(data, rows)
@@ -176,6 +279,33 @@ async function loadList() {
     total.value = 0
   } finally {
     loading.value = false
+  }
+}
+
+async function restoreRow(row) {
+  try {
+    await restoreDefectApi(row.id)
+    ElMessage.success('已恢复')
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '恢复失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '恢复失败')
+  }
+}
+
+async function hardDeleteRow(row) {
+  try {
+    await ElMessageBox.confirm(`确定彻底删除「${row.defect_no || row.id}」？此操作不可恢复。`, '警告', { type: 'error' })
+  } catch {
+    return
+  }
+  try {
+    await hardDeleteDefectApi(row.id)
+    ElMessage.success('已彻底删除')
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '彻底删除失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '彻底删除失败')
   }
 }
 
@@ -209,6 +339,25 @@ onMounted(loadList)
   align-items: center;
   flex-wrap: wrap;
   gap: 16px;
+}
+
+.filter-btn {
+  border-color: rgba(0, 255, 255, 0.25);
+  color: #00d8ff;
+  background: rgba(20, 28, 47, 0.5);
+}
+
+.filter-btn:hover {
+  border-color: rgba(0, 216, 255, 0.45);
+  color: #5ee7ff;
+  background: rgba(0, 216, 255, 0.08);
+}
+
+.recycle-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
 .defect-list--cyber .filter-select--severity {
