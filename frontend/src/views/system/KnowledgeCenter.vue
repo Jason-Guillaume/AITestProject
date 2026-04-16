@@ -2,16 +2,66 @@
   <div class="cyber-page knowledge-page">
     <div class="knowledge-bg-mask"></div>
     <el-card class="admin-list-card cyber-card" shadow="never">
-      <div class="knowledge-layout">
-        <aside class="knowledge-sidenav">
-          <div class="knowledge-sidenav__title">文档分类导航</div>
-          <el-menu :default-active="activePurpose" class="cyber-menu" @select="onPurposeSelect">
-            <el-menu-item v-for="item in purposeTabs" :key="item.value" :index="item.value">
-              <span>{{ item.label }}</span>
-              <span class="purpose-count-badge">{{ purposeCount(item.value) }}</span>
-            </el-menu-item>
-          </el-menu>
+      <div class="knowledge-layout knowledge-layout--module-dock">
+        <aside
+          class="module-tree-dock"
+          :class="{
+            'module-tree-dock--wide': isModuleDockWideLayout,
+            'module-tree-dock--overlay': !isModuleDockWideLayout,
+            'is-expanded': isPurposeDockExpanded,
+          }"
+        >
+          <div class="module-tree-rail" aria-label="文档分类快捷栏">
+            <el-tooltip :content="isPurposeDockExpanded ? '收起分类面板' : '展开分类面板'" placement="right" :show-after="200">
+              <el-button
+                class="module-tree-rail__expand-btn"
+                :class="{ 'is-expanded': isPurposeDockExpanded }"
+                text
+                type="primary"
+                :aria-expanded="isPurposeDockExpanded"
+                @click.stop="togglePurposeDockExpanded"
+              >
+                <el-icon :size="20"><DArrowLeft v-if="isPurposeDockExpanded" /><DArrowRight v-else /></el-icon>
+              </el-button>
+            </el-tooltip>
+          </div>
+
+          <div class="module-tree-slide" :class="{ 'is-open': isPurposeDockExpanded }">
+            <el-card class="tc-card tc-card--tree admin-list-card tc-tree-panel" shadow="never">
+              <div class="tree-panel__head">
+                <div class="tree-panel__all-label">文档分类</div>
+                <div class="tree-panel__head-actions">
+                  <el-tooltip
+                    :content="isModuleDockWideLayout ? '收起侧栏' : '关闭分类面板'"
+                    placement="bottom"
+                    :show-after="400"
+                  >
+                    <el-button class="tree-panel__icon-btn" text type="primary" size="small" @click="closePurposeDock">
+                      <el-icon :size="18"><DArrowLeft v-if="isModuleDockWideLayout" /><Fold v-else /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                </div>
+              </div>
+              <div class="tc-card__tree-body tree-panel__body">
+                <div class="purpose-dock-list">
+                  <button
+                    v-for="item in purposeTabs"
+                    :key="item.value"
+                    type="button"
+                    class="purpose-dock-item"
+                    :class="{ 'is-active': knowledgeUiStore.activePurpose === item.value }"
+                    @click="selectPurpose(item.value)"
+                  >
+                    <span class="purpose-dock-item__label">{{ item.label }}</span>
+                    <span class="purpose-dock-item__badge">{{ purposeDockCount(item.value) }}</span>
+                  </button>
+                </div>
+              </div>
+            </el-card>
+          </div>
         </aside>
+
+        <div v-if="isPurposeDockExpanded && !isModuleDockWideLayout" class="module-tree-mask" @click="closePurposeDock" />
 
         <section class="knowledge-main">
           <div class="admin-toolbar-row knowledge-toolbar">
@@ -34,10 +84,44 @@
           </div>
 
           <div class="runtime-summary">
-            <el-tag size="small">待处理 {{ runtimeStatus.counters.pending || 0 }}</el-tag>
-            <el-tag size="small" type="warning">处理中 {{ runtimeStatus.counters.processing || 0 }}</el-tag>
-            <el-tag size="small" type="success">已完成 {{ runtimeStatus.counters.completed || 0 }}</el-tag>
-            <el-tag size="small" type="danger">失败 {{ runtimeStatus.counters.failed || 0 }}</el-tag>
+            <el-tag size="small" class="cyber-tag cyber-tag--info">待处理 {{ runtimeStatus.counters.pending || 0 }}</el-tag>
+            <el-tag size="small" type="warning" class="cyber-tag cyber-tag--warning">
+              处理中 {{ runtimeStatus.counters.processing || 0 }}
+            </el-tag>
+            <el-tag size="small" type="success" class="cyber-tag cyber-tag--success">
+              已完成 {{ runtimeStatus.counters.completed || 0 }}
+            </el-tag>
+            <el-tag size="small" type="danger" class="cyber-tag cyber-tag--danger">失败 {{ runtimeStatus.counters.failed || 0 }}</el-tag>
+          </div>
+          <div class="knowledge-filters">
+            <el-input
+              v-model="docFilters.keyword"
+              clearable
+              placeholder="搜索标题/文件名/URL"
+              @keyup.enter="onSearch"
+              style="max-width: 320px"
+            />
+            <el-select
+              v-model="docFilters.module_id"
+              clearable
+              filterable
+              placeholder="所属模块"
+              style="width: 220px"
+              @change="onSearch"
+            >
+              <el-option
+                v-for="m in moduleOptions"
+                :key="m.value"
+                :label="m.label"
+                :value="m.value"
+              />
+            </el-select>
+            <el-select v-model="docFilters.status" clearable placeholder="状态" style="width: 160px" @change="onSearch">
+              <el-option label="待处理" value="pending" />
+              <el-option label="处理中" value="processing" />
+              <el-option label="已完成" value="completed" />
+              <el-option label="失败" value="failed" />
+            </el-select>
           </div>
           <el-alert
             v-if="pageErrorMessage"
@@ -55,7 +139,9 @@
             </el-table-column>
             <el-table-column label="用途标签" width="150">
               <template #default="{ row }">
-                <el-tag effect="plain">{{ purposeLabelByValue(resolvePurpose(row)) }}</el-tag>
+                <el-tag effect="plain" class="cyber-tag cyber-tag--neutral">
+                  {{ purposeLabelByValue(resolvePurpose(row)) }}
+                </el-tag>
               </template>
             </el-table-column>
             <el-table-column label="所属模块" width="160" show-overflow-tooltip>
@@ -100,6 +186,18 @@
               </template>
             </el-table-column>
           </el-table>
+          <div class="knowledge-pagination">
+            <el-pagination
+              background
+              layout="total, sizes, prev, pager, next, jumper"
+              :total="pagination.total"
+              :page-size="pagination.page_size"
+              :current-page="pagination.page"
+              :page-sizes="[10, 20, 50, 100]"
+              @current-change="onPageChange"
+              @size-change="onPageSizeChange"
+            />
+          </div>
         </section>
       </div>
     </el-card>
@@ -173,6 +271,7 @@
           <div class="structured-json-panel">
             <div class="structured-json-actions">
               <el-button size="small" type="primary" @click="copyStructuredPayload">复制 JSON</el-button>
+              <el-button size="small" type="success" @click="saveStructuredPayload">保存为测试资产</el-button>
             </div>
             <pre class="structured-json-content">{{ structuredPayloadText }}</pre>
           </div>
@@ -196,16 +295,76 @@
         </div>
       </div>
     </el-drawer>
+
+    <el-dialog v-model="importPreviewDialogVisible" title="进一步落地：导入预览" width="860px">
+      <div v-if="!importPreviewData" style="color: rgba(226,232,240,.75)">暂无预览数据</div>
+      <div v-else class="import-preview">
+        <div class="import-preview__section-title">发布计划（可编辑）</div>
+        <div class="release-plan-form">
+          <el-input v-model="releasePlanForm.release_name" placeholder="发布名称" />
+          <el-input v-model="releasePlanForm.version_no" placeholder="版本号（唯一）" />
+          <el-date-picker
+            v-model="releasePlanForm.release_date"
+            type="datetime"
+            placeholder="发布日期"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            format="YYYY-MM-DD HH:mm:ss"
+            style="width: 100%"
+          />
+        </div>
+
+        <div class="import-preview__section-title">将要导入/更新的用例（去重合并）</div>
+        <el-table :data="importPreviewData.draft_cases || []" border size="small" style="margin-bottom: 12px">
+          <el-table-column label="导入" width="72" align="center">
+            <template #default="{ row }">
+              <el-checkbox :model-value="selectedDraftIdxs.includes(row.idx)" @change="(v)=>toggleDraftIdx(row.idx, v)" />
+            </template>
+          </el-table-column>
+          <el-table-column prop="idx" label="#" width="60" />
+          <el-table-column prop="case_name" label="用例名称" min-width="260" show-overflow-tooltip />
+          <el-table-column prop="action" label="动作" width="100" />
+          <el-table-column prop="step_desc_preview" label="步骤预览" min-width="260" show-overflow-tooltip />
+        </el-table>
+
+        <div class="import-preview__section-title">推荐关联的“模块内已有用例”（将绑定到发布计划）</div>
+        <el-checkbox-group v-model="selectedExistingCaseIds" class="existing-case-group">
+          <div v-for="row in importPreviewData.suggest_existing_cases || []" :key="row.id" class="existing-case-item">
+            <el-checkbox :label="row.id">
+              <span class="existing-case-name">{{ row.case_name }}</span>
+              <span class="existing-case-meta">({{ row.test_type }})</span>
+            </el-checkbox>
+          </div>
+        </el-checkbox-group>
+      </div>
+      <template #footer>
+        <el-button @click="importPreviewDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="importingFromPreview" @click="confirmImportFromPreview">确认导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Delete, RefreshRight, View, WarningFilled } from "@element-plus/icons-vue";
+import { useRouter } from "vue-router";
+import {
+  DArrowLeft,
+  DArrowRight,
+  Delete,
+  Fold,
+  FolderOpened,
+  RefreshRight,
+  View,
+  WarningFilled,
+} from "@element-plus/icons-vue";
 import { getModulesApi } from "@/api/testcase";
+import { KNOWLEDGE_PURPOSE_TABS, useKnowledgeUiStore } from "@/stores/knowledgeUiStore";
 import {
   autoFillKnowledgeFormApi,
+  createGeneratedTestArtifactApi,
+  importGeneratedTestArtifactApi,
+  previewImportGeneratedTestArtifactApi,
   deleteKnowledgeDocumentApi,
   extractKnowledgeTextApi,
   getKnowledgeDocumentStatusApi,
@@ -213,7 +372,6 @@ import {
   ingestKnowledgeDocumentApi,
   listKnowledgeDocumentsApi,
   previewKnowledgeDocumentChunksApi,
-  probeKnowledgeDocumentDeleteApi,
   retryKnowledgeDocumentApi,
 } from "@/api/assistant";
 
@@ -224,7 +382,6 @@ const semanticLoading = ref(false);
 const pageErrorMessage = ref("");
 const documentList = ref([]);
 const moduleOptions = ref([]);
-const activePurpose = ref("all");
 const docIngestUploadFile = ref(null);
 const ingestDrawerVisible = ref(false);
 const semanticDrawerVisible = ref(false);
@@ -239,13 +396,9 @@ const deleteCapability = ref({
   hint: "待检测",
 });
 let documentPollingTimer = null;
+let documentsLoadingInFlight = false;
 
-const purposeTabs = [
-  { label: "全部文档", value: "all" },
-  { label: "需求文档", value: "requirement" },
-  { label: "规范标准", value: "standard" },
-  { label: "报告/计划模版", value: "template" },
-];
+const purposeTabs = KNOWLEDGE_PURPOSE_TABS;
 const purposeCategoryMap = {
   requirement: "functional_test",
   standard: "best_practice",
@@ -265,6 +418,8 @@ const categoryPurposeMap = {
 const runtimeStatus = ref({
   counters: { pending: 0, processing: 0, completed: 0, failed: 0 },
 });
+const pagination = ref({ page: 1, page_size: 20, total: 0 });
+const docFilters = ref({ keyword: "", status: "", module_id: null });
 
 const docIngestForm = ref({
   mode: "upload",
@@ -281,9 +436,55 @@ const docIngestTouched = ref({
   tagsText: false,
 });
 
+const importPreviewDialogVisible = ref(false);
+const importingFromPreview = ref(false);
+const importPreviewData = ref(null);
+const importPreviewArtifactId = ref(null);
+const selectedExistingCaseIds = ref([]);
+const selectedDraftIdxs = ref([]);
+const releasePlanForm = ref({ release_name: "", version_no: "", release_date: "" });
+
+const router = useRouter();
+const knowledgeUiStore = useKnowledgeUiStore();
+const isPurposeDockExpanded = ref(false);
+const windowInnerWidth = ref(typeof window !== "undefined" ? window.innerWidth : 1600);
+
+const MODULE_DOCK_PUSH_BREAKPOINT_PX = 1280;
+const isModuleDockWideLayout = computed(() => windowInnerWidth.value >= MODULE_DOCK_PUSH_BREAKPOINT_PX);
+
+function syncViewportWidth() {
+  if (typeof window !== "undefined") windowInnerWidth.value = window.innerWidth;
+}
+
+function togglePurposeDockExpanded() {
+  isPurposeDockExpanded.value = !isPurposeDockExpanded.value;
+}
+
+function openPurposeDockPanel() {
+  isPurposeDockExpanded.value = true;
+}
+
+function closePurposeDock() {
+  isPurposeDockExpanded.value = false;
+}
+
+function purposeDockCount(value) {
+  const pc = knowledgeUiStore.purposeCounts || {};
+  if (value === "all") return Number(pc.all ?? 0);
+  return Number(pc[value] ?? 0);
+}
+
+function selectPurpose(value) {
+  knowledgeUiStore.setActivePurpose(value);
+  if (!isModuleDockWideLayout.value) {
+    // overlay 模式下点击后收起，避免遮挡表格
+    isPurposeDockExpanded.value = false;
+  }
+}
+
 const filteredDocuments = computed(() => {
-  if (activePurpose.value === "all") return documentList.value;
-  return documentList.value.filter((item) => resolvePurpose(item) === activePurpose.value);
+  // 列表已在后端按 category 过滤；这里不再二次过滤，避免分页/切换分类时出现空列表。
+  return documentList.value;
 });
 const drawerSummaryText = computed(() => {
   if (drawerMode.value === "preview") {
@@ -374,10 +575,6 @@ const structuredPayload = computed(() => {
 });
 const structuredPayloadText = computed(() => JSON.stringify(structuredPayload.value, null, 2));
 
-function onPurposeSelect(value) {
-  activePurpose.value = value;
-}
-
 function resolveApiErrorMessage(error, fallback = "请求失败") {
   const status = error?.response?.status;
   const data = error?.response?.data || {};
@@ -386,6 +583,10 @@ function resolveApiErrorMessage(error, fallback = "请求失败") {
     data?.msg ||
     data?.error ||
     (typeof data === "string" ? data : "");
+  const rawStr = typeof msg === "string" ? msg.trim() : "";
+  if (/^<!doctype html/i.test(rawStr) || /^<html/i.test(rawStr)) {
+    return `${fallback}：后端返回 HTML 错误页（可能未迁移/未重启或后端异常）`;
+  }
   if (msg) return String(msg);
   if (!status) return `${fallback}：网络异常或后端未启动`;
   if (status === 401) return `${fallback}：登录已过期，请重新登录`;
@@ -393,11 +594,6 @@ function resolveApiErrorMessage(error, fallback = "请求失败") {
   if (status === 404) return `${fallback}：接口不存在，请确认后端已更新并重启`;
   if (status >= 500) return `${fallback}：服务端异常（${status}）`;
   return `${fallback}（HTTP ${status}）`;
-}
-
-function purposeCount(value) {
-  if (value === "all") return documentList.value.length;
-  return documentList.value.filter((x) => resolvePurpose(x) === value).length;
 }
 
 function purposeLabelByValue(value) {
@@ -446,13 +642,21 @@ function openIngestDrawer() {
 
 async function checkDeleteCapability() {
   try {
-    // 发送“删除 id=0”探针：正常后端应返回 404 文档不存在（而不是 405/路由404）。
-    await probeKnowledgeDocumentDeleteApi(0);
-    // 理论上不会命中（id=0 不存在），保守按可用处理。
+    // 用 DELETE 探针：0 不存在应返回 404（也说明路由可用），避免依赖 Allow 头。
+    await deleteKnowledgeDocumentApi(0);
+    // 若真的删掉了（极小概率），也说明能力可用
     deleteCapability.value = { status: "ok", label: "可用", tagType: "success", hint: "删除接口已生效" };
   } catch (error) {
     const status = error?.response?.status;
-    const msg = String(error?.response?.data?.message || error?.response?.data?.msg || "");
+    if (status === 404) {
+      deleteCapability.value = {
+        status: "ok",
+        label: "可用",
+        tagType: "success",
+        hint: "删除接口已生效（探针 ID 不存在）",
+      };
+      return;
+    }
     // 401/403 说明路由存在但权限不足，能力应视为可用。
     if (status === 401 || status === 403) {
       deleteCapability.value = {
@@ -460,21 +664,6 @@ async function checkDeleteCapability() {
         label: "可用但受限",
         tagType: "warning",
         hint: "删除接口已生效（当前账户权限受限）",
-      };
-    } else if (status === 404 && msg.includes("文档不存在")) {
-      // 能进入删除视图并返回“文档不存在”，说明删除路由已生效。
-      deleteCapability.value = {
-        status: "ok",
-        label: "可用",
-        tagType: "success",
-        hint: "删除接口已生效",
-      };
-    } else if (status === 404) {
-      deleteCapability.value = {
-        status: "down",
-        label: "未生效",
-        tagType: "danger",
-        hint: "后端可能未加载最新删除路由",
       };
     } else if (status === 405) {
       deleteCapability.value = {
@@ -683,21 +872,53 @@ async function loadModules() {
 }
 
 async function loadDocuments() {
+  if (documentsLoadingInFlight) return;
+  documentsLoadingInFlight = true;
   loading.value = true;
   try {
-    const { data } = await listKnowledgeDocumentsApi({ page_size: 120 });
+    const purpose = knowledgeUiStore.activePurpose || "all";
+    const category = purpose !== "all" ? purposeCategoryMap[purpose] || "" : "";
+    const params = {
+      page: pagination.value.page,
+      page_size: pagination.value.page_size,
+      ...(category ? { category } : {}),
+      ...(String(docFilters.value.keyword || "").trim() ? { q: String(docFilters.value.keyword || "").trim() } : {}),
+      ...(String(docFilters.value.status || "").trim() ? { status: String(docFilters.value.status || "").trim() } : {}),
+      ...(docFilters.value.module_id ? { module_id: Number(docFilters.value.module_id) } : {}),
+    };
+    const { data } = await listKnowledgeDocumentsApi(params);
     documentList.value = Array.isArray(data?.results) ? data.results : [];
+    pagination.value.total = Number(data?.count ?? documentList.value.length ?? 0);
+    if (data?.purpose_counts) knowledgeUiStore.setPurposeCounts(data.purpose_counts);
     pageErrorMessage.value = "";
     await loadRuntimeStatus();
     ensureDocumentPolling();
   } catch (error) {
     documentList.value = [];
+    pagination.value.total = 0;
     stopDocumentPolling();
     pageErrorMessage.value = resolveApiErrorMessage(error, "文档列表加载失败");
     ElMessage.error(pageErrorMessage.value);
   } finally {
     loading.value = false;
+    documentsLoadingInFlight = false;
   }
+}
+
+function onSearch() {
+  pagination.value.page = 1;
+  loadDocuments();
+}
+
+function onPageChange(p) {
+  pagination.value.page = Number(p || 1);
+  loadDocuments();
+}
+
+function onPageSizeChange(size) {
+  pagination.value.page_size = Number(size || 20);
+  pagination.value.page = 1;
+  loadDocuments();
 }
 
 async function loadRuntimeStatus() {
@@ -712,7 +933,8 @@ async function loadRuntimeStatus() {
 }
 
 function hasProcessingDocuments() {
-  return documentList.value.some((x) => x?.status === "processing" || x?.status === "pending");
+  const counters = runtimeStatus.value?.counters || {};
+  return Number(counters.pending || 0) > 0 || Number(counters.processing || 0) > 0;
 }
 
 function stopDocumentPolling() {
@@ -922,10 +1144,108 @@ async function copyStructuredPayload() {
   }
 }
 
+async function saveStructuredPayload() {
+  try {
+    const doc = activeDrawerDocument.value || {};
+    const payload = structuredPayload.value || {};
+    const res = await createGeneratedTestArtifactApi({
+      artifact_type: "test_plan",
+      title: String(payload?.title || doc?.title || doc?.file_name || "").trim(),
+      doc_id: doc?.id || null,
+      module_id: doc?.module_id || null,
+      content: payload,
+      citations: Array.isArray(payload?.chunk_refs) ? payload.chunk_refs : [],
+    });
+    ElMessage.success("已保存为测试资产，正在生成导入预览...");
+    const id = res?.data?.data?.id;
+    if (!id) return;
+    importPreviewArtifactId.value = Number(id);
+    const previewRes = await previewImportGeneratedTestArtifactApi(id, { module_id: doc?.module_id || null });
+    importPreviewData.value = previewRes?.data?.data || null;
+    selectedExistingCaseIds.value = Array.isArray(importPreviewData.value?.default_selected_existing_case_ids)
+      ? importPreviewData.value.default_selected_existing_case_ids
+      : [];
+    selectedDraftIdxs.value = Array.isArray(importPreviewData.value?.draft_cases)
+      ? (importPreviewData.value.draft_cases || []).map((x) => x.idx).filter(Boolean)
+      : [];
+    const rp = importPreviewData.value?.suggest_release_plan || {};
+    releasePlanForm.value = {
+      release_name: String(rp.release_name || "").trim(),
+      version_no: String(rp.version_no || "").trim(),
+      release_date: String(rp.release_date || "").trim(),
+    };
+    importPreviewDialogVisible.value = true;
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.message || "保存失败");
+  }
+}
+
+function toggleDraftIdx(idx, checked) {
+  const id = Number(idx || 0);
+  if (!id) return;
+  const cur = new Set(selectedDraftIdxs.value || []);
+  if (checked) cur.add(id);
+  else cur.delete(id);
+  selectedDraftIdxs.value = Array.from(cur).sort((a, b) => a - b);
+}
+
+async function confirmImportFromPreview() {
+  if (!importPreviewArtifactId.value) return;
+  importingFromPreview.value = true;
+  try {
+    const res = await importGeneratedTestArtifactApi(importPreviewArtifactId.value, {
+      mode: "dedup_merge",
+      enable_release_plan: true,
+      existing_case_ids: selectedExistingCaseIds.value || [],
+      selected_draft_idxs: selectedDraftIdxs.value || [],
+      release_plan: {
+        release_name: String(releasePlanForm.value?.release_name || "").trim(),
+        version_no: String(releasePlanForm.value?.version_no || "").trim(),
+        release_date: String(releasePlanForm.value?.release_date || "").trim(),
+      },
+    });
+    const data = res?.data?.data || {};
+    const rpId = data?.release_plan_id || null;
+    const msg = `导入完成：新增用例 ${data?.created_cases ?? 0} 条，更新用例 ${data?.updated_cases ?? 0} 条，计划关联 ${data?.linked_to_release_plan ?? 0} 条`;
+    if (rpId) {
+      try {
+        await ElMessageBox.confirm(`${msg}\n\n是否跳转到发布计划详情？`, "落地完成", {
+          confirmButtonText: "跳转",
+          cancelButtonText: "留在当前页",
+          type: "success",
+        });
+        router.push(`/defect/release/${rpId}`);
+      } catch (_) {
+        // cancelled
+      }
+    } else {
+      ElMessage.success(msg);
+    }
+    importPreviewDialogVisible.value = false;
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.message || "导入失败");
+  } finally {
+    importingFromPreview.value = false;
+  }
+}
+
 loadDocuments();
 loadModules();
 checkDeleteCapability();
 onBeforeUnmount(() => stopDocumentPolling());
+onMounted(() => {
+  syncViewportWidth();
+  window.addEventListener("resize", syncViewportWidth);
+});
+onBeforeUnmount(() => window.removeEventListener("resize", syncViewportWidth));
+
+watch(
+  () => knowledgeUiStore.activePurpose,
+  () => {
+    pagination.value.page = 1;
+    loadDocuments();
+  }
+);
 </script>
 
 <style scoped>
@@ -966,23 +1286,21 @@ onBeforeUnmount(() => stopDocumentPolling());
 }
 
 .knowledge-layout {
-  display: grid;
-  grid-template-columns: 168px 1fr;
+  display: flex;
+  flex-direction: row;
   gap: 10px;
+  align-items: stretch;
+  min-height: 0;
 }
 
-.knowledge-sidenav,
 .knowledge-main {
+  flex: 1;
+  min-width: 0;
   backdrop-filter: blur(12px);
   background: rgba(8, 15, 30, 0.38);
   border: 1px solid rgba(34, 211, 238, 0.3);
   box-shadow: inset 0 0 8px rgba(0, 255, 255, 0.08);
   border-radius: 12px;
-}
-
-.knowledge-sidenav {
-  padding: 8px 6px;
-  align-self: start;
 }
 
 .knowledge-main {
@@ -1002,41 +1320,240 @@ onBeforeUnmount(() => stopDocumentPolling());
   opacity: 0.8;
 }
 
-.knowledge-sidenav__title {
-  font-size: 12px;
-  color: #9be3ff;
-  margin-bottom: 8px;
-  padding-left: 8px;
-}
-
-.cyber-menu :deep(.el-menu) {
-  border: none;
-  background: transparent;
-}
-
-.cyber-menu :deep(.el-menu-item) {
-  border-radius: 8px;
-  margin: 4px 0;
+/* ====== 复用 TestCase 的“窄竖条 + 侧滑面板”结构（仅保留所需样式） ====== */
+.module-tree-dock {
+  --aitesta-module-dock-surface: #111827;
+  --aitesta-module-rail-w: 52px;
+  --aitesta-module-tree-w: 190px;
+  position: relative;
+  z-index: 52;
+  flex-shrink: 0;
   display: flex;
-  justify-content: space-between;
-  border: 1px solid rgba(56, 189, 248, 0.15);
-  background: rgba(2, 6, 23, 0.26);
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+  height: 100%;
+  align-self: stretch;
+  width: var(--aitesta-module-rail-w);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
 }
 
-.purpose-count-badge {
-  min-width: 24px;
-  height: 20px;
-  border-radius: 999px;
-  padding: 0 8px;
+.module-tree-dock.module-tree-dock--wide.is-expanded {
+  width: calc(var(--aitesta-module-rail-w) + var(--aitesta-module-tree-w));
+}
+
+.module-tree-dock--wide .module-tree-slide {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  height: 100%;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    flex-basis 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.22s ease;
+}
+
+.module-tree-dock--wide.is-expanded .module-tree-slide.is-open {
+  flex: 0 0 var(--aitesta-module-tree-w);
+  width: var(--aitesta-module-tree-w);
+  min-width: var(--aitesta-module-tree-w);
+  max-width: var(--aitesta-module-tree-w);
+  height: 100%;
+  opacity: 1;
+  pointer-events: auto;
+  border-radius: 0 12px 12px 0;
+  background: rgba(17, 24, 39, 0.55);
+}
+
+.module-tree-dock--overlay .module-tree-slide {
+  position: absolute;
+  left: var(--aitesta-module-rail-w);
+  top: 0;
+  bottom: 0;
+  width: var(--aitesta-module-tree-w);
+  z-index: 55;
+  transform: translate3d(-100%, 0, 0);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.22s ease,
+    box-shadow 0.28s ease;
+  will-change: transform;
+}
+
+.module-tree-dock--overlay .module-tree-slide.is-open {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.module-tree-dock--overlay.is-expanded .module-tree-slide.is-open {
+  box-shadow:
+    12px 0 36px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 216, 255, 0.08);
+  border-radius: 0 14px 14px 0;
+  overflow: hidden;
+  background: rgba(17, 24, 39, 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.module-tree-rail {
+  width: 52px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  z-index: 60;
+  box-sizing: border-box;
+  height: 100%;
+  background: var(--aitesta-module-dock-surface);
+  border: 1px solid rgba(0, 216, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.24);
+}
+
+.module-tree-rail__expand-btn {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 10px;
+  color: rgba(0, 216, 255, 0.88) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.module-tree-rail__expand-btn:hover:not(:disabled) {
+  background: rgba(0, 216, 255, 0.12) !important;
+  color: #7aebff !important;
+  box-shadow: 0 0 12px rgba(0, 216, 255, 0.15);
+}
+
+.module-tree-rail__expand-btn.is-expanded {
+  background: rgba(0, 216, 255, 0.14) !important;
+  color: #7aebff !important;
+  box-shadow: 0 0 14px rgba(0, 216, 255, 0.12);
+}
+
+.module-tree-rail__btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(226, 232, 240, 0.82);
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  color: #a5f3fc;
-  border: 1px solid rgba(34, 211, 238, 0.38);
-  background: rgba(8, 47, 73, 0.22);
-  box-shadow: inset 0 0 6px rgba(34, 211, 238, 0.2);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
 }
+
+.module-tree-rail__btn:hover:not(:disabled) {
+  border-color: rgba(0, 216, 255, 0.22);
+  background: rgba(0, 216, 255, 0.08);
+  box-shadow: 0 0 14px rgba(0, 216, 255, 0.12);
+  color: #dbeafe;
+}
+
+.module-tree-rail__btn.is-active {
+  border-color: rgba(0, 216, 255, 0.35);
+  background: rgba(0, 216, 255, 0.12);
+  color: #dbeafe;
+}
+
+.module-tree-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+/* Tree card 充满滑出面板高度，列表区滚动 */
+.tc-tree-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tree-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* 目的分类列表 */
+.purpose-dock-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.purpose-dock-item {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(2, 6, 23, 0.22);
+  color: rgba(226, 232, 240, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: border-color 0.22s ease, box-shadow 0.22s ease, background-color 0.22s ease, color 0.22s ease;
+}
+
+.purpose-dock-item:hover {
+  border-color: rgba(0, 216, 255, 0.22);
+  background: rgba(0, 216, 255, 0.06);
+  color: #e2e8f0;
+}
+
+.purpose-dock-item.is-active {
+  border-color: rgba(0, 216, 255, 0.55);
+  background: rgba(0, 216, 255, 0.08);
+  color: #e2e8f0;
+  box-shadow:
+    inset 4px 0 18px -4px rgba(0, 216, 255, 0.45),
+    0 0 22px rgba(0, 216, 255, 0.14);
+}
+
+.purpose-dock-item__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.purpose-dock-item__badge {
+  min-width: 22px;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: rgba(0, 216, 255, 0.85);
+  border: 1px solid rgba(0, 216, 255, 0.22);
+  background: rgba(0, 216, 255, 0.08);
+  box-shadow: 0 0 12px rgba(0, 216, 255, 0.12);
+}
+
 
 .knowledge-title {
   margin: 0;
@@ -1144,6 +1661,77 @@ onBeforeUnmount(() => stopDocumentPolling());
   flex-wrap: wrap;
 }
 
+/* ===== 统一 Tag：低饱和语义色 + 赛博材质 ===== */
+.cyber-tag {
+  --cyber-tag-fg: rgba(226, 232, 240, 0.86);
+  --cyber-tag-border: rgba(34, 211, 238, 0.18);
+  --cyber-tag-bg: rgba(2, 6, 23, 0.18);
+  --cyber-tag-glow: rgba(34, 211, 238, 0.12);
+  --cyber-tag-h: 22px;
+  --cyber-tag-fs: 11px;
+  --cyber-tag-px: 8px;
+}
+
+.cyber-tag.cyber-tag--neutral,
+.cyber-tag.cyber-tag--info {
+  --cyber-tag-fg: rgba(165, 243, 252, 0.9);
+  --cyber-tag-border: rgba(34, 211, 238, 0.22);
+  --cyber-tag-bg: rgba(8, 47, 73, 0.18);
+  --cyber-tag-glow: rgba(34, 211, 238, 0.12);
+}
+
+.cyber-tag.cyber-tag--success {
+  --cyber-tag-fg: rgba(187, 247, 208, 0.92);
+  --cyber-tag-border: rgba(34, 197, 94, 0.22);
+  --cyber-tag-bg: rgba(20, 83, 45, 0.14);
+  --cyber-tag-glow: rgba(34, 197, 94, 0.1);
+}
+
+.cyber-tag.cyber-tag--warning {
+  /* 琥珀但降饱和，避免亮黄抢眼 */
+  --cyber-tag-fg: rgba(253, 230, 138, 0.9);
+  --cyber-tag-border: rgba(245, 158, 11, 0.22);
+  --cyber-tag-bg: rgba(120, 53, 15, 0.14);
+  --cyber-tag-glow: rgba(245, 158, 11, 0.1);
+}
+
+.cyber-tag.cyber-tag--danger {
+  /* 偏玫红/暗红，降饱和 */
+  --cyber-tag-fg: rgba(254, 202, 202, 0.9);
+  --cyber-tag-border: rgba(244, 63, 94, 0.22);
+  --cyber-tag-bg: rgba(136, 19, 55, 0.12);
+  --cyber-tag-glow: rgba(244, 63, 94, 0.1);
+}
+
+.cyber-tag :deep(.el-tag) {
+  height: var(--cyber-tag-h);
+  line-height: calc(var(--cyber-tag-h) - 2px);
+  padding: 0 var(--cyber-tag-px);
+  border-radius: 999px;
+  border: 1px solid var(--cyber-tag-border);
+  background: var(--cyber-tag-bg);
+  box-shadow: 0 0 14px var(--cyber-tag-glow);
+}
+
+.cyber-tag :deep(.el-tag__content) {
+  font-size: var(--cyber-tag-fs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--cyber-tag-fg);
+}
+
+.cyber-tag :deep(.el-tag__close) {
+  color: color-mix(in srgb, var(--cyber-tag-fg) 70%, transparent);
+}
+
+.knowledge-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
 .knowledge-error-banner {
   margin-bottom: 10px;
 }
@@ -1153,6 +1741,47 @@ onBeforeUnmount(() => stopDocumentPolling());
   border-color: rgba(56, 189, 248, 0.2);
   padding-top: 6px;
   padding-bottom: 6px;
+}
+
+.knowledge-pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.import-preview__section-title {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.75);
+  margin: 6px 0 8px;
+}
+
+.existing-case-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 6px 8px;
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.25);
+}
+
+.existing-case-name {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.existing-case-meta {
+  margin-left: 6px;
+  color: rgba(226, 232, 240, 0.55);
+  font-size: 12px;
+}
+
+.release-plan-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .knowledge-table :deep(.el-table__header-wrapper th) {

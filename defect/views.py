@@ -25,12 +25,27 @@ class TestDefectViewSet(BaseModelViewSet):
     pagination_class = DefectPagination
 
     def get_queryset(self):
-        qs = (
-            super()
-            .get_queryset()
-            .select_related("release_version", "handler", "creator", "module")
-        )
         p = self.request.query_params
+        r = p.get("recycle")
+        recycle_mode = r is not None and str(r).strip().lower() in ("1", "true", "yes")
+        if not recycle_mode:
+            d = p.get("is_deleted")
+            recycle_mode = d is not None and str(d).strip().lower() in ("1", "true", "yes")
+
+        if recycle_mode:
+            qs = TestDefect.objects.filter(is_deleted=True)
+            user = getattr(self.request, "user", None)
+            if (
+                self.enable_data_scope
+                and user
+                and getattr(user, "is_authenticated", False)
+                and not self._is_admin_user(user)
+            ):
+                qs = self._apply_member_scope(qs, user)
+        else:
+            qs = super().get_queryset()
+
+        qs = qs.select_related("release_version", "handler", "creator", "module")
         if p.get("severity"):
             try:
                 severity = int(p["severity"])
@@ -60,6 +75,145 @@ class TestDefectViewSet(BaseModelViewSet):
         if q:
             qs = qs.filter(Q(defect_no__icontains=q) | Q(defect_name__icontains=q))
         return qs.order_by("-create_time")
+
+    def _parse_id_list(self, raw_ids):
+        if raw_ids is None:
+            raise ValidationError({"msg": "ids 必填", "code": 400, "data": None})
+        if not isinstance(raw_ids, list):
+            raise ValidationError({"msg": "ids 必须为数组", "code": 400, "data": None})
+        ids = []
+        for x in raw_ids:
+            try:
+                ids.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        ids = [i for i in ids if i > 0]
+        if not ids:
+            raise ValidationError({"msg": "ids 不能为空", "code": 400, "data": None})
+        if len(ids) > 500:
+            raise ValidationError({"msg": "单次最多处理 500 条", "code": 400, "data": None})
+        seen = set()
+        uniq = []
+        for i in ids:
+            if i in seen:
+                continue
+            seen.add(i)
+            uniq.append(i)
+        return uniq
+
+    @action(detail=False, methods=["get"], url_path="recycle")
+    def recycle(self, request):
+        """回收站列表：等价于 ?recycle=1。"""
+        qp = request.query_params
+        mutable = getattr(qp, "_mutable", False)
+        qp._mutable = True
+        qp["recycle"] = "1"
+        try:
+            return self.list(request)
+        finally:
+            qp.pop("recycle", None)
+            qp._mutable = mutable
+
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request, pk=None):
+        """回收站恢复：仅允许恢复 is_deleted=True 的记录。"""
+        obj = get_object_or_404(TestDefect.objects.filter(is_deleted=True), pk=pk)
+        obj.is_deleted = False
+        obj.save(update_fields=["is_deleted", "update_time"])
+        return Response({"success": True, "id": int(obj.id)})
+
+    @action(detail=False, methods=["post"], url_path="bulk-soft-delete")
+    def bulk_soft_delete(self, request):
+        """批量软删除：body { ids: [] }。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
+        found_ids = list(qs.values_list("id", flat=True))
+        if not found_ids:
+            return Response({"success": True, "deleted": 0, "skipped": len(ids), "missing_ids": ids})
+        updated = qs.update(is_deleted=True)
+        missing = [i for i in ids if i not in set(found_ids)]
+        return Response({"success": True, "deleted": int(updated), "skipped": len(missing), "missing_ids": missing})
+
+    @action(detail=False, methods=["post"], url_path="bulk-restore")
+    def bulk_restore(self, request):
+        """回收站批量恢复：body { ids: [] }。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        user = getattr(request, "user", None)
+        qs = TestDefect.objects.filter(id__in=ids, is_deleted=True)
+        if (
+            self.enable_data_scope
+            and user
+            and getattr(user, "is_authenticated", False)
+            and not self._is_admin_user(user)
+        ):
+            qs = self._apply_member_scope(qs, user)
+        found_ids = list(qs.values_list("id", flat=True))
+        if not found_ids:
+            return Response({"success": True, "restored": 0, "skipped": len(ids), "missing_ids": ids})
+        updated = qs.update(is_deleted=False)
+        missing = [i for i in ids if i not in set(found_ids)]
+        return Response({"success": True, "restored": int(updated), "skipped": len(missing), "missing_ids": missing})
+
+    @action(detail=True, methods=["post"], url_path="hard-delete")
+    def hard_delete(self, request, pk=None):
+        """回收站彻底删除：仅允许删除 is_deleted=True 的记录。"""
+        obj = get_object_or_404(TestDefect.objects.filter(is_deleted=True), pk=pk)
+        user = getattr(request, "user", None)
+        before = obj
+        obj.delete()
+        try:
+            record_audit_event(
+                action=AuditEvent.ACTION_DELETE,
+                actor=user,
+                instance=before,
+                request=request,
+                before=before,
+                after=None,
+            )
+        except Exception:
+            pass
+        return Response({"success": True})
+
+    @action(detail=False, methods=["post"], url_path="bulk-hard-delete")
+    def bulk_hard_delete(self, request):
+        """回收站批量彻底删除：body { ids: [] }，仅对 is_deleted=True 生效。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        user = getattr(request, "user", None)
+        qs = TestDefect.objects.filter(id__in=ids, is_deleted=True).order_by("id")
+        if (
+            self.enable_data_scope
+            and user
+            and getattr(user, "is_authenticated", False)
+            and not self._is_admin_user(user)
+        ):
+            qs = self._apply_member_scope(qs, user)
+        deleted = 0
+        errors = []
+        for obj in qs.iterator(chunk_size=200):
+            try:
+                before = obj
+                obj.delete()
+                deleted += 1
+                try:
+                    record_audit_event(
+                        action=AuditEvent.ACTION_DELETE,
+                        actor=user,
+                        instance=before,
+                        request=request,
+                        before=before,
+                        after=None,
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                errors.append({"id": int(getattr(obj, "id", 0) or 0), "error": str(e)})
+        return Response({"success": len(errors) == 0, "count": deleted, "errors": errors})
 
     def perform_create(self, serializer):
         from django.db import IntegrityError, transaction

@@ -22,6 +22,21 @@ SmartTest 是一个面向软件测试全流程的 AI 辅助平台，覆盖测试
 
 ## 2. 快速启动
 
+### 2.0 一键启动（Windows 推荐）
+
+在项目根目录双击：
+
+- `start-all.bat`：同时启动后端 + 前端（会打开两个终端窗口）
+- `start-backend.bat`：只启动后端
+- `start-frontend.bat`：只启动前端
+
+> 说明：后端会从项目根目录的 `.env` 读取 `DB_*` 等环境变量（`.env` 已加入 `.gitignore` 不会提交）。首次使用请先 `Copy-Item .env.example .env` 并填好数据库账号密码。
+
+补充（与实时/异步能力相关）：
+
+- **WebSocket（如 k6 实时指标、服务器日志实时 tail）需要 ASGI**：开发环境请用 `daphne` 启动（详见 `开发文档/99-项目全局扫描对账索引.md` §3/§6）。
+- **异步任务（Celery）**：需要额外启动 worker（见本页 §4.2 与 `开发文档/99-项目全局扫描对账索引.md` §7.4）。
+
 ### 2.1 后端
 
 ```bash
@@ -50,6 +65,7 @@ npm run dev
 
 | 文档 | 说明 |
 |------|------|
+| [开发文档/99-项目全局扫描对账索引.md](./开发文档/99-项目全局扫描对账索引.md) | **全局对账索引（路由树/WS/环境变量总表/脚本与 CI）**，建议作为单一事实源 |
 | [开发文档/01-项目概述与快速启动.md](./开发文档/01-项目概述与快速启动.md) | 项目定位、技术栈、安装启动 |
 | [开发文档/02-目录结构与架构设计.md](./开发文档/02-目录结构与架构设计.md) | 目录结构与前后端架构分层 |
 | [开发文档/03-核心业务逻辑与模块说明.md](./开发文档/03-核心业务逻辑与模块说明.md) | 核心模型、流程与模块逻辑 |
@@ -97,7 +113,49 @@ python manage.py reindex_knowledge_articles
 python manage.py reindex_knowledge_articles --failed-only
 ```
 
-### 4.1 Celery Worker（Windows）
+### 4.1 全项目一键冒烟测试（Windows，含 UI）
+
+该冒烟会依次执行：
+
+- 后端启动（`manage.py runserver`）并等待端口 `8000`
+- 后端 API 冒烟：`pytest -m smoke tests/api`（生成 HTML 报告）
+- 前端安装/构建：`npm ci` + `npm run build`
+- 前端预览：`vite preview` 并等待端口 `4173`
+- UI 冒烟：Playwright（登录 + 打开关键页面）
+
+#### 4.1.1 前置条件
+
+- 已准备好可登录账号（用于 API + UI）：必须设置环境变量 `TEST_API_USERNAME` / `TEST_API_PASSWORD`
+- 后端依赖与前端依赖可安装（首次运行会较慢）
+- 数据库/Redis 等服务已就绪（如果你的后端配置依赖它们）
+
+#### 4.1.2 运行命令（PowerShell）
+
+```powershell
+# 在项目根目录运行
+$env:TEST_API_USERNAME="admin"
+$env:TEST_API_PASSWORD="your-password"
+
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke_all.ps1
+```
+
+可选参数：
+
+- `-SkipFrontendBuild`：跳过 `npm ci + npm run build`
+- `-SkipUi`：跳过 Playwright UI 冒烟（只跑后端 API 冒烟）
+
+#### 4.1.3 报告产物
+
+- `reports/api-test-report.html`：pytest HTML 报告
+- `reports/playwright-report/`：Playwright HTML 报告
+
+#### 4.1.4 常见失败原因
+
+- 端口被占用：`127.0.0.1:8000`（后端）或 `127.0.0.1:4173`（前端预览）
+- 未安装 Playwright 浏览器：执行 `cd frontend; npm run e2e:install`
+- 缺少测试账号环境变量：未设置 `TEST_API_USERNAME` / `TEST_API_PASSWORD`
+
+### 4.2 Celery Worker（Windows）
 
 ```powershell
 # 标准 worker
@@ -123,6 +181,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-celery-solo.ps1
 - `POST /api/assistant/knowledge-articles/`
   - 支持 `application/json` 与 `multipart/form-data`
   - `multipart` 模式字段示例：`title`、`category`、`tags`、`text_source=upload`、`source_file`
+- `POST /api/assistant/knowledge/documents/ingest/`
+  - 作用：知识文档入库（PDF/MD 上传或 URL 导入），异步向量化
+  - 关键字段：`mode=upload|url`、`file|url`、`module_id?`、`category?`、`tags?`
+- `GET /api/assistant/knowledge/documents/`
+  - 作用：文档列表（支持 `page/page_size` 与 `status/category/module_id/tag/q` 过滤）
+- `POST /api/assistant/knowledge/artifacts/`
+  - 作用：保存“生成测试资产”（结构化测试计划/测试点/用例草稿等），便于追溯与复用
+- `POST /api/ai/knowledge/ask/`
+  - 作用：知识库问答（返回 `citations` 引用来源，可追溯）
 
 ### 5.2 依赖
 

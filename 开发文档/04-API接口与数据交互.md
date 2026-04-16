@@ -19,6 +19,7 @@
 | `/api/user/` | `user/urls.py` | 登录注册、用户中心、组织/角色/用户管理 |
 | `/api/project/` | `project/urls.py` | 测试项目、任务、发布计划 |
 | `/api/testcase/` | `testcase/urls.py` | 测试模块、用例、步骤、测试方案、测试设计 |
+| `/api/environments/` | `testcase/environment_urls.py` | 环境管理独立挂载入口（与 testcase 中 environments ViewSet 对齐） |
 | `/api/execution/` | `execution/urls.py` | 测试计划、测试报告、仪表盘聚合 |
 | `/api/perf/` | `execution/perf_urls.py` | 性能任务专用入口（按 `task_id` 操作） |
 | `/api/defect/` | `defect/urls.py` | 缺陷管理 |
@@ -26,6 +27,19 @@
 | `/api/ai/` | `assistant/ai_urls.py` | AI 连接测试、用例生成（同步/流式） |
 | `/api/sys/` | `user/sys_urls.py` | 系统级配置与系统管理员能力（AI 模型配置、系统审计等） |
 | `/api/change-requests/` | `user/approval_urls.py` | 敏感信息审批动作接口 |
+| `/api/server-logs/` | `server_logs/urls.py` | 服务器日志主机管理、实时查看、AI 诊断、审计、（可选）历史检索与工单 |
+
+补充（全局对账索引）：
+
+- 路由树、扩展 action、前端调用侧入口、以及 WebSocket 路由与鉴权方式，统一以 `开发文档/99-项目全局扫描对账索引.md` 为准。
+
+### 1.3 WebSocket 路由与鉴权（统一约定）
+
+部分模块使用 WebSocket（如 k6 实时指标、服务器日志实时 tail）。当前约定：
+
+- **WS 前缀**：`/ws/*`（开发模式由 `frontend/vite.config.js` 代理到后端）
+- **鉴权方式**：querystring 传 token：`?token=<DRF Token>`
+- 具体 WS 路由清单见：`开发文档/99-项目全局扫描对账索引.md` §3
 
 ### 1.2 前端 API 分层
 

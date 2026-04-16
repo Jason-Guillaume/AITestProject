@@ -130,16 +130,21 @@ class Migration(migrations.Migration):
             code=_forwards_copy_releaseplan_test_cases,
             reverse_code=migrations.RunPython.noop,
         ),
-        migrations.AlterField(
-            model_name="releaseplan",
-            name="test_cases",
-            field=models.ManyToManyField(
-                blank=True,
-                related_name="release_plans",
-                through="project.ReleasePlanTestCase",
-                to="testcase.testcase",
-                verbose_name="关联测试用例",
-            ),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[],
+            state_operations=[
+                migrations.AlterField(
+                    model_name="releaseplan",
+                    name="test_cases",
+                    field=models.ManyToManyField(
+                        blank=True,
+                        related_name="release_plans",
+                        through="project.ReleasePlanTestCase",
+                        to="testcase.testcase",
+                        verbose_name="关联测试用例",
+                    ),
+                )
+            ],
         ),
         migrations.AddConstraint(
             model_name="releaseplantestcase",

@@ -30,5 +30,11 @@ frontend/vite.config.js.timestamp-*.mjs
 # Local AI/IDE configs (machine-specific)
 .claude/settings.local.json
 
+# Local env (secrets)
+.env
+
 # Test caches
 .pytest_cache/
+
+# Test reports / artifacts
+reports/

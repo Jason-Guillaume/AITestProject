@@ -8,6 +8,31 @@ from django.conf import settings
 class KnowledgeArticle(BaseModel):
     """RAG 测试知识库文章。"""
 
+    VISIBILITY_PRIVATE = "private"
+    VISIBILITY_PROJECT = "project"
+    VISIBILITY_ORG = "org"
+    VISIBILITY_CHOICES = [
+        (VISIBILITY_PRIVATE, "仅自己可见"),
+        (VISIBILITY_PROJECT, "项目内共享"),
+        (VISIBILITY_ORG, "组织内共享"),
+    ]
+
+    org = models.ForeignKey(
+        "user.Organization",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="knowledge_articles",
+        verbose_name="所属组织",
+    )
+    visibility_scope = models.CharField(
+        max_length=16,
+        choices=VISIBILITY_CHOICES,
+        default=VISIBILITY_PRIVATE,
+        db_index=True,
+        verbose_name="可见范围",
+    )
+
     CATEGORY_TEMPLATE = "template"
     CATEGORY_BEST_PRACTICE = "best_practice"
     CATEGORY_FAQ = "faq"
@@ -47,6 +72,27 @@ class KnowledgeArticle(BaseModel):
 
 class KnowledgeDocument(BaseModel):
     """知识库文档。"""
+
+    VISIBILITY_PRIVATE = KnowledgeArticle.VISIBILITY_PRIVATE
+    VISIBILITY_PROJECT = KnowledgeArticle.VISIBILITY_PROJECT
+    VISIBILITY_ORG = KnowledgeArticle.VISIBILITY_ORG
+    VISIBILITY_CHOICES = KnowledgeArticle.VISIBILITY_CHOICES
+
+    org = models.ForeignKey(
+        "user.Organization",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="knowledge_documents",
+        verbose_name="所属组织",
+    )
+    visibility_scope = models.CharField(
+        max_length=16,
+        choices=VISIBILITY_CHOICES,
+        default=VISIBILITY_PRIVATE,
+        db_index=True,
+        verbose_name="可见范围",
+    )
 
     STATUS_PENDING = "pending"
     STATUS_PROCESSING = "processing"
@@ -149,6 +195,84 @@ class KnowledgeDocument(BaseModel):
         ordering = ("-created_at",)
         indexes = [
             models.Index(fields=["category", "status", "-created_at"]),
+        ]
+
+
+class GeneratedTestArtifact(BaseModel):
+    """
+    生成测试资产（最小闭环）：
+    - 允许从知识文档切片/知识库问答 citations 生成结构化产物并落库
+    - 保存引用来源，便于追溯与审计
+    """
+
+    TYPE_TEST_PLAN = "test_plan"
+    TYPE_TEST_POINTS = "test_points"
+    TYPE_CASE_DRAFT = "case_draft"
+    TYPE_API_SCENARIO = "api_scenario"
+    TYPE_CHOICES = [
+        (TYPE_TEST_PLAN, "测试计划"),
+        (TYPE_TEST_POINTS, "测试点"),
+        (TYPE_CASE_DRAFT, "用例草稿"),
+        (TYPE_API_SCENARIO, "API 场景"),
+    ]
+
+    org = models.ForeignKey(
+        "user.Organization",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="generated_test_artifacts",
+        verbose_name="所属组织",
+    )
+    project = models.ForeignKey(
+        "project.TestProject",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="generated_test_artifacts",
+        verbose_name="所属项目",
+    )
+    module = models.ForeignKey(
+        TestModule,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="generated_test_artifacts",
+        verbose_name="关联模块",
+    )
+    source_document = models.ForeignKey(
+        KnowledgeDocument,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="generated_artifacts",
+        verbose_name="来源知识文档",
+    )
+    source_question = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="来源问题（可选）",
+    )
+
+    artifact_type = models.CharField(
+        max_length=32,
+        choices=TYPE_CHOICES,
+        db_index=True,
+        verbose_name="资产类型",
+    )
+    title = models.CharField(max_length=255, blank=True, default="", verbose_name="标题")
+    content = models.JSONField(default=dict, blank=True, verbose_name="结构化内容")
+    citations = models.JSONField(default=list, blank=True, verbose_name="引用来源（citations/chunks）")
+    model_used = models.CharField(max_length=128, blank=True, default="", verbose_name="模型（可选）")
+
+    class Meta:
+        db_table = "generated_test_artifact"
+        ordering = ("-create_time",)
+        indexes = [
+            models.Index(fields=["artifact_type", "-create_time"]),
+            models.Index(fields=["project", "-create_time"]),
+            models.Index(fields=["module", "-create_time"]),
+            models.Index(fields=["source_document", "-create_time"]),
         ]
 
 

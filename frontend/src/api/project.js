@@ -6,6 +6,35 @@ export const createProjectApi = (data) => request.post("/project/projects/", dat
 export const updateProjectApi = (id, data) => request.patch(`/project/projects/${id}/`, data);
 export const deleteProjectApi = (id) => request.delete(`/project/projects/${id}/`);
 
+// ===== Projects: recycle bin + bulk ops + export =====
+export const getProjectsRecycleApi = (params) =>
+  request.get("/project/projects/recycle/", { params });
+
+export const restoreProjectApi = (id) =>
+  request.post(`/project/projects/${id}/restore/`);
+
+export const bulkSoftDeleteProjectsApi = (ids) =>
+  request.post("/project/projects/bulk-soft-delete/", { ids });
+
+export const bulkRestoreProjectsApi = (ids) =>
+  request.post("/project/projects/bulk-restore/", { ids });
+
+export const bulkUpdateProjectStatusApi = (ids, project_status) =>
+  request.post("/project/projects/bulk-status/", { ids, project_status });
+
+export const hardDeleteProjectApi = (id) =>
+  request.post(`/project/projects/${id}/hard-delete/`);
+
+export const bulkHardDeleteProjectsApi = (ids) =>
+  request.post("/project/projects/bulk-hard-delete/", { ids });
+
+export function downloadProjectsCsv(params) {
+  return downloadAuthedGet(`/api/project/projects/export.csv`, {
+    params,
+    defaultFilename: `projects.csv`,
+  });
+}
+
 export const getTasksApi = (params) => request.get("/project/tasks/", { params });
 export const createTaskApi = (data) => request.post("/project/tasks/", data);
 export const updateTaskApi = (id, data) => request.patch(`/project/tasks/${id}/`, data);

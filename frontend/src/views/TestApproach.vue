@@ -18,6 +18,50 @@
         </el-input>
       </div>
       <div class="approach-toolbar__actions">
+        <el-button class="filter-btn" :type="isRecycleMode ? 'warning' : ''" @click="toggleRecycleMode">
+          {{ isRecycleMode ? '返回列表' : '回收站' }}
+        </el-button>
+        <el-button class="filter-btn" :type="isSelectMode ? 'info' : ''" @click="toggleSelectMode">
+          {{ isSelectMode ? '取消选择' : '选择' }}
+          <span v-if="isSelectMode && selectedIds.length" style="margin-left: 6px">（{{ selectedIds.length }}）</span>
+        </el-button>
+
+        <el-button
+          v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0"
+          type="danger"
+          plain
+          :loading="batchDeleting"
+          @click="batchSoftDelete"
+        >
+          批量删除（{{ selectedIds.length }}）
+        </el-button>
+        <el-button
+          v-if="isSelectMode && isRecycleMode && selectedIds.length > 0"
+          type="success"
+          plain
+          :loading="batchRestoring"
+          @click="batchRestore"
+        >
+          批量恢复（{{ selectedIds.length }}）
+        </el-button>
+        <el-button
+          v-if="isSelectMode && isRecycleMode && selectedIds.length > 0"
+          type="danger"
+          plain
+          :loading="batchHardDeleting"
+          @click="batchHardDelete"
+        >
+          彻底删除（{{ selectedIds.length }}）
+        </el-button>
+        <el-button
+          v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0"
+          type="success"
+          plain
+          :loading="batchCopying"
+          @click="batchCopySelected"
+        >
+          批量复制
+        </el-button>
         <el-button class="filter-btn" @click="filterDrawerOpen = true">
           <el-icon><Filter /></el-icon>
           更多筛选
@@ -35,8 +79,29 @@
         v-for="item in filteredList"
         :key="item.id"
         class="approach-card"
-        @click="goDesign"
+        :class="{ 'approach-card--selected': selectedIds.includes(item.id) }"
+        @click="onCardClick(item)"
       >
+        <div v-if="isSelectMode" class="approach-card__select" @click.stop>
+          <button
+            type="button"
+            class="approach-card__select-btn"
+            :class="{ 'is-checked': selectedIdSet.has(item.id) }"
+            :aria-pressed="selectedIdSet.has(item.id)"
+            :aria-label="selectedIdSet.has(item.id) ? '取消选择' : '选择测试方案'"
+            @click.stop="toggleSelected(item.id, !selectedIdSet.has(item.id))"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M20 6L9 17l-5-5"
+                stroke="currentColor"
+                stroke-width="2.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
         <div class="approach-card__cover">
           <img v-if="coverUrl(item)" :src="coverUrl(item)" class="cover-img" alt="" loading="lazy" />
           <div v-else class="cover-placeholder cover-placeholder--empty">
@@ -54,17 +119,40 @@
                 link
                 type="primary"
                 class="approach-card__edit"
+                :disabled="isSelectMode || isRecycleMode"
                 @click="editItem(item)"
               >
                 <el-icon><EditPen /></el-icon>
               </el-button>
               <el-button
+                v-if="!isRecycleMode"
                 link
                 type="danger"
                 class="approach-card__delete"
-                @click="deleteItem(item)"
+                :disabled="isSelectMode"
+                @click="softDeleteItem(item)"
               >
                 <el-icon><Delete /></el-icon>
+              </el-button>
+              <el-button
+                v-else
+                link
+                type="success"
+                class="approach-card__restore"
+                :disabled="isSelectMode"
+                @click="restoreItem(item)"
+              >
+                恢复
+              </el-button>
+              <el-button
+                v-if="isRecycleMode"
+                link
+                type="danger"
+                class="approach-card__delete"
+                :disabled="isSelectMode"
+                @click="hardDeleteItem(item)"
+              >
+                彻底删除
               </el-button>
             </div>
           </div>
@@ -230,6 +318,13 @@ import {
   createApproachApi,
   updateApproachApi,
   deleteApproachApi,
+  batchCopyApproachsApi,
+  getApproachsRecycleApi,
+  restoreApproachApi,
+  hardDeleteApproachApi,
+  bulkSoftDeleteApproachsApi,
+  bulkRestoreApproachsApi,
+  bulkHardDeleteApproachsApi,
   uploadApproachImagesApi,
   deleteApproachImageApi,
 } from '@/api/testcase'
@@ -265,6 +360,11 @@ const selectedPreviewUrls = ref([])
 // 弹窗“图片历史”在“新建”时也希望沿用的本地图片库（避免 editing 为空导致历史丢失）
 const myImageHistory = ref([])
 const deletingImageId = ref(null)
+const selectedIds = ref([])
+const batchDeleting = ref(false)
+const batchRestoring = ref(false)
+const batchHardDeleting = ref(false)
+const batchCopying = ref(false)
 const form = ref({
   scheme_name: '',
   version: '',
@@ -303,6 +403,40 @@ const filteredList = computed(() => {
   if (!searchKw.value) return rows
   return rows.filter((i) => (i.scheme_name || '').includes(searchKw.value.trim()))
 })
+
+const isRecycleMode = ref(false)
+const isSelectMode = ref(false)
+const selectedIdSet = computed(() => new Set(selectedIds.value))
+
+function toggleSelectMode() {
+  isSelectMode.value = !isSelectMode.value
+  if (!isSelectMode.value) selectedIds.value = []
+}
+
+function toggleRecycleMode() {
+  isRecycleMode.value = !isRecycleMode.value
+  selectedIds.value = []
+  isSelectMode.value = false
+  load()
+}
+
+function toggleSelected(id, checked) {
+  const nid = Number(id)
+  if (!Number.isFinite(nid)) return
+  const cur = new Set((selectedIds.value || []).map((x) => Number(x)))
+  if (checked) cur.add(nid)
+  else cur.delete(nid)
+  selectedIds.value = Array.from(cur)
+}
+
+function onCardClick(item) {
+  if (isSelectMode.value) {
+    const id = item?.id
+    toggleSelected(id, !selectedIdSet.value.has(id))
+    return
+  }
+  goDesign()
+}
 
 function rebuildMyImageHistoryFromList() {
   const merged = []
@@ -381,7 +515,7 @@ function resetFilter() {
 
 async function load() {
   try {
-    const { data } = await getApproachsApi()
+    const { data } = await (isRecycleMode.value ? getApproachsRecycleApi() : getApproachsApi())
     list.value = normalizeListResponse(data)
     rebuildMyImageHistoryFromList()
   } catch (err) {
@@ -409,9 +543,9 @@ function editItem(item) {
   showDialog.value = true
 }
 
-async function deleteItem(item) {
+async function softDeleteItem(item) {
   try {
-    await ElMessageBox.confirm(`确定删除测试方案「${item.scheme_name}」吗？删除后不可恢复。`, '删除确认', {
+    await ElMessageBox.confirm(`确定将测试方案「${item.scheme_name}」移入回收站吗？`, '删除确认', {
       type: 'warning',
       confirmButtonText: '删除',
       cancelButtonText: '取消',
@@ -421,7 +555,7 @@ async function deleteItem(item) {
   }
   try {
     await deleteApproachApi(item.id)
-    ElMessage.success('删除成功')
+    ElMessage.success('已移入回收站')
     if (editing.value?.id === item.id) {
       showDialog.value = false
       editing.value = null
@@ -436,6 +570,145 @@ async function deleteItem(item) {
       err?.message ||
       '删除失败'
     ElMessage.error(typeof msg === 'string' ? msg : '删除失败')
+  }
+}
+
+async function batchSoftDelete() {
+  if (!selectedIds.value.length) return
+  try {
+    await ElMessageBox.confirm(`确定将选中的 ${selectedIds.value.length} 条测试方案移入回收站吗？`, '删除确认', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  batchDeleting.value = true
+  try {
+    const { data } = await bulkSoftDeleteApproachsApi({ ids: selectedIds.value })
+    const deleted = Number(data?.deleted ?? data?.data?.deleted ?? 0)
+    const skipped = Number(data?.skipped ?? data?.data?.skipped ?? 0)
+    ElMessage.success(`已删除 ${deleted} 条；跳过 ${skipped} 条`)
+    selectedIds.value = []
+    await load()
+  } catch (err) {
+    const d = err?.response?.data
+    const msg = (typeof d === 'string' && d) || d?.msg || d?.detail || err?.message || '批量删除失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量删除失败')
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function batchRestore() {
+  if (!selectedIds.value.length) return
+  batchRestoring.value = true
+  try {
+    const { data } = await bulkRestoreApproachsApi({ ids: selectedIds.value })
+    const restored = Number(data?.restored ?? data?.data?.restored ?? 0)
+    const skipped = Number(data?.skipped ?? data?.data?.skipped ?? 0)
+    ElMessage.success(`已恢复 ${restored} 条；跳过 ${skipped} 条`)
+    selectedIds.value = []
+    await load()
+  } catch (err) {
+    const d = err?.response?.data
+    const msg = (typeof d === 'string' && d) || d?.msg || d?.detail || err?.message || '批量恢复失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量恢复失败')
+  } finally {
+    batchRestoring.value = false
+  }
+}
+
+async function batchHardDelete() {
+  if (!selectedIds.value.length) return
+  try {
+    await ElMessageBox.confirm(`确定彻底删除选中的 ${selectedIds.value.length} 条测试方案吗？此操作不可恢复。`, '警告', {
+      type: 'error',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  batchHardDeleting.value = true
+  try {
+    const { data } = await bulkHardDeleteApproachsApi({ ids: selectedIds.value })
+    const count = Number(data?.count ?? data?.data?.count ?? 0)
+    ElMessage.success(`已彻底删除 ${count} 条`)
+    selectedIds.value = []
+    await load()
+  } catch (err) {
+    const d = err?.response?.data
+    const msg = (typeof d === 'string' && d) || d?.msg || d?.detail || err?.message || '彻底删除失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '彻底删除失败')
+  } finally {
+    batchHardDeleting.value = false
+  }
+}
+
+async function hardDeleteItem(item) {
+  try {
+    await ElMessageBox.confirm(`确定彻底删除测试方案「${item.scheme_name}」吗？此操作不可恢复。`, '警告', {
+      type: 'error',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    await hardDeleteApproachApi(item.id)
+    ElMessage.success('已彻底删除')
+    await load()
+  } catch (err) {
+    const d = err?.response?.data
+    const msg = (typeof d === 'string' && d) || d?.msg || d?.detail || err?.message || '彻底删除失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '彻底删除失败')
+  }
+}
+
+async function restoreItem(item) {
+  try {
+    await restoreApproachApi(item.id)
+    ElMessage.success('已恢复')
+    await load()
+  } catch (err) {
+    const d = err?.response?.data
+    const msg = (typeof d === 'string' && d) || d?.msg || d?.detail || err?.message || '恢复失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '恢复失败')
+  }
+}
+
+async function batchCopySelected() {
+  if (!selectedIds.value.length) return
+  let suffix = '（复制）'
+  try {
+    const { value } = await ElMessageBox.prompt('请输入复制后名称后缀（可留空）', '批量复制测试方案', {
+      inputValue: suffix,
+      confirmButtonText: '复制',
+      cancelButtonText: '取消',
+    })
+    suffix = String(value ?? '').trim() || '（复制）'
+  } catch {
+    return
+  }
+  batchCopying.value = true
+  try {
+    const { data } = await batchCopyApproachsApi({ ids: selectedIds.value, name_suffix: suffix })
+    const created = Number(data?.created ?? data?.data?.created ?? 0)
+    const missing = Array.isArray(data?.missing_ids) ? data.missing_ids.length : Array.isArray(data?.data?.missing_ids) ? data.data.missing_ids.length : 0
+    const errors = Array.isArray(data?.errors) ? data.errors.length : Array.isArray(data?.data?.errors) ? data.data.errors.length : 0
+    if (errors) ElMessage.warning(`已复制 ${created} 条；缺失 ${missing} 条；失败 ${errors} 条`)
+    else ElMessage.success(`已复制 ${created} 条；缺失 ${missing} 条`)
+    selectedIds.value = []
+    await load()
+  } catch (err) {
+    const d = err?.response?.data
+    const msg = (typeof d === 'string' && d) || d?.msg || d?.detail || err?.message || '批量复制失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量复制失败')
+  } finally {
+    batchCopying.value = false
   }
 }
 
@@ -747,6 +1020,79 @@ async function deleteHistoryImage(img) {
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+}
+
+.approach-card__select {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  opacity: 0;
+  transform: translateY(-1px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.approach-card:hover .approach-card__select,
+.approach-card--selected .approach-card__select {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.approach-card__select-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(165, 243, 252, 0.85);
+  background: rgba(10, 16, 28, 0.35);
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.approach-card__select-btn:hover {
+  border-color: rgba(34, 211, 238, 0.32);
+  box-shadow: 0 0 22px rgba(34, 211, 238, 0.12);
+  background: rgba(0, 255, 255, 0.06);
+}
+
+.approach-card__select-btn.is-checked {
+  color: rgba(226, 232, 240, 0.96);
+  border-color: rgba(34, 211, 238, 0.55);
+  background: rgba(0, 255, 255, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(0, 255, 255, 0.18) inset,
+    0 0 26px rgba(0, 255, 255, 0.14);
+}
+
+.approach-card__select-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(0, 255, 255, 0.28),
+    0 0 22px rgba(0, 255, 255, 0.12);
+}
+
+.approach-card--selected {
+  border-color: rgba(0, 255, 255, 0.38);
+  box-shadow:
+    0 0 0 1px rgba(0, 255, 255, 0.14) inset,
+    0 0 28px rgba(0, 255, 255, 0.08);
+}
+
+.approach-card__restore {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  color: rgba(34, 211, 238, 0.9) !important;
+}
+
+.approach-card__restore:hover {
+  color: rgba(165, 243, 252, 0.95) !important;
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.28));
 }
 
 .approach-card__edit {

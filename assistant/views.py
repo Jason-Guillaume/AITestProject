@@ -10,7 +10,8 @@ import sys
 import time
 
 from django.conf import settings
-from django.db.models import OuterRef, Subquery
+from django.db import transaction
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import JsonResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -76,9 +77,9 @@ from assistant.ai_prompts import (
     _PHASE1_REPAIR_SYSTEM_PROMPT,
     _PHASE2_MULTI_CASE_MANDATE,
 )
-from assistant.models import KnowledgeArticle, KnowledgeDocument
+from assistant.models import GeneratedTestArtifact, KnowledgeArticle, KnowledgeDocument
 from assistant.permissions import (
-    IsAdminOrDocumentCreator,
+    IsAdminOrKnowledgeResourceAccessible,
     user_is_knowledge_document_privileged,
 )
 from assistant.services.ai_governance import (
@@ -90,12 +91,17 @@ from assistant.services.ai_governance import (
     resolve_effective_scope_policy,
     write_ai_usage_event,
 )
-from assistant.serialize import KnowledgeArticleSerializer, KnowledgeDocumentSerializer
+from assistant.serialize import (
+    GeneratedTestArtifactSerializer,
+    KnowledgeArticleSerializer,
+    KnowledgeDocumentSerializer,
+)
 from assistant.error_parser import simplify_vector_error
 from assistant.services.document_parser import (
     SUPPORTED_EXTENSIONS,
     extract_text_from_uploaded_file,
 )
+from project.models import TestProject
 from testcase.models import TestModule
 
 logger = logging.getLogger(__name__)
@@ -619,13 +625,75 @@ def _mark_stuck_processing_docs_failed() -> int:
     return changed
 
 
+def _get_user_org_ids(user) -> list[int]:
+    if not user or not getattr(user, "is_authenticated", False):
+        return []
+    try:
+        qs = getattr(user, "organization_memberships", None)
+        if qs is None:
+            return []
+        return [int(x) for x in qs.filter(is_deleted=False).values_list("id", flat=True)]
+    except Exception:
+        return []
+
+
+def _resolve_org_for_request(request, *, explicit_org_id=None):
+    """
+    组织级共享的默认组织解析：
+    - 若显式传 org_id：要求当前用户属于该组织（或为系统管理员），否则拒绝
+    - 否则：取用户加入的第一个组织作为默认值；未加入组织则返回 None
+    """
+    raw = explicit_org_id
+    if raw not in (None, ""):
+        try:
+            org_id = int(raw)
+        except (TypeError, ValueError):
+            org_id = 0
+        if org_id <= 0:
+            return None, Response({"success": False, "message": "org_id 无效"}, status=400)
+        if user_is_knowledge_document_privileged(getattr(request, "user", None)):
+            from user.models import Organization
+
+            org = Organization.objects.filter(pk=org_id, is_deleted=False).first()
+            if org is None:
+                return None, Response({"success": False, "message": "org_id 不存在"}, status=400)
+            return org, None
+        # 普通用户：必须是该组织成员
+        org_ids = _get_user_org_ids(getattr(request, "user", None))
+        if org_id not in org_ids:
+            return None, Response({"success": False, "message": "无权限使用该组织"}, status=403)
+        from user.models import Organization
+
+        org = Organization.objects.filter(pk=org_id, is_deleted=False).first()
+        if org is None:
+            return None, Response({"success": False, "message": "org_id 不存在"}, status=400)
+        return org, None
+
+    org_ids = _get_user_org_ids(getattr(request, "user", None))
+    if not org_ids:
+        return None, None
+    from user.models import Organization
+
+    org = Organization.objects.filter(pk=org_ids[0], is_deleted=False).first()
+    return org, None
+
+
 class KnowledgeArticleViewSet(BaseModelViewSet):
     queryset = KnowledgeArticle.objects.all()
     serializer_class = KnowledgeArticleSerializer
     parser_classes = (JSONParser, MultiPartParser, FormParser)
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = KnowledgeArticle.objects.filter(is_deleted=False)
+        if not user_is_knowledge_document_privileged(self.request.user):
+            org_ids = _get_user_org_ids(self.request.user)
+            qs = qs.filter(
+                Q(creator=self.request.user)
+                | Q(
+                    visibility_scope=KnowledgeArticle.VISIBILITY_ORG,
+                    org_id__in=org_ids,
+                )
+            )
         category = (self.request.query_params.get("category") or "").strip()
         tag = (self.request.query_params.get("tag") or "").strip()
         if category:
@@ -683,6 +751,24 @@ class KnowledgeArticleViewSet(BaseModelViewSet):
                     ]
             else:
                 payload["tags"] = [x.strip() for x in tags_val.split(",") if x.strip()]
+
+        org, denied = _resolve_org_for_request(request, explicit_org_id=payload.get("org_id"))
+        if denied is not None:
+            return denied
+        if "org_id" in payload:
+            payload.pop("org_id")
+        if org is not None and not payload.get("org"):
+            payload["org"] = int(org.id)
+        scope = str(payload.get("visibility_scope") or "").strip().lower()
+        if scope not in {
+            KnowledgeArticle.VISIBILITY_PRIVATE,
+            KnowledgeArticle.VISIBILITY_PROJECT,
+            KnowledgeArticle.VISIBILITY_ORG,
+        }:
+            # 组织级共享为主目标：有组织则默认 org，否则保持 private
+            payload["visibility_scope"] = (
+                KnowledgeArticle.VISIBILITY_ORG if org is not None else KnowledgeArticle.VISIBILITY_PRIVATE
+            )
 
         serializer = self.get_serializer(data=payload)
         serializer.is_valid(raise_exception=True)
@@ -868,6 +954,8 @@ class KnowledgeSearchAPIView(APIView):
             category=category,
             tag=tag,
             min_score=min_score,
+            user=request.user,
+            org_ids=_get_user_org_ids(request.user),
         )
         return Response(
             {
@@ -891,6 +979,22 @@ class KnowledgeDocumentUploadAPIView(APIView):
         if uploaded_file is None:
             return Response({"success": False, "message": "file 不能为空"}, status=400)
 
+        max_size = int(getattr(settings, "KNOWLEDGE_UPLOAD_MAX_SIZE", 10 * 1024 * 1024))
+        if int(getattr(uploaded_file, "size", 0) or 0) > max_size:
+            return Response(
+                {
+                    "success": False,
+                    "message": f"上传文件过大，最大支持 {max_size // 1024 // 1024}MB",
+                },
+                status=400,
+            )
+        ext = (getattr(uploaded_file, "name", "") or "").lower()
+        if not (ext.endswith(".pdf") or ext.endswith(".md")):
+            return Response(
+                {"success": False, "message": "仅支持 PDF 或 MD 文件"},
+                status=400,
+            )
+
         title = (request.data.get("title") or "").strip()
         if not title:
             return Response({"success": False, "message": "title 不能为空"}, status=400)
@@ -913,14 +1017,27 @@ class KnowledgeDocumentUploadAPIView(APIView):
         elif isinstance(raw_tags, (list, tuple)):
             tags = [str(x).strip() for x in raw_tags if str(x).strip()]
 
+        org, denied = _resolve_org_for_request(request, explicit_org_id=request.data.get("org_id"))
+        if denied is not None:
+            return denied
+        scope = str(request.data.get("visibility_scope") or "").strip().lower()
+        if scope not in {
+            KnowledgeDocument.VISIBILITY_PRIVATE,
+            KnowledgeDocument.VISIBILITY_PROJECT,
+            KnowledgeDocument.VISIBILITY_ORG,
+        }:
+            scope = KnowledgeDocument.VISIBILITY_ORG if org is not None else KnowledgeDocument.VISIBILITY_PRIVATE
+
         doc = KnowledgeDocument.objects.create(
             title=title,
             category=category,
             tags=tags,
+            org=org,
+            visibility_scope=scope,
             source_type=KnowledgeDocument.SOURCE_UPLOAD,
             article=None,
             file_path=uploaded_file,
-            status=KnowledgeDocument.STATUS_PENDING,
+            status=KnowledgeDocument.STATUS_PROCESSING,
             error_message="",
             creator=request.user,
             updater=request.user,
@@ -929,19 +1046,16 @@ class KnowledgeDocumentUploadAPIView(APIView):
         from assistant.tasks import process_knowledge_document_task
         from assistant.services.rag_service import process_and_embed_document
 
-        mode = _enqueue_celery_or_thread(
-            celery_delay=process_knowledge_document_task.delay,
-            thread_target=process_and_embed_document,
-            args=(int(doc.id),),
-            error_log_msg=f"知识库文档向量化失败: doc_id={doc.id}",
-        )
-        doc.status = KnowledgeDocument.STATUS_PROCESSING
-        doc.save(update_fields=["status", "update_time"])
-        enqueue_msg = (
-            "文档已上传，已加入异步处理队列"
-            if mode == "celery"
-            else "文档已上传，正在后台处理（线程降级模式）"
-        )
+        def _enqueue_after_commit():
+            _enqueue_celery_or_thread(
+                celery_delay=process_knowledge_document_task.delay,
+                thread_target=process_and_embed_document,
+                args=(int(doc.id),),
+                error_log_msg=f"知识库文档向量化失败: doc_id={doc.id}",
+            )
+
+        transaction.on_commit(_enqueue_after_commit)
+        enqueue_msg = "文档已上传，处理任务将于事务提交后触发"
         return Response(
             {
                 "success": True,
@@ -1006,6 +1120,17 @@ class KnowledgeDocumentIngestAPIView(APIView):
                 return Response(
                     {"success": False, "message": "上传文件名不能为空"}, status=400
                 )
+            max_size = int(
+                getattr(settings, "KNOWLEDGE_UPLOAD_MAX_SIZE", 10 * 1024 * 1024)
+            )
+            if int(getattr(uploaded_file, "size", 0) or 0) > max_size:
+                return Response(
+                    {
+                        "success": False,
+                        "message": f"上传文件过大，最大支持 {max_size // 1024 // 1024}MB",
+                    },
+                    status=400,
+                )
             ext = file_name.lower()
             if ext.endswith(".pdf"):
                 document_type = KnowledgeDocument.DOC_TYPE_PDF
@@ -1040,15 +1165,27 @@ class KnowledgeDocumentIngestAPIView(APIView):
                 final_title = source_url
 
         # 3) 先落库，初始状态为“待处理”，后续由异步任务更新处理状态。
+        org, denied = _resolve_org_for_request(request, explicit_org_id=request.data.get("org_id"))
+        if denied is not None:
+            return denied
+        scope = str(request.data.get("visibility_scope") or "").strip().lower()
+        if scope not in {
+            KnowledgeDocument.VISIBILITY_PRIVATE,
+            KnowledgeDocument.VISIBILITY_PROJECT,
+            KnowledgeDocument.VISIBILITY_ORG,
+        }:
+            scope = KnowledgeDocument.VISIBILITY_ORG if org is not None else KnowledgeDocument.VISIBILITY_PRIVATE
         document = KnowledgeDocument.objects.create(
             title=final_title[:255],
             file_name=file_name[:255],
             module=module,
+            org=org,
+            visibility_scope=scope,
             document_type=document_type,
             source_type=KnowledgeDocument.SOURCE_UPLOAD,
             file_path=file_path,
             source_url=final_source_url,
-            status=KnowledgeDocument.STATUS_PENDING,
+            status=KnowledgeDocument.STATUS_PROCESSING,
             creator=request.user,
             updater=request.user,
         )
@@ -1056,19 +1193,20 @@ class KnowledgeDocumentIngestAPIView(APIView):
         # 4) 异步触发 RAG 处理：优先 Celery；不可用时降级线程执行。
         from assistant.tasks import process_document_rag
 
-        mode = _enqueue_celery_or_thread(
-            celery_delay=process_document_rag.delay,
-            thread_target=process_document_rag,
-            args=(int(document.id),),
-            error_log_msg=f"知识文档 RAG 处理失败: doc_id={document.id}",
-        )
-        document.status = KnowledgeDocument.STATUS_PROCESSING
-        document.save(update_fields=["status", "update_time"])
+        def _enqueue_after_commit():
+            _enqueue_celery_or_thread(
+                celery_delay=process_document_rag.delay,
+                thread_target=process_document_rag,
+                args=(int(document.id),),
+                error_log_msg=f"知识文档 RAG 处理失败: doc_id={document.id}",
+            )
+
+        transaction.on_commit(_enqueue_after_commit)
 
         return Response(
             {
                 "success": True,
-                "message": "文档记录已创建，RAG 处理任务已提交",
+                "message": "文档记录已创建，RAG 处理任务将于事务提交后触发",
                 "data": KnowledgeDocumentSerializer(document).data,
             },
             status=202,
@@ -1076,7 +1214,7 @@ class KnowledgeDocumentIngestAPIView(APIView):
 
 
 class KnowledgeDocumentStatusAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrDocumentCreator]
+    permission_classes = [IsAuthenticated, IsAdminOrKnowledgeResourceAccessible]
 
     def get(self, request, doc_id: int):
         _mark_stuck_processing_docs_failed()
@@ -1111,7 +1249,7 @@ class KnowledgeDocumentStatusAPIView(APIView):
 class KnowledgeDocumentChunksPreviewAPIView(APIView):
     """预览文档切片（用于监控切片质量）。"""
 
-    permission_classes = [IsAuthenticated, IsAdminOrDocumentCreator]
+    permission_classes = [IsAuthenticated, IsAdminOrKnowledgeResourceAccessible]
 
     def get(self, request, doc_id: int):
         doc = KnowledgeDocument.objects.filter(pk=doc_id, is_deleted=False).first()
@@ -1207,7 +1345,7 @@ class KnowledgeArticleChunksPreviewAPIView(APIView):
 
 
 class KnowledgeDocumentRetryAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrDocumentCreator]
+    permission_classes = [IsAuthenticated, IsAdminOrKnowledgeResourceAccessible]
 
     def post(self, request, doc_id: int):
         doc = KnowledgeDocument.objects.filter(pk=doc_id, is_deleted=False).first()
@@ -1269,7 +1407,7 @@ class KnowledgeDocumentRetryAPIView(APIView):
 
 
 class KnowledgeDocumentDeleteAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrDocumentCreator]
+    permission_classes = [IsAuthenticated, IsAdminOrKnowledgeResourceAccessible]
 
     def delete(self, request, doc_id: int):
         doc = KnowledgeDocument.objects.filter(pk=doc_id, is_deleted=False).first()
@@ -1292,19 +1430,83 @@ class KnowledgeDocumentListAPIView(APIView):
 
     def get(self, request):
         _mark_stuck_processing_docs_failed()
+        page = request.query_params.get("page", 1)
         page_size = request.query_params.get("page_size", 20)
+        try:
+            page = int(page)
+        except (TypeError, ValueError):
+            page = 1
         try:
             page_size = int(page_size)
         except (TypeError, ValueError):
             page_size = 20
+        page = max(1, page)
         page_size = max(1, min(page_size, 100))
+
         qs = KnowledgeDocument.objects.filter(is_deleted=False)
         if not user_is_knowledge_document_privileged(request.user):
-            qs = qs.filter(creator=request.user)
-        rows = qs.order_by("-created_at")[:page_size]
+            org_ids = _get_user_org_ids(request.user)
+            qs = qs.filter(
+                Q(creator=request.user)
+                | Q(
+                    visibility_scope=KnowledgeDocument.VISIBILITY_ORG,
+                    org_id__in=org_ids,
+                )
+            )
+
+        # filters
+        status = (request.query_params.get("status") or "").strip()
+        if status:
+            qs = qs.filter(status=status)
+        raw_module_id = request.query_params.get("module_id")
+        if raw_module_id not in (None, ""):
+            try:
+                qs = qs.filter(module_id=int(raw_module_id))
+            except (TypeError, ValueError):
+                pass
+        tag = (request.query_params.get("tag") or "").strip()
+        if tag:
+            qs = qs.filter(tags__contains=[tag])
+        keyword = (request.query_params.get("q") or "").strip()
+        if keyword:
+            qs = qs.filter(
+                Q(title__icontains=keyword)
+                | Q(file_name__icontains=keyword)
+                | Q(source_url__icontains=keyword)
+            )
+
+        # purpose counters (for left-side navigation), independent of pagination and
+        # independent of current `category` filter so tabs don't show page-sized numbers.
+        purpose_counts = {"all": 0, "requirement": 0, "standard": 0, "template": 0}
+        for row in qs.values("category").annotate(c=Count("id")):
+            cat = str(row.get("category") or "")
+            c = int(row.get("c") or 0)
+            if not c:
+                continue
+            if cat == KnowledgeArticle.CATEGORY_TEMPLATE:
+                purpose = "template"
+            elif cat in {KnowledgeArticle.CATEGORY_BEST_PRACTICE, KnowledgeArticle.CATEGORY_FAQ}:
+                purpose = "standard"
+            else:
+                purpose = "requirement"
+            purpose_counts[purpose] += c
+            purpose_counts["all"] += c
+
+        # category filter (affects the list results only)
+        category = (request.query_params.get("category") or "").strip()
+        if category:
+            qs = qs.filter(category=category)
+
+        total = qs.count()
+        offset = (page - 1) * page_size
+        rows = qs.order_by("-created_at")[offset : offset + page_size]
         return Response(
             {
                 "success": True,
+                "count": total,
+                "page": page,
+                "page_size": page_size,
+                "purpose_counts": purpose_counts,
                 "results": _sanitize_doc_error_fields(
                     KnowledgeDocumentSerializer(rows, many=True).data
                 ),
@@ -1321,7 +1523,14 @@ class KnowledgeRuntimeStatusAPIView(APIView):
         queue_mode = "celery" if celery_installed else "thread_fallback"
         base_qs = KnowledgeDocument.objects.filter(is_deleted=False)
         if not user_is_knowledge_document_privileged(request.user):
-            base_qs = base_qs.filter(creator=request.user)
+            org_ids = _get_user_org_ids(request.user)
+            base_qs = base_qs.filter(
+                Q(creator=request.user)
+                | Q(
+                    visibility_scope=KnowledgeDocument.VISIBILITY_ORG,
+                    org_id__in=org_ids,
+                )
+            )
         counters = {
             "pending": base_qs.filter(status=KnowledgeDocument.STATUS_PENDING).count(),
             "processing": base_qs.filter(
@@ -1338,6 +1547,515 @@ class KnowledgeRuntimeStatusAPIView(APIView):
                 "queue_mode": queue_mode,
                 "celery_installed": celery_installed,
                 "counters": counters,
+            }
+        )
+
+
+class GeneratedTestArtifactListCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def get(self, request):
+        page = request.query_params.get("page", 1)
+        page_size = request.query_params.get("page_size", 20)
+        try:
+            page = int(page)
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(page_size)
+        except (TypeError, ValueError):
+            page_size = 20
+        page = max(1, page)
+        page_size = max(1, min(page_size, 100))
+
+        qs = GeneratedTestArtifact.objects.filter(is_deleted=False)
+        if not user_is_knowledge_document_privileged(request.user):
+            org_ids = _get_user_org_ids(request.user)
+            qs = qs.filter(Q(creator=request.user) | Q(org_id__in=org_ids))
+
+        artifact_type = (request.query_params.get("artifact_type") or "").strip()
+        if artifact_type:
+            qs = qs.filter(artifact_type=artifact_type)
+        raw_module_id = request.query_params.get("module_id")
+        if raw_module_id not in (None, ""):
+            try:
+                qs = qs.filter(module_id=int(raw_module_id))
+            except (TypeError, ValueError):
+                pass
+        raw_doc_id = request.query_params.get("doc_id")
+        if raw_doc_id not in (None, ""):
+            try:
+                qs = qs.filter(source_document_id=int(raw_doc_id))
+            except (TypeError, ValueError):
+                pass
+
+        total = qs.count()
+        offset = (page - 1) * page_size
+        rows = qs.order_by("-create_time")[offset : offset + page_size]
+        return Response(
+            {
+                "success": True,
+                "count": total,
+                "page": page,
+                "page_size": page_size,
+                "results": GeneratedTestArtifactSerializer(rows, many=True).data,
+            }
+        )
+
+    def post(self, request):
+        body = request.data or {}
+        artifact_type = (body.get("artifact_type") or "").strip()
+        if artifact_type not in {x[0] for x in GeneratedTestArtifact.TYPE_CHOICES}:
+            return Response({"success": False, "message": "artifact_type 无效"}, status=400)
+        content = body.get("content")
+        if content is None:
+            return Response({"success": False, "message": "content 不能为空"}, status=400)
+        if not isinstance(content, (dict, list, str)):
+            return Response({"success": False, "message": "content 类型不支持"}, status=400)
+        citations = body.get("citations") or []
+        if citations is None:
+            citations = []
+        if not isinstance(citations, list):
+            return Response({"success": False, "message": "citations 必须为数组"}, status=400)
+
+        # optional relations
+        module = None
+        raw_module_id = body.get("module_id")
+        if raw_module_id not in (None, ""):
+            try:
+                module = TestModule.objects.filter(
+                    pk=int(raw_module_id), is_deleted=False
+                ).first()
+            except (TypeError, ValueError):
+                module = None
+            if module is None:
+                return Response({"success": False, "message": "module_id 无效"}, status=400)
+
+        project = None
+        raw_project_id = body.get("project_id")
+        if raw_project_id not in (None, ""):
+            try:
+                project = TestProject.objects.filter(
+                    pk=int(raw_project_id), is_deleted=False
+                ).first()
+            except (TypeError, ValueError):
+                project = None
+            if project is None:
+                return Response({"success": False, "message": "project_id 无效"}, status=400)
+        if project is None and module is not None:
+            project = getattr(module, "project", None)
+
+        source_doc = None
+        raw_doc_id = body.get("doc_id") or body.get("source_document_id")
+        if raw_doc_id not in (None, ""):
+            try:
+                source_doc = KnowledgeDocument.objects.filter(
+                    pk=int(raw_doc_id), is_deleted=False
+                ).first()
+            except (TypeError, ValueError):
+                source_doc = None
+            if source_doc is None:
+                return Response({"success": False, "message": "doc_id 无效"}, status=400)
+            denied = _knowledge_document_forbidden_if_no_object_permission(
+                request,
+                type("Tmp", (), {"permission_classes": [IsAuthenticated, IsAdminOrKnowledgeResourceAccessible]})(),
+                source_doc,
+                "无权限使用该文档生成资产",
+            )
+            if denied is not None:
+                return denied
+
+        org = None
+        if source_doc is not None and getattr(source_doc, "org_id", None):
+            org = getattr(source_doc, "org", None)
+        if org is None:
+            org, denied = _resolve_org_for_request(request, explicit_org_id=body.get("org_id"))
+            if denied is not None:
+                return denied
+
+        title = (body.get("title") or "").strip()
+        if not title:
+            if source_doc is not None:
+                title = f"{artifact_type}:{source_doc.title or source_doc.file_name or source_doc.id}"
+            else:
+                title = artifact_type
+
+        item = GeneratedTestArtifact.objects.create(
+            org=org,
+            project=project,
+            module=module,
+            source_document=source_doc,
+            source_question=str(body.get("source_question") or "").strip(),
+            artifact_type=artifact_type,
+            title=title[:255],
+            content=content,
+            citations=citations,
+            model_used=str(body.get("model_used") or "").strip(),
+            creator=request.user,
+            updater=request.user,
+        )
+        return Response(
+            {
+                "success": True,
+                "message": "已保存生成资产",
+                "data": GeneratedTestArtifactSerializer(item).data,
+            },
+            status=201,
+        )
+
+
+class GeneratedTestArtifactImportAPIView(APIView):
+    """
+    将已保存的 GeneratedTestArtifact 进一步落地为：
+    - TestCase/TestCaseStep（去重/合并）
+    - ReleasePlan + ReleasePlanTestCase（可选）
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request, artifact_id: int):
+        item = GeneratedTestArtifact.objects.filter(pk=artifact_id, is_deleted=False).first()
+        if item is None:
+            return Response({"success": False, "message": "资产不存在"}, status=404)
+
+        if not user_is_knowledge_document_privileged(request.user):
+            org_ids = _get_user_org_ids(request.user)
+            if not (int(getattr(item, "creator_id", 0) or 0) == int(request.user.id) or (item.org_id and item.org_id in org_ids)):
+                return Response({"success": False, "message": "无权限导入该资产"}, status=403)
+
+        body = request.data or {}
+        mode = str(body.get("mode") or "dedup_merge").strip().lower()
+        if mode not in {"dedup_merge"}:
+            mode = "dedup_merge"
+
+        # resolve module/project
+        module = item.module
+        raw_module_id = body.get("module_id")
+        if raw_module_id not in (None, ""):
+            try:
+                module = TestModule.objects.filter(pk=int(raw_module_id), is_deleted=False).first()
+            except (TypeError, ValueError):
+                module = None
+        if module is None:
+            return Response({"success": False, "message": "module_id 不能为空或无效"}, status=400)
+
+        project = item.project or getattr(module, "project", None)
+        raw_project_id = body.get("project_id")
+        if raw_project_id not in (None, ""):
+            try:
+                project = TestProject.objects.filter(pk=int(raw_project_id), is_deleted=False).first()
+            except (TypeError, ValueError):
+                project = None
+        if project is None:
+            project = getattr(module, "project", None)
+
+        # suggested existing cases (for linking to release plan)
+        raw_existing_ids = body.get("existing_case_ids") or []
+        existing_case_ids = []
+        if isinstance(raw_existing_ids, (list, tuple)):
+            for x in raw_existing_ids:
+                try:
+                    cid = int(x)
+                except (TypeError, ValueError):
+                    continue
+                if cid > 0:
+                    existing_case_ids.append(cid)
+        existing_case_ids = list(dict.fromkeys(existing_case_ids))[:500]
+
+        # build case drafts from artifact content
+        content = item.content if isinstance(item.content, (dict, list)) else {}
+        in_scope = []
+        if isinstance(content, dict):
+            scope = content.get("scope") if isinstance(content.get("scope"), dict) else {}
+            in_scope = scope.get("in_scope") if isinstance(scope.get("in_scope"), list) else []
+        if not in_scope and item.artifact_type == GeneratedTestArtifact.TYPE_TEST_POINTS and isinstance(content, dict):
+            q = str(content.get("question") or "").strip()
+            if q:
+                in_scope = [f"基于问答提炼测试点：{q}"]
+        if not in_scope:
+            # fallback: use citations/chunk refs
+            in_scope = []
+            for c in (item.citations or [])[:6]:
+                txt = str((c or {}).get("text") or (c or {}).get("title") or "").strip()
+                if txt:
+                    in_scope.append(txt[:120])
+
+        base_title = str(item.title or "").strip() or str(content.get("title") or "").strip() if isinstance(content, dict) else ""
+        if not base_title:
+            base_title = f"Artifact#{item.id}"
+
+        from testcase.models import TestCase, TestCaseStep
+        from project.models import ReleasePlan, ReleasePlanTestCase
+        from django.db import transaction
+        from django.utils import timezone
+
+        created = 0
+        updated = 0
+        linked = 0
+        imported_case_ids = []
+        raw_selected_draft_idxs = body.get("selected_draft_idxs") or []
+        selected_draft_idxs = None
+        if isinstance(raw_selected_draft_idxs, (list, tuple)):
+            picked = []
+            for x in raw_selected_draft_idxs:
+                try:
+                    i = int(x)
+                except (TypeError, ValueError):
+                    continue
+                if i > 0:
+                    picked.append(i)
+            selected_draft_idxs = set(picked[:200]) if picked else None
+
+        def _upsert_case(case_name: str, step_desc: str):
+            nonlocal created, updated
+            name = (case_name or "").strip()[:255]
+            if not name:
+                return None
+            existing = TestCase.objects.filter(module=module, case_name=name, is_deleted=False).first()
+            if existing is None:
+                tc = TestCase.objects.create(
+                    module=module,
+                    case_name=name,
+                    test_type=TestCase.TEST_TYPE_FUNCTIONAL,
+                    level="P2",
+                    creator=request.user,
+                    updater=request.user,
+                )
+                TestCaseStep.objects.create(
+                    testcase=tc,
+                    step_number=1,
+                    step_desc=str(step_desc or "").strip()[:2000] or "执行该测试点",
+                    expected_result="满足文档/知识库约束与预期",
+                    creator=request.user,
+                    updater=request.user,
+                )
+                created += 1
+                return tc
+
+            # dedup_merge: overwrite steps (soft-delete old steps)
+            TestCaseStep.objects.filter(testcase=existing, is_deleted=False).update(is_deleted=True, updater=request.user)
+            TestCaseStep.objects.create(
+                testcase=existing,
+                step_number=1,
+                step_desc=str(step_desc or "").strip()[:2000] or "执行该测试点",
+                expected_result="满足文档/知识库约束与预期",
+                creator=request.user,
+                updater=request.user,
+            )
+            existing.updater = request.user
+            existing.save(update_fields=["updater", "update_time"])
+            updated += 1
+            return existing
+
+        with transaction.atomic():
+            for idx, tp in enumerate(in_scope[:20], start=1):
+                if selected_draft_idxs is not None and idx not in selected_draft_idxs:
+                    continue
+                desc = str(tp or "").strip()
+                if not desc:
+                    continue
+                case_name = f"【AI资产】{base_title}-测试点{idx}"
+                tc = _upsert_case(case_name, desc)
+                if tc is not None:
+                    imported_case_ids.append(int(tc.id))
+
+            # optional: create/update release plan and link cases
+            rp_payload = body.get("release_plan") if isinstance(body.get("release_plan"), dict) else {}
+            enable_release_plan = bool(rp_payload) or bool(body.get("enable_release_plan", False))
+            release_plan_id = None
+            if enable_release_plan and project is not None and imported_case_ids:
+                release_name = str(rp_payload.get("release_name") or f"AI导入-{base_title}").strip()[:255]
+                version_no = str(rp_payload.get("version_no") or f"KB-{item.id}").strip()[:255]
+                release_date = rp_payload.get("release_date")
+                if isinstance(release_date, str) and release_date.strip():
+                    try:
+                        # Accept ISO-like string; if parsing fails fallback to now+7d
+                        from django.utils.dateparse import parse_datetime
+
+                        dt = parse_datetime(release_date.strip())
+                        release_dt = dt or (timezone.now() + timedelta(days=7))
+                    except Exception:
+                        release_dt = timezone.now() + timedelta(days=7)
+                else:
+                    release_dt = timezone.now() + timedelta(days=7)
+
+                rp = ReleasePlan.objects.filter(project=project, version_no=version_no, is_deleted=False).first()
+                if rp is None:
+                    rp = ReleasePlan.objects.create(
+                        project=project,
+                        release_name=release_name,
+                        version_no=version_no,
+                        release_date=release_dt,
+                        status=1,
+                        creator=request.user,
+                        updater=request.user,
+                    )
+                else:
+                    # update name/date if provided
+                    changed = False
+                    if release_name and rp.release_name != release_name:
+                        rp.release_name = release_name
+                        changed = True
+                    if release_dt and rp.release_date != release_dt:
+                        rp.release_date = release_dt
+                        changed = True
+                    if changed:
+                        rp.updater = request.user
+                        rp.save(update_fields=["release_name", "release_date", "updater", "update_time"])
+                release_plan_id = int(rp.id)
+
+                for cid in imported_case_ids:
+                    if ReleasePlanTestCase.objects.filter(release_plan=rp, test_case_id=cid, is_deleted=False).exists():
+                        continue
+                    ReleasePlanTestCase.objects.create(release_plan=rp, test_case_id=cid, is_deleted=False)
+                    linked += 1
+
+                # link existing cases selected from preview
+                for cid in existing_case_ids:
+                    if not TestCase.objects.filter(pk=cid, module=module, is_deleted=False).exists():
+                        continue
+                    if ReleasePlanTestCase.objects.filter(release_plan=rp, test_case_id=cid, is_deleted=False).exists():
+                        continue
+                    ReleasePlanTestCase.objects.create(release_plan=rp, test_case_id=cid, is_deleted=False)
+                    linked += 1
+
+        return Response(
+            {
+                "success": True,
+                "message": "导入完成",
+                "data": {
+                    "artifact_id": int(item.id),
+                    "module_id": int(module.id),
+                    "project_id": int(project.id) if project is not None else None,
+                    "release_plan_id": release_plan_id,
+                    "created_cases": created,
+                    "updated_cases": updated,
+                    "linked_to_release_plan": linked,
+                    "linked_existing_case_ids": existing_case_ids,
+                    "case_ids": imported_case_ids,
+                },
+            }
+        )
+
+
+class GeneratedTestArtifactImportPreviewAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request, artifact_id: int):
+        item = GeneratedTestArtifact.objects.filter(pk=artifact_id, is_deleted=False).first()
+        if item is None:
+            return Response({"success": False, "message": "资产不存在"}, status=404)
+        if not user_is_knowledge_document_privileged(request.user):
+            org_ids = _get_user_org_ids(request.user)
+            if not (
+                int(getattr(item, "creator_id", 0) or 0) == int(request.user.id)
+                or (item.org_id and item.org_id in org_ids)
+            ):
+                return Response({"success": False, "message": "无权限预览该资产"}, status=403)
+
+        body = request.data or {}
+        module = item.module
+        raw_module_id = body.get("module_id")
+        if raw_module_id not in (None, ""):
+            try:
+                module = TestModule.objects.filter(
+                    pk=int(raw_module_id), is_deleted=False
+                ).first()
+            except (TypeError, ValueError):
+                module = None
+        if module is None:
+            return Response({"success": False, "message": "module_id 不能为空或无效"}, status=400)
+
+        from testcase.models import TestCase
+
+        content = item.content if isinstance(item.content, (dict, list)) else {}
+        in_scope = []
+        if isinstance(content, dict):
+            scope = content.get("scope") if isinstance(content.get("scope"), dict) else {}
+            in_scope = scope.get("in_scope") if isinstance(scope.get("in_scope"), list) else []
+        if not in_scope and item.artifact_type == GeneratedTestArtifact.TYPE_TEST_POINTS and isinstance(content, dict):
+            q = str(content.get("question") or "").strip()
+            if q:
+                in_scope = [f"基于问答提炼测试点：{q}"]
+        if not in_scope:
+            for c in (item.citations or [])[:6]:
+                txt = str((c or {}).get("text") or (c or {}).get("title") or "").strip()
+                if txt:
+                    in_scope.append(txt[:120])
+
+        base_title = str(item.title or "").strip()
+        if not base_title and isinstance(content, dict):
+            base_title = str(content.get("title") or "").strip()
+        if not base_title:
+            base_title = f"Artifact#{item.id}"
+
+        drafts = []
+        for idx, tp in enumerate(in_scope[:20], start=1):
+            desc = str(tp or "").strip()
+            if not desc:
+                continue
+            case_name = f"【AI资产】{base_title}-测试点{idx}"
+            exists = TestCase.objects.filter(
+                module=module, case_name=case_name, is_deleted=False
+            ).first()
+            drafts.append(
+                {
+                    "idx": idx,
+                    "case_name": case_name,
+                    "action": "update" if exists else "create",
+                    "existing_case_id": int(exists.id) if exists else None,
+                    "step_desc_preview": desc[:220],
+                }
+            )
+
+        # suggest existing cases for linking to ReleasePlan (keyword hit)
+        kw_tokens = []
+        for tp in in_scope[:8]:
+            t = str(tp or "").strip()
+            if not t:
+                continue
+            for w in re.split(r"[，。,\\s/\\\\\\-_|]+", t):
+                w = (w or "").strip()
+                if 2 <= len(w) <= 12:
+                    kw_tokens.append(w)
+        kw_tokens = list(dict.fromkeys(kw_tokens))[:8]
+        suggest_qs = TestCase.objects.filter(module=module, is_deleted=False)
+        if kw_tokens:
+            q = Q()
+            for tk in kw_tokens:
+                q |= Q(case_name__icontains=tk)
+            suggest_qs = suggest_qs.filter(q)
+        suggest_rows = list(
+            suggest_qs.order_by("-create_time").values("id", "case_name", "test_type")[:50]
+        )
+
+        # suggested release plan defaults
+        try:
+            from django.utils import timezone
+
+            release_dt = timezone.now() + timedelta(days=7)
+            release_date_iso = release_dt.replace(microsecond=0).isoformat()
+        except Exception:
+            release_date_iso = ""
+
+        return Response(
+            {
+                "success": True,
+                "data": {
+                    "artifact_id": int(item.id),
+                    "module_id": int(module.id),
+                    "draft_cases": drafts,
+                    "suggest_existing_cases": suggest_rows,
+                    "default_selected_existing_case_ids": [int(x["id"]) for x in suggest_rows[:10]],
+                    "suggest_release_plan": {
+                        "release_name": f"AI导入-{base_title}",
+                        "version_no": f"KB-{int(item.id)}",
+                        "release_date": release_date_iso,
+                    },
+                },
             }
         )
 
@@ -4881,6 +5599,8 @@ class AiKnowledgeAskAPIView(APIView):
             category=category,
             tag=tag,
             min_score=min_score,
+            user=request.user,
+            org_ids=_get_user_org_ids(request.user),
         )
 
         citations = []

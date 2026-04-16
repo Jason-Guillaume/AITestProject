@@ -200,7 +200,7 @@ export const previewKnowledgeArticleChunksApi = (id, params) =>
 export const probeKnowledgeDocumentDeleteApi = (id = 0) =>
   request({
     url: `/assistant/knowledge/documents/${id}/`,
-    method: "delete",
+    method: "options",
   });
 
 export const retryKnowledgeDocumentApi = (id) =>
@@ -211,6 +211,15 @@ export const deleteKnowledgeDocumentApi = (id) =>
 
 export const getKnowledgeRuntimeStatusApi = () =>
   request.get("/assistant/knowledge/runtime-status/");
+
+export const createGeneratedTestArtifactApi = (payload) =>
+  request.post("/assistant/knowledge/artifacts/", payload);
+
+export const importGeneratedTestArtifactApi = (id, payload) =>
+  request.post(`/assistant/knowledge/artifacts/${id}/import/`, payload);
+
+export const previewImportGeneratedTestArtifactApi = (id, payload) =>
+  request.post(`/assistant/knowledge/artifacts/${id}/import-preview/`, payload);
 
 export const extractKnowledgeTextApi = (formData) =>
   request.post("/assistant/knowledge/extract-text/", formData);

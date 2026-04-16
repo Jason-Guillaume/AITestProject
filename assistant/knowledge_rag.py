@@ -7,8 +7,10 @@ import hashlib
 from typing import Any, Dict, List
 
 from django.conf import settings
+from django.db.models import Q
 
 from assistant.models import KnowledgeArticle
+from assistant.permissions import user_is_knowledge_document_privileged
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +215,9 @@ class KnowledgeIndexer:
                     for t in (article.tags if isinstance(article.tags, list) else [])
                 ]
             ),
+            "org_id": int(article.org_id) if getattr(article, "org_id", None) else None,
+            "visibility_scope": str(getattr(article, "visibility_scope", "") or ""),
+            "creator_id": int(article.creator_id) if getattr(article, "creator_id", None) else None,
         }
         try:
             ids = [_doc_id(article.id, i) for i, _ in enumerate(chunks)]
@@ -263,6 +268,8 @@ class KnowledgeSearcher:
         *,
         category: str | None = None,
         tag: str | None = None,
+        user=None,
+        org_ids: list[int] | None = None,
     ) -> List[Dict[str, Any]]:
         """
         向量检索不可用时回退关键词检索，避免接口 500 或空结果不可用。
@@ -275,6 +282,15 @@ class KnowledgeSearcher:
             tokens = [q]
 
         qs = KnowledgeArticle.objects.filter(is_deleted=False)
+        if user is not None and not user_is_knowledge_document_privileged(user):
+            org_ids = list(org_ids or [])
+            qs = qs.filter(
+                Q(creator=user, visibility_scope=KnowledgeArticle.VISIBILITY_PRIVATE)
+                | Q(
+                    visibility_scope=KnowledgeArticle.VISIBILITY_ORG,
+                    org_id__in=[int(x) for x in org_ids if int(x) > 0],
+                )
+            )
         if category:
             qs = qs.filter(category=str(category))
         if tag:
@@ -323,6 +339,8 @@ class KnowledgeSearcher:
         category: str | None = None,
         tag: str | None = None,
         min_score: float | None = None,
+        user=None,
+        org_ids: list[int] | None = None,
     ) -> List[Dict[str, Any]]:
         col = get_collection()
         if col is None:
@@ -332,20 +350,44 @@ class KnowledgeSearcher:
                 top_k=top_k,
                 category=category,
                 tag=tag,
+                user=user,
+                org_ids=org_ids,
             )
         q = (query_text or "").strip()
         if not q:
             return []
-        try:
-            where = None
-            if category:
-                where = {"category": str(category)}
-            res = col.query(
+        def _query_one(where):
+            return col.query(
                 query_texts=[q],
                 n_results=max(int(top_k), 1),
                 where=where,
                 include=["documents", "distances", "metadatas"],
             )
+
+        try:
+            where_list = []
+            if user is not None and not user_is_knowledge_document_privileged(user):
+                org_ids = [int(x) for x in (org_ids or []) if int(x) > 0]
+                for oid in org_ids[:6]:
+                    w = {
+                        "visibility_scope": KnowledgeArticle.VISIBILITY_ORG,
+                        "org_id": int(oid),
+                    }
+                    if category:
+                        w["category"] = str(category)
+                    where_list.append(w)
+                w_private = {
+                    "visibility_scope": KnowledgeArticle.VISIBILITY_PRIVATE,
+                    "creator_id": int(getattr(user, "id", 0) or 0),
+                }
+                if category:
+                    w_private["category"] = str(category)
+                where_list.append(w_private)
+            else:
+                w = {"category": str(category)} if category else None
+                where_list.append(w)
+
+            res_list = [_query_one(w) for w in where_list]
         except Exception as exc:  # pragma: no cover
             logger.warning("KnowledgeSearcher query failed: %s", exc)
             return cls._keyword_fallback_search(
@@ -353,52 +395,60 @@ class KnowledgeSearcher:
                 top_k=top_k,
                 category=category,
                 tag=tag,
+                user=user,
+                org_ids=org_ids,
             )
-        docs = (res.get("documents") or [[]])[0]
-        dists = (res.get("distances") or [[]])[0]
-        metas = (res.get("metadatas") or [[]])[0]
+
         out: List[Dict[str, Any]] = []
         best_by_article: Dict[int, Dict[str, Any]] = {}
-        for i, md in enumerate(metas):
-            meta = md if isinstance(md, dict) else {}
-            title = meta.get("title", "")
-            category = meta.get("category", "")
-            tags = [x for x in str(meta.get("tags", "")).split(",") if x]
-            dist = dists[i] if i < len(dists) else None
-            score = (1.0 - float(dist)) if dist is not None else None
-            item = {
-                "article_id": (
-                    int(meta.get("article_id")) if meta.get("article_id") else None
-                ),
-                "title": title,
-                "category": category,
-                "tags": tags,
-                "distance": dist,
-                "score": score,
-                "document": docs[i] if i < len(docs) else "",
-            }
-            if tag and tag not in tags:
-                continue
-            if min_score is not None and score is not None and score < float(min_score):
-                continue
-            article_id = item["article_id"]
-            if article_id is None:
-                continue
-            row = {
-                "article_id": article_id,
-                "title": item["title"],
-                "category": item["category"],
-                "tags": item["tags"],
-                "distance": item["distance"],
-                "score": item["score"],
-                "document": item["document"],
-                "retrieve_mode": "semantic",
-            }
-            old = best_by_article.get(article_id)
-            old_score = float(old.get("score") or -1) if old else -1
-            new_score = float(row.get("score") or -1)
-            if old is None or new_score > old_score:
-                best_by_article[article_id] = row
+        for res in res_list:
+            docs = (res.get("documents") or [[]])[0]
+            dists = (res.get("distances") or [[]])[0]
+            metas = (res.get("metadatas") or [[]])[0]
+            for i, md in enumerate(metas):
+                meta = md if isinstance(md, dict) else {}
+                title = meta.get("title", "")
+                category_val = meta.get("category", "")
+                tags = [x for x in str(meta.get("tags", "")).split(",") if x]
+                dist = dists[i] if i < len(dists) else None
+                score = (1.0 - float(dist)) if dist is not None else None
+                item = {
+                    "article_id": (
+                        int(meta.get("article_id")) if meta.get("article_id") else None
+                    ),
+                    "title": title,
+                    "category": category_val,
+                    "tags": tags,
+                    "distance": dist,
+                    "score": score,
+                    "document": docs[i] if i < len(docs) else "",
+                }
+                if tag and tag not in tags:
+                    continue
+                if (
+                    min_score is not None
+                    and score is not None
+                    and score < float(min_score)
+                ):
+                    continue
+                article_id = item["article_id"]
+                if article_id is None:
+                    continue
+                row = {
+                    "article_id": article_id,
+                    "title": item["title"],
+                    "category": item["category"],
+                    "tags": item["tags"],
+                    "distance": item["distance"],
+                    "score": item["score"],
+                    "document": item["document"],
+                    "retrieve_mode": "semantic",
+                }
+                old = best_by_article.get(article_id)
+                old_score = float(old.get("score") or -1) if old else -1
+                new_score = float(row.get("score") or -1)
+                if old is None or new_score > old_score:
+                    best_by_article[article_id] = row
         out = sorted(
             best_by_article.values(),
             key=lambda x: float(x.get("score") or 0.0),
@@ -411,5 +461,7 @@ class KnowledgeSearcher:
                 top_k=top_k,
                 category=category,
                 tag=tag,
+                user=user,
+                org_ids=org_ids,
             )
         return out

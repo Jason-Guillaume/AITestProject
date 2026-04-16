@@ -1192,10 +1192,413 @@ class TestDesignViewSet(BaseModelViewSet):
     queryset = TestDesign.objects.all()
     serializer_class = TestDesignSerializer
 
+    def get_queryset(self):
+        """
+        支持回收站模式：
+        - GET /api/testcase/designs/?recycle=1
+        """
+        params = self.request.query_params
+        recycle_mode = _recycle_mode_from_params(params)
+        if recycle_mode:
+            qs = TestDesign.objects.filter(is_deleted=True)
+            user = getattr(self.request, "user", None)
+            if (
+                self.enable_data_scope
+                and user
+                and getattr(user, "is_authenticated", False)
+                and not self._is_admin_user(user)
+            ):
+                qs = self._apply_member_scope(qs, user)
+            return qs.order_by("-update_time", "-id")
+        return super().get_queryset()
+
+    def _parse_id_list(self, raw_ids):
+        if raw_ids is None:
+            return [], Response({"msg": "ids 必填"}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(raw_ids, list):
+            return [], Response({"msg": "ids 必须为数组"}, status=status.HTTP_400_BAD_REQUEST)
+        ids = []
+        for x in raw_ids:
+            try:
+                ids.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        ids = [i for i in ids if i > 0]
+        if not ids:
+            return [], Response({"msg": "ids 不能为空"}, status=status.HTTP_400_BAD_REQUEST)
+        seen = set()
+        uniq = []
+        for i in ids:
+            if i in seen:
+                continue
+            seen.add(i)
+            uniq.append(i)
+        return uniq, None
+
+    @action(detail=False, methods=["post"], url_path="batch-delete")
+    def batch_delete(self, request):
+        """
+        批量软删除测试设计（数据范围与列表一致）。
+        POST /api/testcase/designs/batch-delete/
+        body: { ids: number[] }
+        """
+        id_list, err = self._parse_id_list(request.data.get("ids") if isinstance(request.data, dict) else None)
+        if err is not None:
+            return err
+        qs = self.get_queryset().filter(id__in=id_list, is_deleted=False)
+        found = list(qs)
+        found_ids = [int(o.id) for o in found]
+        if not found_ids:
+            return Response({"success": True, "deleted": 0, "skipped": len(id_list), "missing_ids": id_list})
+        deleted = 0
+        errors = []
+        # 注意：单个删除失败会使当前事务进入 broken 状态，继续执行 SQL 会报
+        # "You can't execute queries until the end of the atomic block"。
+        # 因此这里按条目使用 savepoint 隔离，保证“部分成功”可用。
+        for obj in found:
+            try:
+                with transaction.atomic():
+                    self.perform_destroy(obj)
+                deleted += 1
+            except Exception as e:
+                errors.append({"id": int(obj.id), "error": str(e)})
+        missing = [i for i in id_list if i not in set(found_ids)]
+        return Response(
+            {
+                "success": len(errors) == 0,
+                "deleted": deleted,
+                "missing_ids": missing,
+                "errors": errors,
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="batch-update")
+    def batch_update(self, request):
+        """
+        批量更新测试设计（对所有 ids 应用同一 patch）。
+        POST /api/testcase/designs/batch-update/
+        body: { ids: number[], patch: object }
+        """
+        if not isinstance(request.data, dict):
+            return Response({"msg": "请求体必须为 JSON 对象"}, status=status.HTTP_400_BAD_REQUEST)
+        id_list, err = self._parse_id_list(request.data.get("ids"))
+        if err is not None:
+            return err
+        patch = request.data.get("patch")
+        if not isinstance(patch, dict) or not patch:
+            return Response({"msg": "patch 必须为非空对象"}, status=status.HTTP_400_BAD_REQUEST)
+
+        allowed_keys = {"design_name", "req_count", "point_count", "case_count", "review_status", "archive_status"}
+        cleaned = {k: v for (k, v) in patch.items() if k in allowed_keys}
+        if not cleaned:
+            return Response({"msg": "patch 未包含可更新字段"}, status=status.HTTP_400_BAD_REQUEST)
+
+        qs = self.get_queryset().filter(id__in=id_list, is_deleted=False)
+        found = list(qs)
+        found_ids = {int(o.id) for o in found}
+        missing = [i for i in id_list if i not in found_ids]
+
+        updated_ids = []
+        errors = []
+        with transaction.atomic():
+            for obj in found:
+                ser = self.get_serializer(obj, data=cleaned, partial=True)
+                try:
+                    ser.is_valid(raise_exception=True)
+                    self.perform_update(ser)
+                    updated_ids.append(int(obj.id))
+                except Exception as e:
+                    errors.append({"id": int(obj.id), "error": str(e)})
+        return Response(
+            {
+                "success": len(errors) == 0,
+                "updated": len(updated_ids),
+                "updated_ids": updated_ids,
+                "missing_ids": missing,
+                "errors": errors,
+            }
+        )
+
+    @action(detail=False, methods=["get"], url_path="recycle")
+    def recycle(self, request):
+        """回收站列表：等价于 ?recycle=1。"""
+        qp = request.query_params
+        mutable = getattr(qp, "_mutable", False)
+        qp._mutable = True
+        qp["recycle"] = "1"
+        try:
+            return self.list(request)
+        finally:
+            qp.pop("recycle", None)
+            qp._mutable = mutable
+
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request, pk=None):
+        """回收站恢复：仅允许恢复 is_deleted=True 的记录。"""
+        obj = get_object_or_404(TestDesign.objects.filter(is_deleted=True), pk=pk)
+        obj.is_deleted = False
+        obj.save(update_fields=["is_deleted", "update_time"])
+        return Response({"success": True, "id": int(obj.id)})
+
+    @action(detail=False, methods=["post"], url_path="bulk-soft-delete")
+    def bulk_soft_delete(self, request):
+        """批量软删除：body { ids: [] }。"""
+        id_list, err = self._parse_id_list(
+            request.data.get("ids") if isinstance(request.data, dict) else None
+        )
+        if err is not None:
+            return err
+        qs = self.get_queryset().filter(id__in=id_list, is_deleted=False)
+        found_ids = list(qs.values_list("id", flat=True))
+        if not found_ids:
+            return Response(
+                {
+                    "success": True,
+                    "deleted": 0,
+                    "skipped": len(id_list),
+                    "missing_ids": id_list,
+                }
+            )
+        with transaction.atomic():
+            updated = qs.update(is_deleted=True)
+        missing = [i for i in id_list if i not in set(found_ids)]
+        return Response(
+            {
+                "success": True,
+                "deleted": int(updated),
+                "skipped": len(missing),
+                "missing_ids": missing,
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="bulk-restore")
+    def bulk_restore(self, request):
+        """回收站批量恢复：body { ids: [] }。"""
+        id_list, err = self._parse_id_list(
+            request.data.get("ids") if isinstance(request.data, dict) else None
+        )
+        if err is not None:
+            return err
+        qs = TestDesign.objects.filter(id__in=id_list, is_deleted=True)
+        user = getattr(request, "user", None)
+        if (
+            self.enable_data_scope
+            and user
+            and getattr(user, "is_authenticated", False)
+            and not self._is_admin_user(user)
+        ):
+            qs = self._apply_member_scope(qs, user)
+        found_ids = list(qs.values_list("id", flat=True))
+        if not found_ids:
+            return Response(
+                {
+                    "success": True,
+                    "restored": 0,
+                    "skipped": len(id_list),
+                    "missing_ids": id_list,
+                }
+            )
+        with transaction.atomic():
+            updated = qs.update(is_deleted=False)
+        missing = [i for i in id_list if i not in set(found_ids)]
+        return Response(
+            {
+                "success": True,
+                "restored": int(updated),
+                "skipped": len(missing),
+                "missing_ids": missing,
+            }
+        )
+
+    @action(detail=True, methods=["post"], url_path="hard-delete")
+    def hard_delete(self, request, pk=None):
+        """回收站彻底删除：仅允许删除 is_deleted=True 的记录。"""
+        obj = get_object_or_404(TestDesign.objects.filter(is_deleted=True), pk=pk)
+        user = getattr(request, "user", None)
+        before = obj
+        obj.delete()
+        try:
+            record_audit_event(
+                action=AuditEvent.ACTION_DELETE,
+                actor=user,
+                instance=before,
+                request=request,
+                before=before,
+                after=None,
+            )
+        except Exception:
+            pass
+        return Response({"success": True})
+
+    @action(detail=False, methods=["post"], url_path="bulk-hard-delete")
+    def bulk_hard_delete(self, request):
+        """回收站批量彻底删除：body { ids: [] }，仅对 is_deleted=True 生效。"""
+        id_list, err = self._parse_id_list(
+            request.data.get("ids") if isinstance(request.data, dict) else None
+        )
+        if err is not None:
+            return err
+        user = getattr(request, "user", None)
+        qs = TestDesign.objects.filter(id__in=id_list, is_deleted=True).order_by("id")
+        if (
+            self.enable_data_scope
+            and user
+            and getattr(user, "is_authenticated", False)
+            and not self._is_admin_user(user)
+        ):
+            qs = self._apply_member_scope(qs, user)
+        deleted = 0
+        errors = []
+        for obj in qs.iterator(chunk_size=200):
+            try:
+                before = obj
+                obj.delete()
+                deleted += 1
+                try:
+                    record_audit_event(
+                        action=AuditEvent.ACTION_DELETE,
+                        actor=user,
+                        instance=before,
+                        request=request,
+                        before=before,
+                        after=None,
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                errors.append({"id": int(getattr(obj, "id", 0) or 0), "error": str(e)})
+        return Response({"success": len(errors) == 0, "count": deleted, "errors": errors})
+
 
 class TestApproachViewSet(BaseModelViewSet):
     queryset = TestApproach.objects.all()
     serializer_class = TestApproachSerializer
+
+    def get_queryset(self):
+        """
+        支持回收站模式：
+        - GET /api/testcase/approaches/?recycle=1
+        """
+        params = self.request.query_params
+        recycle_mode = _recycle_mode_from_params(params)
+        if recycle_mode:
+            qs = TestApproach.objects.filter(is_deleted=True)
+            user = getattr(self.request, "user", None)
+            if (
+                self.enable_data_scope
+                and user
+                and getattr(user, "is_authenticated", False)
+                and not self._is_admin_user(user)
+            ):
+                qs = self._apply_member_scope(qs, user)
+            return qs.order_by("-update_time", "-id")
+        return super().get_queryset()
+
+    def _parse_id_list(self, raw_ids):
+        if raw_ids is None:
+            raise ValidationError({"msg": "ids 必填", "code": 400, "data": None})
+        if not isinstance(raw_ids, list):
+            raise ValidationError({"msg": "ids 必须为数组", "code": 400, "data": None})
+        ids = []
+        for x in raw_ids:
+            try:
+                ids.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        ids = [i for i in ids if i > 0]
+        if not ids:
+            raise ValidationError({"msg": "ids 不能为空", "code": 400, "data": None})
+        seen = set()
+        uniq = []
+        for i in ids:
+            if i in seen:
+                continue
+            seen.add(i)
+            uniq.append(i)
+        return uniq
+
+    @action(detail=False, methods=["post"], url_path="batch-delete")
+    def batch_delete(self, request):
+        """
+        批量软删除测试方案（数据范围与列表一致）。
+        POST /api/testcase/approaches/batch-delete/
+        body: { ids: number[] }
+        """
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
+        found = list(qs)
+        found_ids = {int(o.id) for o in found}
+        missing = [i for i in ids if i not in found_ids]
+        if not found:
+            return Response({"success": True, "deleted": 0, "missing_ids": ids, "errors": []})
+        deleted = 0
+        errors = []
+        for obj in found:
+            try:
+                with transaction.atomic():
+                    self.perform_destroy(obj)
+                deleted += 1
+            except Exception as e:
+                errors.append({"id": int(obj.id), "error": str(e)})
+        return Response(
+            {
+                "success": len(errors) == 0,
+                "deleted": deleted,
+                "missing_ids": missing,
+                "errors": errors,
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="batch-copy")
+    def batch_copy(self, request):
+        """
+        批量复制测试方案（复制字段；重置封面图；不复制图片历史）。
+        POST /api/testcase/approaches/batch-copy/
+        body: { ids: number[], name_suffix?: string }
+        """
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        suffix = str(request.data.get("name_suffix") or "（复制）").strip()[:32] or "（复制）"
+
+        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
+        found = list(qs)
+        found_ids = {int(o.id) for o in found}
+        missing = [i for i in ids if i not in found_ids]
+        if not found:
+            return Response(
+                {"success": True, "created": 0, "created_ids": [], "missing_ids": ids, "errors": []}
+            )
+
+        user = request.user if getattr(request, "user", None) is not None else None
+        created_ids = []
+        errors = []
+        with transaction.atomic():
+            for src in found:
+                try:
+                    obj = TestApproach.objects.create(
+                        scheme_name=(str(src.scheme_name or "")[:220] + suffix),
+                        version=getattr(src, "version", ""),
+                        cover_image=None,
+                        test_goal=getattr(src, "test_goal", None),
+                        test_category=getattr(src, "test_category", 1),
+                        creator=user if (user and getattr(user, "is_authenticated", False)) else None,
+                        updater=user if (user and getattr(user, "is_authenticated", False)) else None,
+                    )
+                    created_ids.append(int(obj.id))
+                except Exception as e:
+                    errors.append({"id": int(src.id), "error": str(e)})
+        return Response(
+            {
+                "success": len(errors) == 0,
+                "created": len(created_ids),
+                "created_ids": created_ids,
+                "missing_ids": missing,
+                "errors": errors,
+            }
+        )
 
     @action(methods=["get"], detail=True, url_path="images")
     def list_images(self, request, pk=None):
@@ -1300,6 +1703,125 @@ class TestApproachViewSet(BaseModelViewSet):
         approach.save(update_fields=["cover_image"])
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=["get"], url_path="recycle")
+    def recycle(self, request):
+        """回收站列表：等价于 ?recycle=1。"""
+        qp = request.query_params
+        mutable = getattr(qp, "_mutable", False)
+        qp._mutable = True
+        qp["recycle"] = "1"
+        try:
+            return self.list(request)
+        finally:
+            qp.pop("recycle", None)
+            qp._mutable = mutable
+
+    @action(detail=True, methods=["post"], url_path="restore")
+    def restore(self, request, pk=None):
+        """回收站恢复：仅允许恢复 is_deleted=True 的记录。"""
+        obj = get_object_or_404(TestApproach.objects.filter(is_deleted=True), pk=pk)
+        obj.is_deleted = False
+        obj.save(update_fields=["is_deleted", "update_time"])
+        return Response({"success": True, "id": int(obj.id)})
+
+    @action(detail=False, methods=["post"], url_path="bulk-soft-delete")
+    def bulk_soft_delete(self, request):
+        """批量软删除：body { ids: [] }。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
+        found_ids = list(qs.values_list("id", flat=True))
+        if not found_ids:
+            return Response({"success": True, "deleted": 0, "skipped": len(ids), "missing_ids": ids})
+        with transaction.atomic():
+            updated = qs.update(is_deleted=True)
+        missing = [i for i in ids if i not in set(found_ids)]
+        return Response({"success": True, "deleted": int(updated), "skipped": len(missing), "missing_ids": missing})
+
+    @action(detail=False, methods=["post"], url_path="bulk-restore")
+    def bulk_restore(self, request):
+        """回收站批量恢复：body { ids: [] }。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        user = getattr(request, "user", None)
+        qs = TestApproach.objects.filter(id__in=ids, is_deleted=True)
+        if (
+            self.enable_data_scope
+            and user
+            and getattr(user, "is_authenticated", False)
+            and not self._is_admin_user(user)
+        ):
+            qs = self._apply_member_scope(qs, user)
+        found_ids = list(qs.values_list("id", flat=True))
+        if not found_ids:
+            return Response({"success": True, "restored": 0, "skipped": len(ids), "missing_ids": ids})
+        with transaction.atomic():
+            updated = qs.update(is_deleted=False)
+        missing = [i for i in ids if i not in set(found_ids)]
+        return Response({"success": True, "restored": int(updated), "skipped": len(missing), "missing_ids": missing})
+
+    @action(detail=True, methods=["post"], url_path="hard-delete")
+    def hard_delete(self, request, pk=None):
+        """回收站彻底删除：仅允许删除 is_deleted=True 的记录。"""
+        try:
+            obj = TestApproach.objects.get(pk=pk, is_deleted=True)
+        except TestApproach.DoesNotExist:
+            return Response({"success": False, "message": "记录不存在或未在回收站"}, status=404)
+        user = getattr(request, "user", None)
+        before = obj
+        obj.delete()
+        try:
+            record_audit_event(
+                action=AuditEvent.ACTION_DELETE,
+                actor=user,
+                instance=before,
+                request=request,
+                before=before,
+                after=None,
+            )
+        except Exception:
+            pass
+        return Response({"success": True})
+
+    @action(detail=False, methods=["post"], url_path="bulk-hard-delete")
+    def bulk_hard_delete(self, request):
+        """回收站批量彻底删除：body { ids: [] }，仅对 is_deleted=True 生效。"""
+        if not isinstance(request.data, dict):
+            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
+        ids = self._parse_id_list(request.data.get("ids"))
+        user = getattr(request, "user", None)
+        qs = TestApproach.objects.filter(id__in=ids, is_deleted=True).order_by("id")
+        if (
+            self.enable_data_scope
+            and user
+            and getattr(user, "is_authenticated", False)
+            and not self._is_admin_user(user)
+        ):
+            qs = self._apply_member_scope(qs, user)
+        deleted = 0
+        errors = []
+        for obj in qs.iterator(chunk_size=200):
+            try:
+                before = obj
+                obj.delete()
+                deleted += 1
+                try:
+                    record_audit_event(
+                        action=AuditEvent.ACTION_DELETE,
+                        actor=user,
+                        instance=before,
+                        request=request,
+                        before=before,
+                        after=None,
+                    )
+                except Exception:
+                    pass
+            except Exception as e:
+                errors.append({"id": int(getattr(obj, "id", 0) or 0), "error": str(e)})
+        return Response({"success": len(errors) == 0, "count": deleted, "errors": errors})
 
 
 def _user_can_write_module_cases(user, module) -> bool:

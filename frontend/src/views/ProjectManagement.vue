@@ -17,6 +17,67 @@
           </template>
         </el-input>
       </div>
+      <div class="pm-toolbar__right">
+        <el-button
+          :type="isRecycleMode ? 'info' : 'warning'"
+          plain
+          class="pm-recycle-toggle"
+          @click="toggleRecycleMode"
+        >
+          {{ isRecycleMode ? '返回项目列表' : '回收站' }}
+        </el-button>
+        <el-button
+          :type="isSelectMode ? 'info' : 'primary'"
+          plain
+          class="pm-select-toggle"
+          @click="toggleSelectMode"
+        >
+          {{ isSelectMode ? '取消选择' : '选择' }}
+        </el-button>
+        <el-button
+          v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0"
+          type="danger"
+          class="pm-batch-btn"
+          @click="batchSoftDelete"
+        >
+          批量删除（{{ selectedIds.length }}）
+        </el-button>
+        <el-button
+          v-if="isSelectMode && isRecycleMode && selectedIds.length > 0"
+          type="success"
+          class="pm-batch-btn"
+          @click="batchRestore"
+        >
+          批量恢复（{{ selectedIds.length }}）
+        </el-button>
+        <el-button
+          v-if="isSelectMode && isRecycleMode && selectedIds.length > 0"
+          type="danger"
+          class="pm-batch-btn"
+          @click="batchHardDelete"
+        >
+          彻底删除（{{ selectedIds.length }}）
+        </el-button>
+        <el-dropdown v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0" @command="onBatchStatusCmd">
+          <el-button type="primary" class="pm-batch-btn">
+            批量改状态 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="in_progress">设为进行中</el-dropdown-item>
+              <el-dropdown-item command="completed">设为已完成</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button
+          v-if="isSelectMode && selectedIds.length > 0"
+          class="pm-batch-btn"
+          @click="exportSelected"
+        >
+          导出选中
+        </el-button>
+        <el-button v-if="isSelectMode" class="pm-batch-btn" @click="exportFiltered">导出当前筛选</el-button>
+      </div>
     </div>
 
     <!-- 顶部：四种创建入口 -->
@@ -46,9 +107,33 @@
         v-for="p in filteredProjects"
         :key="p.id"
         class="pm-card"
-        :class="{ 'pm-card--active': selectedId === p.id }"
-        @click="setCurrentProject(p)"
+        :class="{
+          'pm-card--active': selectedId === p.id,
+          'pm-card--selected': selectedIds.includes(p.id),
+        }"
+        @click="onProjectCardClick(p)"
       >
+        <div v-if="isSelectMode" class="pm-card__select" @click.stop>
+          <button
+            type="button"
+            class="pm-card__select-btn"
+            :class="{ 'is-checked': selectedIds.includes(p.id) }"
+            :aria-pressed="selectedIds.includes(p.id)"
+            :aria-label="selectedIds.includes(p.id) ? '取消选择' : '选择项目'"
+            @click.stop="toggleSelected(p.id, !selectedIds.includes(p.id))"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path
+                d="M20 6L9 17l-5-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
         <div class="pm-card__head">
           <div class="pm-card__head-left">
             <span class="pm-card__code-icon" aria-hidden="true">&lt;/&gt;</span>
@@ -90,7 +175,9 @@
           <el-button type="primary" link @click.stop="editProject(p)">编辑</el-button>
           <el-button link type="primary" @click.stop="openReleaseDialog(p)">版本发布</el-button>
           <el-button link @click.stop="enterProject(p)">详情</el-button>
-          <el-button link type="danger" @click.stop="delProject(p)">删除</el-button>
+          <el-button v-if="!isRecycleMode" link type="danger" @click.stop="delProject(p)">删除</el-button>
+          <el-button v-else link type="success" @click.stop="restoreProject(p)">恢复</el-button>
+          <el-button v-if="isRecycleMode" link type="danger" @click.stop="hardDeleteProject(p)">彻底删除</el-button>
         </div>
       </div>
 
@@ -249,7 +336,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Monitor, List, Grid, Setting } from '@element-plus/icons-vue'
+import { Plus, Search, Monitor, List, Grid, Setting, ArrowDown } from '@element-plus/icons-vue'
 import {
   getProjectsApi,
   createProjectApi,
@@ -257,6 +344,14 @@ import {
   deleteProjectApi,
   getReleasesApi,
   createReleaseApi,
+  getProjectsRecycleApi,
+  restoreProjectApi,
+  hardDeleteProjectApi,
+  bulkSoftDeleteProjectsApi,
+  bulkRestoreProjectsApi,
+  bulkHardDeleteProjectsApi,
+  bulkUpdateProjectStatusApi,
+  downloadProjectsCsv,
 } from '@/api/project'
 import { useAppContextStore } from '@/stores/appContextStore'
 
@@ -265,6 +360,9 @@ const appContextStore = useAppContextStore()
 
 const projects = ref([])
 const searchKw = ref('')
+const isRecycleMode = ref(false)
+const isSelectMode = ref(false)
+const selectedIds = ref([])
 const showCreateDialog = ref(false)
 const editingProject = ref(null)
 const saving = ref(false)
@@ -405,7 +503,7 @@ function setCurrentProject(project) {
 
 async function loadProjects() {
   try {
-    const { data } = await getProjectsApi()
+    const { data } = await (isRecycleMode.value ? getProjectsRecycleApi({ q: searchKw.value || '' }) : getProjectsApi())
     const list = Array.isArray(data) ? data : (data?.results || data?.data || [])
     projects.value = list
     const storedProjectId = localStorage.getItem('current_project_id')
@@ -423,6 +521,98 @@ async function loadProjects() {
   } catch {
     /* silent */
   }
+}
+
+function toggleRecycleMode() {
+  isRecycleMode.value = !isRecycleMode.value
+  selectedIds.value = []
+  isSelectMode.value = false
+  loadProjects()
+}
+
+function toggleSelectMode() {
+  isSelectMode.value = !isSelectMode.value
+  if (!isSelectMode.value) {
+    selectedIds.value = []
+  }
+}
+
+function toggleSelected(id, checked) {
+  const nid = Number(id)
+  if (!nid) return
+  const cur = new Set(selectedIds.value || [])
+  if (checked) cur.add(nid)
+  else cur.delete(nid)
+  selectedIds.value = Array.from(cur)
+}
+
+function onProjectCardClick(p) {
+  // 选择模式下：点击卡片切换选中；非选择模式：设置当前项目
+  if (isSelectMode.value) {
+    toggleSelected(p?.id, !selectedIds.value.includes(Number(p?.id)))
+    return
+  }
+  setCurrentProject(p)
+}
+
+async function restoreProject(p) {
+  await restoreProjectApi(p.id)
+  ElMessage.success('已恢复')
+  loadProjects()
+  window.dispatchEvent(new Event('app:projects-updated'))
+}
+
+async function hardDeleteProject(p) {
+  await ElMessageBox.confirm(`确定彻底删除项目「${p.project_name}」吗？此操作不可恢复。`, '警告', { type: 'error' })
+  await hardDeleteProjectApi(p.id)
+  ElMessage.success('已彻底删除')
+  if (selectedId.value === p.id) selectedId.value = null
+  selectedIds.value = (selectedIds.value || []).filter((x) => Number(x) !== Number(p.id))
+  loadProjects()
+  window.dispatchEvent(new Event('app:projects-updated'))
+}
+
+async function batchSoftDelete() {
+  await ElMessageBox.confirm(`确定将选中的 ${selectedIds.value.length} 个项目移入回收站吗？`, '提示', { type: 'warning' })
+  await bulkSoftDeleteProjectsApi(selectedIds.value)
+  ElMessage.success('已移入回收站')
+  selectedIds.value = []
+  loadProjects()
+  window.dispatchEvent(new Event('app:projects-updated'))
+}
+
+async function batchRestore() {
+  await bulkRestoreProjectsApi(selectedIds.value)
+  ElMessage.success('已恢复')
+  selectedIds.value = []
+  loadProjects()
+  window.dispatchEvent(new Event('app:projects-updated'))
+}
+
+async function batchHardDelete() {
+  await ElMessageBox.confirm(`确定彻底删除选中的 ${selectedIds.value.length} 个项目吗？此操作不可恢复。`, '警告', { type: 'error' })
+  await bulkHardDeleteProjectsApi(selectedIds.value)
+  ElMessage.success('已彻底删除')
+  selectedIds.value = []
+  loadProjects()
+  window.dispatchEvent(new Event('app:projects-updated'))
+}
+
+async function onBatchStatusCmd(cmd) {
+  const st = cmd === 'completed' ? STATUS_COMPLETED : STATUS_IN_PROGRESS
+  await bulkUpdateProjectStatusApi(selectedIds.value, st)
+  ElMessage.success('状态已更新')
+  selectedIds.value = []
+  loadProjects()
+}
+
+function exportSelected() {
+  const ids = (selectedIds.value || []).join(',')
+  downloadProjectsCsv({ mode: 'selected', ids, include_deleted: isRecycleMode.value ? 1 : 0 })
+}
+
+function exportFiltered() {
+  downloadProjectsCsv({ mode: 'filtered', q: searchKw.value || '', include_deleted: isRecycleMode.value ? 1 : 0 })
 }
 
 function openCreate() {
@@ -457,9 +647,9 @@ function editProject(p) {
 }
 
 async function delProject(p) {
-  await ElMessageBox.confirm(`确定删除项目「${p.project_name}」吗？`, '警告', { type: 'warning' })
+  await ElMessageBox.confirm(`确定将项目「${p.project_name}」移入回收站吗？`, '提示', { type: 'warning' })
   await deleteProjectApi(p.id)
-  ElMessage.success('删除成功')
+  ElMessage.success('已移入回收站')
   if (selectedId.value === p.id) selectedId.value = null
   loadProjects()
   window.dispatchEvent(new Event('app:projects-updated'))
@@ -640,10 +830,29 @@ onMounted(loadProjects)
 
 .pm-toolbar {
   margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .pm-search-wrap {
   max-width: 520px;
+  flex: 1 1 auto;
+}
+
+.pm-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pm-batch-btn {
+  border-radius: 12px;
 }
 
 .pm-search-input :deep(.el-input__wrapper) {
@@ -813,6 +1022,7 @@ onMounted(loadProjects)
 }
 
 .pm-card {
+  position: relative;
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
@@ -825,6 +1035,68 @@ onMounted(loadProjects)
     transform 0.28s ease,
     border-color 0.28s ease,
     box-shadow 0.28s ease;
+}
+
+.pm-card__select {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 3;
+  opacity: 0;
+  transform: translateY(-1px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.pm-card:hover .pm-card__select,
+.pm-card--selected .pm-card__select {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.pm-card__select-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(165, 243, 252, 0.85);
+  background: rgba(10, 16, 28, 0.35);
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.pm-card__select-btn:hover {
+  border-color: rgba(34, 211, 238, 0.32);
+  box-shadow: 0 0 22px rgba(34, 211, 238, 0.12);
+  background: rgba(0, 255, 255, 0.06);
+}
+
+.pm-card__select-btn.is-checked {
+  color: rgba(226, 232, 240, 0.96);
+  border-color: rgba(34, 211, 238, 0.55);
+  background: rgba(0, 255, 255, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(0, 255, 255, 0.18) inset,
+    0 0 26px rgba(0, 255, 255, 0.14);
+}
+
+.pm-card__select-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(0, 255, 255, 0.28),
+    0 0 22px rgba(0, 255, 255, 0.12);
+}
+
+.pm-card--selected {
+  border-color: rgba(0, 255, 255, 0.38);
+  box-shadow:
+    0 0 0 1px rgba(0, 255, 255, 0.14) inset,
+    0 0 28px rgba(0, 255, 255, 0.08);
 }
 
 .pm-card:hover {
