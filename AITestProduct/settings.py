@@ -407,6 +407,22 @@ ELASTICSEARCH_REQUEST_TIMEOUT = int(
 # 读写别名（与 ILM rollover 一致）；若自建集群改了别名，需同步改此项与模板中的物理索引前缀。
 SERVER_LOGS_ES_INDEX = os.environ.get("SERVER_LOGS_ES_INDEX", "server-logs")
 
+# 远程 SSH 日志 tail：主机密钥策略（对齐安全审计 Bandit B507 / MITM 风险）。
+# - auto_add：等同 Paramiko AutoAddPolicy（仅建议开发 / 明确接受风险的环境）
+# - warning：Paramiko WarningPolicy（未知指纹仍连接，控制台告警）
+# - reject：加载系统 known_hosts（~/.ssh/known_hosts 等）+ RejectPolicy（生产默认，当 DEBUG=0）
+# - known_hosts：仅信任 SERVER_LOGS_SSH_KNOWN_HOSTS_PATH 文件中的指纹 + RejectPolicy
+_server_logs_ssh_policy = os.environ.get(
+    "SERVER_LOGS_SSH_HOST_KEY_POLICY", ""
+).strip().lower()
+if _server_logs_ssh_policy:
+    SERVER_LOGS_SSH_HOST_KEY_POLICY = _server_logs_ssh_policy
+else:
+    SERVER_LOGS_SSH_HOST_KEY_POLICY = "auto_add" if DEBUG else "reject"
+SERVER_LOGS_SSH_KNOWN_HOSTS_PATH = os.environ.get(
+    "SERVER_LOGS_SSH_KNOWN_HOSTS_PATH", ""
+).strip()
+
 if not DEBUG:
     # 生产安全：若配置了 ES 用户则要求密码不为空（允许匿名集群：用户为空时不做强校验）
     if (

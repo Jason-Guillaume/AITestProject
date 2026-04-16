@@ -52,7 +52,7 @@ class Command(BaseCommand):
                 buf.seek(0)
 
                 filename = f"seed_{app.id}_{idx}.png"
-                created = TestApproachImage.objects.create(
+                TestApproachImage.objects.create(
                     approach=app,
                     image=ContentFile(buf.read(), name=filename),
                     sort_order=idx + 1,

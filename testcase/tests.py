@@ -1,5 +1,15 @@
-from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase as DjangoTestCase
+from rest_framework.test import APIClient
 
+from project.models import TestProject
+from testcase.models import (
+    TEST_CASE_TYPE_FUNCTIONAL,
+    ExecutionLog,
+    TestCase as TestCaseModel,
+    TestCaseStep,
+    TestModule,
+)
 from testcase.services.variable_runtime import (
     VariableExtractor,
     VariableResolver,
@@ -78,3 +88,134 @@ class VariableRuntimeTests(SimpleTestCase):
         self.assertNotIn("$.code", paths)
         self.assertNotIn("$.msg", paths)
         self.assertNotIn("$.status", paths)
+
+
+User = get_user_model()
+
+
+class ApplyAiSuggestedStepsApiTests(DjangoTestCase):
+    """POST /api/testcase/cases/<id>/apply-ai-suggested-steps/ 权限与替换步骤行为。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="apply_ai_steps_u1",
+            password="pass-apply-ai-1",
+            real_name="Apply Steps User",
+        )
+        self.project = TestProject.objects.create(
+            project_name="ProjApplySteps",
+            creator=self.user,
+        )
+        self.project.members.add(self.user)
+        self.module = TestModule.objects.create(
+            project=self.project,
+            name="RootMod",
+            test_type=TEST_CASE_TYPE_FUNCTIONAL,
+        )
+        self.case = TestCaseModel.objects.create(
+            module=self.module,
+            case_name="Case Apply AI",
+            test_type=TEST_CASE_TYPE_FUNCTIONAL,
+            creator=self.user,
+            updater=self.user,
+        )
+        self.old_step = TestCaseStep.objects.create(
+            testcase=self.case,
+            step_number=1,
+            step_desc="旧步骤",
+            expected_result="旧预期",
+            creator=self.user,
+            updater=self.user,
+        )
+        self.log = ExecutionLog.objects.create(
+            test_case=self.case,
+            request_url="http://example.com/api",
+            request_method="GET",
+            is_passed=False,
+            execution_status=ExecutionLog.ExecutionStatus.ASSERTION_FAILED,
+            creator=self.user,
+            updater=self.user,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _url(self, case_id: int | None = None) -> str:
+        cid = case_id if case_id is not None else self.case.id
+        return f"/api/testcase/cases/{cid}/apply-ai-suggested-steps/"
+
+    def test_requires_confirm_replace_all_boolean_true(self):
+        r = self.client.post(
+            self._url(),
+            {
+                "execution_log_id": self.log.id,
+                "suggested_steps": [{"step_desc": "n1", "expected_result": "e1"}],
+                "confirm_replace_all": False,
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+        data = r.json()
+        self.assertFalse(data.get("success", True))
+
+    def test_rejects_passed_execution_log(self):
+        self.log.is_passed = True
+        self.log.save(update_fields=["is_passed"])
+        r = self.client.post(
+            self._url(),
+            {
+                "execution_log_id": self.log.id,
+                "confirm_replace_all": True,
+                "suggested_steps": [{"step_desc": "n1"}],
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_rejects_log_not_belonging_to_case(self):
+        other = TestCaseModel.objects.create(
+            module=self.module,
+            case_name="Other",
+            test_type=TEST_CASE_TYPE_FUNCTIONAL,
+            creator=self.user,
+            updater=self.user,
+        )
+        r = self.client.post(
+            self._url(other.id),
+            {
+                "execution_log_id": self.log.id,
+                "confirm_replace_all": True,
+                "suggested_steps": [{"step_desc": "n1"}],
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_replaces_steps_happy_path(self):
+        r = self.client.post(
+            self._url(),
+            {
+                "execution_log_id": self.log.id,
+                "confirm_replace_all": True,
+                "suggested_steps": [
+                    {"step_desc": "新步骤一", "expected_result": "预期甲"},
+                    {"step_desc": "新步骤二", "expected_result": "—"},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body.get("success"))
+        self.assertEqual(body.get("steps_count"), 2)
+        self.old_step.refresh_from_db()
+        self.assertTrue(self.old_step.is_deleted)
+        active = list(
+            TestCaseStep.objects.filter(testcase=self.case, is_deleted=False).order_by(
+                "step_number"
+            )
+        )
+        self.assertEqual(len(active), 2)
+        self.assertEqual(active[0].step_desc, "新步骤一")
+        self.assertEqual(active[0].expected_result, "预期甲")
+        self.assertEqual(active[1].step_number, 2)
+        self.assertEqual(active[1].step_desc, "新步骤二")

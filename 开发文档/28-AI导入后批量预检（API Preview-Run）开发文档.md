@@ -109,10 +109,12 @@
 
 ## 4. 验收清单（最小）
 
-- [ ] AI 导入 API 用例成功后自动弹出预检报告
-- [ ] 报告中能展示每条用例的 method/url
-- [ ] 存在 `${var}` 未替换时，`unresolved_vars` 能正确提示
-- [ ] `overrides.environment_id/variables` 生效（可手工调用接口验证）
+- [x] AI 导入 API 用例成功后自动弹出预检报告
+- [x] 报告中能展示每条用例的 method/url
+- [x] 存在 `${var}` 未替换时，`unresolved_vars` 能正确提示
+- [x] `overrides.environment_id/variables` 生效（可手工调用接口验证）
+
+最小复测路径：按 `开发文档/31` §5 步骤 5（P4）走一遍即可。
 
 ---
 
@@ -120,4 +122,12 @@
 
 - 回滚前端：移除导入后预检调用与弹窗即可（不影响导入主流程）
 - 回滚后端：移除 `batch-preview-run-api` action（不影响单条 `preview-run-api`）
+
+---
+
+## 6. 实现状态与全链路索引
+
+- **结论**：已按设计落地（`batch-preview-run-api`、导入成功后报告弹窗）。
+- **在本全链路中的优先级**：**P4**（依赖落库用例 id）。
+- **总览**：`开发文档/31-AI用例导入全链路-优先级与实现状态.md`。
 

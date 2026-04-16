@@ -41,9 +41,12 @@ AUTH_ENDPOINTS = [
     ("POST", "/ai/test-connection/"),
     ("POST", "/ai/generate-cases/"),
     ("POST", "/ai/generate-cases-stream/"),
+    ("POST", "/ai/suggest-case-fix/"),
+    ("POST", "/testcase/cases/1/apply-ai-suggested-steps/"),
     ("GET", "/assistant/llm/test-connection/"),
     ("GET", "/project/projects/"),
     ("GET", "/project/releases/"),
+    ("GET", "/project/releases/0/risk-brief/"),
     ("GET", "/project/tasks/"),
     ("GET", "/testcase/modules/"),
     ("GET", "/testcase/cases/"),
@@ -52,11 +55,28 @@ AUTH_ENDPOINTS = [
     ("GET", "/testcase/approaches/"),
     ("GET", "/execution/plans/"),
     ("GET", "/execution/reports/"),
+    ("POST", "/execution/plans/batch-delete/"),
+    ("POST", "/execution/plans/batch-update/"),
+    ("POST", "/execution/plans/batch-copy/"),
+    ("POST", "/execution/reports/batch-delete/"),
+    ("POST", "/execution/reports/batch-update/"),
+    ("POST", "/execution/reports/batch-copy/"),
     ("GET", "/execution/tasks/"),
     ("GET", "/execution/dashboard/summary/"),
     ("GET", "/execution/dashboard/quality/"),
     ("GET", "/perf/tasks/"),
+    ("POST", "/perf/tasks/batch-delete/"),
+    ("POST", "/perf/tasks/batch-update/"),
+    ("POST", "/perf/tasks/batch-copy/"),
     ("GET", "/defect/defects/"),
+    ("POST", "/execution/scheduled-tasks/batch-delete/"),
+    ("POST", "/execution/scheduled-tasks/batch-update/"),
+    ("POST", "/execution/scheduled-tasks/batch-copy/"),
+    ("POST", "/execution/scheduled-task-logs/batch-delete/"),
+    ("POST", "/execution/scheduled-task-logs/batch-delete-by-filter/"),
+    ("POST", "/perf/k6-sessions/batch-delete/"),
+    ("POST", "/perf/k6-sessions/batch-copy/"),
+    ("GET", "/perf/k6-sessions/"),
 ]
 
 
@@ -196,6 +216,20 @@ def test_release_filter_boundary(authed_client, seed_objects):
         _url(authed_client, "/project/releases/?project=not-a-number"), timeout=20
     )
     _assert_status(bad, (200,))
+
+
+@pytest.mark.regression
+def test_release_risk_brief(authed_client, seed_objects):
+    rid = seed_objects["release_id"]
+    resp = authed_client.get(
+        _url(authed_client, f"/project/releases/{rid}/risk-brief/?days=7"),
+        timeout=20,
+    )
+    _assert_status(resp, (200,))
+    data = resp.json()
+    assert data.get("release", {}).get("id") == rid
+    assert "coverage" in data and "defects" in data and "executions" in data
+    assert isinstance(data.get("markdown"), str) and data["markdown"]
 
 
 @pytest.mark.regression

@@ -1,8 +1,6 @@
 import logging
 import time
 
-import requests
-from django.conf import settings
 from django.db.models import Q
 from rest_framework import mixins, status, viewsets
 from rest_framework.pagination import PageNumberPagination
@@ -12,6 +10,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from common.views import BaseModelViewSet
+from common.services.audit import record_execute_audit, record_audit_event
 from server_logs.access import (
     remote_log_server_queryset_for_user,
     user_is_platform_log_admin,
@@ -500,7 +499,7 @@ class LogErrorTrendAPIView(APIView):
                     "points": points,
                 }
             )
-        except Exception as e:
+        except Exception:
             return Response(
                 {
                     "enabled": False,
@@ -608,6 +607,17 @@ class LogAutoTicketEnqueueAPIView(APIView):
             },
             remote_server=srv,
             request=request,
+        )
+        record_execute_audit(
+            actor=request.user,
+            instance=srv,
+            request=request,
+            extra={
+                "server_logs": "auto_ticket_enqueue",
+                "job_id": int(job.id),
+                "server_id": int(server_id),
+                "create_defect": bool(job.create_defect_requested),
+            },
         )
         return Response(
             {
@@ -747,6 +757,17 @@ class LogAutoTicketCreateDefectAPIView(APIView):
             },
             remote_server=job.remote_log_server,
             request=request,
+        )
+        record_audit_event(
+            action=AuditEvent.ACTION_CREATE,
+            actor=request.user,
+            instance=d_obj,
+            request=request,
+            extra={
+                "server_logs": "auto_ticket_create_defect",
+                "job_id": int(job.id),
+                "remote_log_server_id": int(job.remote_log_server_id or 0) or None,
+            },
         )
 
         job_out = LogAutoTicketJob.objects.select_related(

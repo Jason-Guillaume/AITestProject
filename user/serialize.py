@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.contrib.auth import authenticate
 from django.core.cache import cache
 
@@ -8,6 +7,7 @@ from django.contrib.auth.hashers import make_password
 from user.models import User
 from user.models import (
     AIModelConfig,
+    AiQuotaPolicy,
     Organization,
     SystemMessage,
     SystemMessageSetting,
@@ -146,6 +146,15 @@ class OrganizationSerializer(BaseModelSerializers):
 
     class Meta:
         model = Organization
+        fields = "__all__"
+        read_only_fields = ("creator", "updater", "create_time", "update_time")
+
+
+class AiQuotaPolicySerializer(BaseModelSerializers):
+    creator_name = serializers.CharField(source="creator.real_name", read_only=True)
+
+    class Meta:
+        model = AiQuotaPolicy
         fields = "__all__"
         read_only_fields = ("creator", "updater", "create_time", "update_time")
 

@@ -17,9 +17,18 @@ router.register(r"tasks", PerfTaskViewSet)
 router.register(r"scheduled-tasks", ScheduledTaskViewSet)
 router.register(r"scheduled-task-logs", ScheduledTaskLogViewSet)
 router.register(r"k6-sessions", K6LoadTestSessionViewSet)
+router.register(r"api-scenarios", ApiScenarioViewSet)
+router.register(r"api-scenario-steps", ApiScenarioStepViewSet)
+router.register(r"api-scenario-runs", ApiScenarioRunViewSet)
+router.register(r"api-scenario-step-runs", ApiScenarioStepRunViewSet)
 
 # 3. 暴露路由
 urlpatterns = router.urls + [
+    path(
+        "api-scenarios/generate/",
+        ApiScenarioGenerateAPIView.as_view(),
+        name="api-scenario-generate",
+    ),
     path(
         "dashboard/stream/",
         DashboardStreamView.as_view(),

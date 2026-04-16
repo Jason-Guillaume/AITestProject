@@ -6,12 +6,8 @@ import re
 from difflib import SequenceMatcher
 from datetime import timedelta
 from pathlib import Path
-import socket
-import ssl
 import sys
 import time
-import urllib.error
-import urllib.request
 
 from django.conf import settings
 from django.db.models import OuterRef, Subquery
@@ -88,7 +84,10 @@ from assistant.permissions import (
 from assistant.services.ai_governance import (
     acquire_ai_concurrency_slot,
     check_and_increment_daily_quota,
+    check_and_increment_daily_quota_for_scope,
+    acquire_ai_concurrency_slot_for_scope,
     release_ai_concurrency_slot,
+    resolve_effective_scope_policy,
     write_ai_usage_event,
 )
 from assistant.serialize import KnowledgeArticleSerializer, KnowledgeDocumentSerializer
@@ -150,6 +149,78 @@ def _guard_ai_request_or_429(request, *, action: str):
             {"success": False, "error": msg, "message": msg, "cases": []}, status=429
         )
 
+    # 额外：项目/组织级配额（仅在请求带 project_id / module_id / org_id 时启用）
+    project_id = None
+    org_id = None
+    try:
+        raw_pid = request.data.get("project_id")
+        if raw_pid not in (None, ""):
+            project_id = int(raw_pid)
+    except Exception:
+        project_id = None
+    try:
+        raw_oid = request.data.get("org_id")
+        if raw_oid not in (None, ""):
+            org_id = int(raw_oid)
+    except Exception:
+        org_id = None
+
+    if project_id is None:
+        try:
+            raw_mod = request.data.get("module_id")
+            mod_id = int(raw_mod) if raw_mod not in (None, "") else None
+        except Exception:
+            mod_id = None
+        if mod_id:
+            try:
+                project_id = (
+                    TestModule.objects.filter(pk=mod_id, is_deleted=False)
+                    .values_list("project_id", flat=True)
+                    .first()
+                )
+            except Exception:
+                project_id = None
+
+    scope_policy = None
+    if project_id or org_id:
+        scope_policy = resolve_effective_scope_policy(
+            user_id=uid, project_id=project_id, org_id=org_id, action=action
+        )
+    if scope_policy and int(getattr(scope_policy, "daily_requests", 0) or 0) > 0:
+        ok, s_used, s_limit = check_and_increment_daily_quota_for_scope(
+            scope=getattr(scope_policy, "scope"),
+            scope_id=int(getattr(scope_policy, "scope_id")),
+            yyyymmdd=_yyyymmdd_now(),
+            limit=int(getattr(scope_policy, "daily_requests")),
+        )
+        if not ok:
+            msg = (
+                f"当前范围（{scope_policy.scope}{scope_policy.scope_id}）"
+                f"今日 AI 调用次数已达上限（{s_used}/{s_limit}），请明日再试或联系管理员调整配额。"
+            )
+            try:
+                write_ai_usage_event(
+                    user=u,
+                    action=action,
+                    endpoint=_request_path(request),
+                    success=False,
+                    status_code=429,
+                    error_code="SCOPE_QUOTA_EXCEEDED",
+                    error_message=msg,
+                    meta={
+                        "scope": scope_policy.scope,
+                        "scope_id": scope_policy.scope_id,
+                        "daily_used": s_used,
+                        "daily_limit": s_limit,
+                    },
+                )
+            except Exception:
+                pass
+            return False, Response(
+                {"success": False, "error": msg, "message": msg, "cases": []},
+                status=429,
+            )
+
     acquired, cur, max_c = acquire_ai_concurrency_slot(user_id=uid)
     if not acquired:
         msg = f"当前 AI 并发过高（>{max_c}），请稍后重试。"
@@ -169,6 +240,53 @@ def _guard_ai_request_or_429(request, *, action: str):
         return False, Response(
             {"success": False, "error": msg, "message": msg, "cases": []}, status=429
         )
+
+    if scope_policy and int(getattr(scope_policy, "max_concurrency", 0) or 0) > 0:
+        s_ok, s_cur, s_max = acquire_ai_concurrency_slot_for_scope(
+            scope=getattr(scope_policy, "scope"),
+            scope_id=int(getattr(scope_policy, "scope_id")),
+            max_concurrency=int(getattr(scope_policy, "max_concurrency")),
+            ttl_seconds=int(getattr(scope_policy, "concurrency_ttl_seconds", 180) or 180),
+        )
+        if not s_ok:
+            # scope 拦截：释放 user 槽（scope 槽本次未占用成功）
+            try:
+                release_ai_concurrency_slot(user_id=uid)
+            except Exception:
+                pass
+            msg = f"当前范围 AI 并发过高（>{s_max}），请稍后重试。"
+            try:
+                write_ai_usage_event(
+                    user=u,
+                    action=action,
+                    endpoint=_request_path(request),
+                    success=False,
+                    status_code=429,
+                    error_code="SCOPE_CONCURRENCY_LIMIT",
+                    error_message=msg,
+                    meta={
+                        "scope": scope_policy.scope,
+                        "scope_id": scope_policy.scope_id,
+                        "concurrency": s_cur,
+                        "max_concurrency": s_max,
+                    },
+                )
+            except Exception:
+                pass
+            return False, Response(
+                {"success": False, "error": msg, "message": msg, "cases": []},
+                status=429,
+            )
+
+        # 标记 scope 槽（用于后续可选释放；即使不释放也会 TTL 到期）
+        try:
+            setattr(
+                request,
+                "_ai_scope_slot",
+                {"scope": scope_policy.scope, "scope_id": scope_policy.scope_id},
+            )
+        except Exception:
+            pass
     return True, None
 
 
@@ -3106,7 +3224,7 @@ class AiGenerateCasesAPIView(APIView):
                 model_used=model_used,
                 api_base_url=api_base_url,
                 module_id=module_id,
-                fail=fail,
+                fail=self._fail,
             )
             if handled is not None:
                 return handled
@@ -3534,6 +3652,8 @@ class AiGenerateCasesStreamView(View):
             phase1_override = None
 
         def event_stream():
+            stream_started_at = time.monotonic()
+            payload = getattr(drf_request, "data", None)
             raw_parts_outer: list[str] = []
             audit_success = False
             audit_all_covered = False
@@ -3919,7 +4039,7 @@ class AiGenerateCasesStreamView(View):
                 success=True,
                 all_covered=False,
                 cases_count=len(cases),
-                latency_ms=int((time.monotonic() - started_at) * 1000),
+                latency_ms=int((time.monotonic() - stream_started_at) * 1000),
                 output_chars=len("".join(raw_parts_outer)),
                 meta={
                     "truncated_by_length": bool(truncate_by_length),
@@ -3944,7 +4064,7 @@ class AiGenerateCasesStreamView(View):
                     module_id=ctx.get("module_id"),
                     streamed=True,
                     all_covered=bool(audit_all_covered),
-                    latency_ms=int((time.monotonic() - started_at) * 1000),
+                    latency_ms=int((time.monotonic() - stream_started_at) * 1000),
                     prompt_chars=len(str(ctx.get("requirement") or ""))
                     + len(str(ctx.get("api_spec") or "")),
                     output_chars=len("".join(raw_parts_outer)),
@@ -3972,3 +4092,1005 @@ class AiGenerateCasesStreamView(View):
         # WSGI（如 Django dev server / wsgiref）禁止应用层设置 hop-by-hop 头（如 Connection）。
         # 是否保持连接由服务器本身决定；SSE 在 HTTP/1.1 下可正常工作，无需显式设置该头。
         return response
+
+
+class AiSuggestCaseFixAPIView(APIView):
+    """
+    POST /api/ai/suggest-case-fix/
+    基于单条 ExecutionLog（未通过）生成用例修订建议；不落库，须项目成员等数据权限。
+    Body: { "execution_log_id": int, "hint"?: str }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from testcase.models import ExecutionLog, TestCaseStep
+
+        from assistant.services.case_fix_from_execution import (
+            CASE_FIX_SYSTEM_PROMPT,
+            build_case_fix_user_message,
+            can_user_access_execution_log,
+            parse_case_fix_llm_output,
+        )
+
+        started_at = time.monotonic()
+        slot, denied = _guard_ai_request_or_429(request, action="suggest_case_fix")
+        if denied is not None:
+            return denied
+
+        body = request.data if isinstance(request.data, dict) else {}
+        el_raw = body.get("execution_log_id")
+        try:
+            el_id = int(el_raw)
+        except (TypeError, ValueError):
+            return Response(
+                {"success": False, "message": "execution_log_id 必填且为整数"},
+                status=400,
+            )
+
+        log = (
+            ExecutionLog.objects.select_related(
+                "test_case__module__project", "test_case__creator"
+            )
+            .filter(pk=el_id, is_deleted=False)
+            .first()
+        )
+        if not log:
+            try:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            except Exception:
+                pass
+            return Response({"success": False, "message": "执行日志不存在"}, status=404)
+
+        if not can_user_access_execution_log(request.user, log):
+            try:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            except Exception:
+                pass
+            return Response({"success": False, "message": "无权限查看该执行记录"}, status=403)
+
+        if bool(log.is_passed):
+            try:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            except Exception:
+                pass
+            return Response(
+                {
+                    "success": False,
+                    "message": "该条执行记录为通过状态，无需生成修订建议",
+                    "summary": "",
+                    "suggested_steps": [],
+                    "risks": "",
+                },
+                status=400,
+            )
+
+        tc = log.test_case
+        if not tc or getattr(tc, "is_deleted", False):
+            try:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            except Exception:
+                pass
+            return Response({"success": False, "message": "关联用例不存在"}, status=404)
+
+        steps = list(
+            TestCaseStep.objects.filter(testcase=tc, is_deleted=False)
+            .order_by("step_number")
+            .values("step_number", "step_desc", "expected_result")[:80]
+        )
+        steps_lines = []
+        for s in steps:
+            steps_lines.append(
+                f"{s['step_number']}. {(s.get('step_desc') or '').strip()} => 预期: {(s.get('expected_result') or '—')}"
+            )
+        steps_block = "\n".join(steps_lines) if steps_lines else "（无步骤）"
+
+        hint = str(body.get("hint") or body.get("extra_hint") or "").strip()[:2000]
+        user_msg = build_case_fix_user_message(
+            case_name=str(tc.case_name or ""),
+            test_type=str(tc.test_type or ""),
+            steps_block=steps_block,
+            execution_status=str(log.execution_status or ""),
+            is_passed=bool(log.is_passed),
+            request_method=str(log.request_method or ""),
+            request_url=str(log.request_url or "")[:2048],
+            response_status=log.response_status_code,
+            error_message=str(log.error_message or "")[:4000],
+            assertion_text=json.dumps(log.assertion_results or [], ensure_ascii=False)[
+                :4000
+            ],
+            request_body_snip=str(log.request_body_text or "")[:3500],
+            response_body_snip=str(log.response_body_text or "")[:3500],
+            extra_hint=hint,
+        )
+
+        api_key, api_base_url, model_used = _get_active_ai_model_credentials()
+        if not api_key or not OPENAI_SDK_AVAILABLE:
+            try:
+                if slot:
+                    release_ai_concurrency_slot(
+                        user_id=int(getattr(request.user, "id", 0) or 0)
+                    )
+            except Exception:
+                pass
+            return Response(
+                {
+                    "success": False,
+                    "message": _openai_missing_response_json()
+                    if not OPENAI_SDK_AVAILABLE
+                    else "未配置已连通的全局 AI（请在系统管理中连接模型）",
+                },
+                status=503,
+            )
+
+        parsed: dict = {}
+        err_msg = ""
+        try:
+            _debug_log_openai_target("ai_suggest_case_fix", model_used, api_base_url)
+            client = OpenAI(api_key=api_key, base_url=api_base_url, timeout=60.0)
+            completion = client.chat.completions.create(
+                model=model_used,
+                messages=[
+                    {"role": "system", "content": CASE_FIX_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+                temperature=0.2,
+                max_tokens=1800,
+            )
+            raw = (completion.choices[0].message.content or "").strip()
+            parsed = parse_case_fix_llm_output(raw)
+        except Exception as e:
+            err_msg = str(e)
+            logger.exception(
+                "suggest_case_fix failed. user_id=%s log_id=%s",
+                getattr(request.user, "id", None),
+                el_id,
+            )
+
+        latency_ms = int((time.monotonic() - started_at) * 1000)
+        try:
+            write_ai_usage_event(
+                user=request.user,
+                action="suggest_case_fix",
+                endpoint=_request_path(request),
+                success=bool(parsed and not err_msg),
+                status_code=200 if (parsed and not err_msg) else 502,
+                model_used=str(model_used or ""),
+                test_type=str(tc.test_type or ""),
+                module_id=getattr(getattr(tc, "module", None), "id", None),
+                streamed=False,
+                latency_ms=latency_ms,
+                prompt_chars=len(user_msg),
+                output_chars=len(json.dumps(parsed, ensure_ascii=False)) if parsed else 0,
+                error_code="" if not err_msg else "PARSE_OR_UPSTREAM",
+                error_message=err_msg[:512] if err_msg else "",
+                meta={"execution_log_id": el_id, "test_case_id": tc.id},
+            )
+        except Exception:
+            pass
+        try:
+            if slot:
+                release_ai_concurrency_slot(
+                    user_id=int(getattr(request.user, "id", 0) or 0)
+                )
+        except Exception:
+            pass
+
+        if err_msg or not parsed:
+            return Response(
+                {
+                    "success": False,
+                    "message": err_msg or "模型输出解析失败",
+                    "summary": "",
+                    "suggested_steps": [],
+                    "risks": "请稍后重试或检查模型输出是否为合法 JSON。",
+                },
+                status=502,
+            )
+
+        return Response(
+            {
+                "success": True,
+                "execution_log_id": el_id,
+                "test_case_id": tc.id,
+                "model": model_used,
+                **parsed,
+            },
+            status=200,
+        )
+
+
+def _can_user_access_test_case(user, tc) -> bool:
+    """与 ExecutionLog 访问权限口径一致：项目成员 / 系统管理员 / 创建者（含无 module 的孤儿用例）。"""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+        return True
+    if bool(getattr(user, "is_system_admin", False)):
+        return True
+    if not tc or getattr(tc, "is_deleted", False):
+        return False
+    mod = getattr(tc, "module", None)
+    if mod is None:
+        return int(getattr(tc, "creator_id", 0) or 0) == int(getattr(user, "id", 0) or 0)
+    proj = getattr(mod, "project", None)
+    if not proj or getattr(proj, "is_deleted", False):
+        return False
+    if proj.members.filter(pk=user.pk, is_deleted=False).exists():
+        return True
+    return int(getattr(tc, "creator_id", 0) or 0) == int(getattr(user, "id", 0) or 0)
+
+
+def _case_steps_snapshot(tc) -> list[dict]:
+    from testcase.models import TestCaseStep
+
+    rows = list(
+        TestCaseStep.objects.filter(testcase=tc, is_deleted=False)
+        .order_by("step_number")
+        .values("step_number", "step_desc", "expected_result")[:120]
+    )
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "step_number": int(r.get("step_number") or 0),
+                "step_desc": str(r.get("step_desc") or ""),
+                "expected_result": str(r.get("expected_result") or "—"),
+            }
+        )
+    return out
+
+
+class AiPatchFromExecutionAPIView(APIView):
+    """
+    POST /api/ai/patches/from-execution/
+    基于未通过 ExecutionLog 生成 AiPatch（默认 draft，不自动写入用例）。
+
+    body: { "execution_log_id": int, "hint"?: str }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from assistant.models import AiPatch
+        from testcase.models import ExecutionLog
+        from assistant.services.case_fix_from_execution import (
+            can_user_access_execution_log,
+        )
+        from common.services.audit import record_audit_event
+        from common.models import AuditEvent
+
+        body = request.data if isinstance(request.data, dict) else {}
+        try:
+            el_id = int(body.get("execution_log_id"))
+        except (TypeError, ValueError):
+            return Response({"success": False, "message": "execution_log_id 必填且为整数"}, status=400)
+
+        # 复用现有建议生成接口逻辑：直接调用内部 view 并解析返回
+        # 这里为了最小改动，走同一段逻辑：调用 LLM 生成 suggested_steps。
+        # （后续可重构为 service 复用，避免重复耗时）
+        suggest_view = AiSuggestCaseFixAPIView()
+        suggest_view.request = request
+        suggest_resp = suggest_view.post(request)
+        if getattr(suggest_resp, "status_code", 500) != 200:
+            return suggest_resp
+        payload = suggest_resp.data if isinstance(suggest_resp.data, dict) else {}
+
+        log = (
+            ExecutionLog.objects.select_related("test_case__module__project", "test_case__creator")
+            .filter(pk=el_id, is_deleted=False)
+            .first()
+        )
+        if not log:
+            return Response({"success": False, "message": "执行日志不存在"}, status=404)
+        if not can_user_access_execution_log(request.user, log):
+            return Response({"success": False, "message": "无权限查看该执行记录"}, status=403)
+        if bool(log.is_passed):
+            return Response({"success": False, "message": "仅允许基于未通过的执行记录生成补丁"}, status=400)
+
+        tc = log.test_case
+        if not tc or getattr(tc, "is_deleted", False):
+            return Response({"success": False, "message": "关联用例不存在"}, status=404)
+
+        before_steps = _case_steps_snapshot(tc)
+        after_steps = payload.get("suggested_steps") or []
+        if not isinstance(after_steps, list):
+            after_steps = []
+
+        # 粗略风险：步骤为空或变化过大标 high
+        risk = AiPatch.RISK_MEDIUM
+        if not after_steps:
+            risk = AiPatch.RISK_HIGH
+        elif len(after_steps) >= 2 * max(1, len(before_steps)):
+            risk = AiPatch.RISK_HIGH
+        elif len(after_steps) <= max(1, len(before_steps) // 2):
+            risk = AiPatch.RISK_HIGH
+
+        patch = AiPatch.objects.create(
+            creator=request.user,
+            target_type="testcase.TestCase",
+            target_id=str(tc.id),
+            source_execution_log_id=int(el_id),
+            status=AiPatch.STATUS_DRAFT,
+            risk_level=risk,
+            summary=str(payload.get("summary") or "")[:512],
+            risks=str(payload.get("risks") or "")[:1000],
+            before={"steps": before_steps},
+            after={"steps": after_steps},
+            changes=[
+                {"op": "replace_all_steps", "count_before": len(before_steps), "count_after": len(after_steps)}
+            ],
+        )
+
+        record_audit_event(
+            action=AuditEvent.ACTION_EXECUTE,
+            actor=request.user,
+            instance=patch,
+            request=request,
+            extra={
+                "ai_patch_id": patch.id,
+                "target_type": patch.target_type,
+                "target_id": patch.target_id,
+                "source_execution_log_id": el_id,
+            },
+        )
+
+        return Response(
+            {
+                "success": True,
+                "patch_id": patch.id,
+                "status": patch.status,
+                "risk_level": patch.risk_level,
+                "target_type": patch.target_type,
+                "target_id": patch.target_id,
+                "summary": patch.summary,
+                "risks": patch.risks,
+                "before": patch.before,
+                "after": patch.after,
+                "changes": patch.changes,
+            }
+        )
+
+
+class AiPatchApplyAPIView(APIView):
+    """
+    POST /api/ai/patches/<id>/apply/
+    body: { "confirm": true }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, patch_id: int):
+        from assistant.models import AiPatch
+        from testcase.models import TestCase, TestCaseStep
+        from common.services.audit import record_audit_event
+        from common.models import AuditEvent
+
+        patch = AiPatch.objects.filter(pk=patch_id).first()
+        if not patch:
+            return Response({"success": False, "message": "patch 不存在"}, status=404)
+        if patch.status != AiPatch.STATUS_DRAFT:
+            return Response({"success": False, "message": "仅允许对 draft 补丁执行 apply"}, status=400)
+        if not isinstance(request.data, dict) or request.data.get("confirm") is not True:
+            return Response({"success": False, "message": "须将 confirm 设为布尔 true 以确认应用"}, status=400)
+        if patch.target_type != "testcase.TestCase":
+            return Response({"success": False, "message": "当前仅支持 testcase.TestCase 的补丁"}, status=400)
+
+        tc = (
+            TestCase.objects.select_related("module__project", "creator")
+            .filter(pk=int(patch.target_id), is_deleted=False)
+            .first()
+        )
+        if not tc:
+            return Response({"success": False, "message": "目标用例不存在"}, status=404)
+        if not _can_user_access_test_case(request.user, tc):
+            return Response({"success": False, "message": "无权限操作该用例"}, status=403)
+
+        after_steps = (patch.after or {}).get("steps") if isinstance(patch.after, dict) else None
+        if not isinstance(after_steps, list) or not after_steps:
+            return Response({"success": False, "message": "补丁 after.steps 为空，无法应用"}, status=400)
+
+        before_snapshot = _case_steps_snapshot(tc)
+        with transaction.atomic():
+            TestCaseStep.objects.filter(testcase=tc, is_deleted=False).update(is_deleted=True)
+            for idx, it in enumerate(after_steps[:60], start=1):
+                if not isinstance(it, dict):
+                    continue
+                desc = str(it.get("step_desc") or it.get("desc") or "").strip()
+                exp = str(it.get("expected_result") or it.get("expected") or "").strip() or "—"
+                if not desc:
+                    continue
+                TestCaseStep.objects.create(
+                    testcase=tc,
+                    step_number=idx,
+                    step_desc=desc[:4000],
+                    expected_result=exp[:2000],
+                    creator=request.user,
+                    updater=request.user,
+                )
+            tc.save(update_fields=["update_time"])
+            patch.before = patch.before or {}
+            if isinstance(patch.before, dict):
+                patch.before["steps"] = before_snapshot
+            patch.status = AiPatch.STATUS_APPLIED
+            patch.applied_at = timezone.now()
+            patch.save(update_fields=["before", "status", "applied_at", "updated_at"])
+
+        record_audit_event(
+            action=AuditEvent.ACTION_UPDATE,
+            actor=request.user,
+            instance=tc,
+            request=request,
+            extra={"ai_patch_id": patch.id, "operation": "apply", "steps": len(after_steps)},
+        )
+        return Response({"success": True, "message": "已应用补丁", "patch_id": patch.id, "test_case_id": tc.id})
+
+
+class AiPatchRollbackAPIView(APIView):
+    """
+    POST /api/ai/patches/<id>/rollback/
+    body: { "confirm": true }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, patch_id: int):
+        from assistant.models import AiPatch
+        from testcase.models import TestCase, TestCaseStep
+        from common.services.audit import record_audit_event
+        from common.models import AuditEvent
+
+        patch = AiPatch.objects.filter(pk=patch_id).first()
+        if not patch:
+            return Response({"success": False, "message": "patch 不存在"}, status=404)
+        if patch.status != AiPatch.STATUS_APPLIED:
+            return Response({"success": False, "message": "仅允许对 applied 补丁执行 rollback"}, status=400)
+        if not isinstance(request.data, dict) or request.data.get("confirm") is not True:
+            return Response({"success": False, "message": "须将 confirm 设为布尔 true 以确认回滚"}, status=400)
+        if patch.target_type != "testcase.TestCase":
+            return Response({"success": False, "message": "当前仅支持 testcase.TestCase 的补丁"}, status=400)
+
+        tc = (
+            TestCase.objects.select_related("module__project", "creator")
+            .filter(pk=int(patch.target_id), is_deleted=False)
+            .first()
+        )
+        if not tc:
+            return Response({"success": False, "message": "目标用例不存在"}, status=404)
+        if not _can_user_access_test_case(request.user, tc):
+            return Response({"success": False, "message": "无权限操作该用例"}, status=403)
+
+        before_steps = (patch.before or {}).get("steps") if isinstance(patch.before, dict) else None
+        if not isinstance(before_steps, list):
+            before_steps = []
+
+        with transaction.atomic():
+            TestCaseStep.objects.filter(testcase=tc, is_deleted=False).update(is_deleted=True)
+            for idx, it in enumerate(before_steps[:60], start=1):
+                if not isinstance(it, dict):
+                    continue
+                desc = str(it.get("step_desc") or "").strip()
+                exp = str(it.get("expected_result") or "").strip() or "—"
+                if not desc:
+                    continue
+                TestCaseStep.objects.create(
+                    testcase=tc,
+                    step_number=idx,
+                    step_desc=desc[:4000],
+                    expected_result=exp[:2000],
+                    creator=request.user,
+                    updater=request.user,
+                )
+            tc.save(update_fields=["update_time"])
+            patch.status = AiPatch.STATUS_ROLLED_BACK
+            patch.rolled_back_at = timezone.now()
+            patch.save(update_fields=["status", "rolled_back_at", "updated_at"])
+
+        record_audit_event(
+            action=AuditEvent.ACTION_UPDATE,
+            actor=request.user,
+            instance=tc,
+            request=request,
+            extra={"ai_patch_id": patch.id, "operation": "rollback", "steps": len(before_steps)},
+        )
+        return Response({"success": True, "message": "已回滚补丁", "patch_id": patch.id, "test_case_id": tc.id})
+
+
+class AiPatchListAPIView(APIView):
+    """
+    GET /api/ai/patches/?target_type=&target_id=&status=&page=&page_size=
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from assistant.models import AiPatch
+
+        target_type = str(request.query_params.get("target_type") or "").strip()
+        target_id = str(request.query_params.get("target_id") or "").strip()
+        status_q = str(request.query_params.get("status") or "").strip()
+
+        try:
+            page = int(request.query_params.get("page") or 1)
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(request.query_params.get("page_size") or 20)
+        except (TypeError, ValueError):
+            page_size = 20
+        page = max(1, page)
+        page_size = max(1, min(page_size, 200))
+        offset = (page - 1) * page_size
+
+        qs = AiPatch.objects.all()
+        if target_type:
+            qs = qs.filter(target_type=target_type)
+        if target_id:
+            qs = qs.filter(target_id=target_id)
+        if status_q:
+            qs = qs.filter(status=status_q)
+
+        total = qs.count()
+        rows = list(
+            qs.order_by("-created_at")
+            .values(
+                "id",
+                "target_type",
+                "target_id",
+                "status",
+                "risk_level",
+                "summary",
+                "risks",
+                "source_execution_log_id",
+                "creator_id",
+                "created_at",
+                "applied_at",
+                "rolled_back_at",
+            )[offset : offset + page_size]
+        )
+        return Response({"success": True, "page": page, "page_size": page_size, "total": total, "items": rows})
+
+
+class AiSecurityGenerateCasesAPIView(APIView):
+    """
+    POST /api/ai/security/generate-cases/
+    基于 OpenAPI 生成安全用例草稿（规则优先，不依赖大模型）。
+
+    body:
+    - openapi_spec: string（JSON/YAML）
+    - base_url?: string
+    - scope?: string[]（可选：idor/injection/sensitive/authn）
+    - max_findings?: number（默认 50，最大 200）
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from assistant.services.security_rules import generate_security_findings_from_openapi
+        from assistant.services.ai_governance import write_ai_usage_event
+
+        started = time.monotonic()
+        slot, denied = _guard_ai_request_or_429(request, action="security_generate")
+        if denied is not None:
+            return denied
+
+        body = request.data if isinstance(request.data, dict) else {}
+        spec = str(body.get("openapi_spec") or body.get("openapi") or "").strip()
+        if not spec:
+            try:
+                if slot:
+                    release_ai_concurrency_slot(user_id=int(getattr(request.user, "id", 0) or 0))
+            except Exception:
+                pass
+            return Response({"success": False, "message": "openapi_spec 必填"}, status=400)
+
+        base_url = str(body.get("base_url") or "").strip()
+        scope = body.get("scope")
+        scopes = scope if isinstance(scope, list) else []
+        max_findings = body.get("max_findings", 50)
+        try:
+            max_findings = int(max_findings)
+        except (TypeError, ValueError):
+            max_findings = 50
+        max_findings = max(1, min(max_findings, 200))
+
+        findings: list[dict] = []
+        err = ""
+        try:
+            findings = generate_security_findings_from_openapi(
+                openapi_spec_text=spec,
+                base_url=base_url,
+                scopes=[str(x) for x in scopes],
+                max_findings=max_findings,
+            )
+        except Exception as exc:
+            err = str(exc)
+
+        latency_ms = int((time.monotonic() - started) * 1000)
+        try:
+            write_ai_usage_event(
+                user=request.user,
+                action="security_generate",
+                endpoint=_request_path(request),
+                success=bool(findings) and not err,
+                status_code=200 if (findings and not err) else 400,
+                model_used="rule_engine",
+                test_type="security",
+                module_id=None,
+                streamed=False,
+                latency_ms=latency_ms,
+                prompt_chars=len(spec),
+                output_chars=len(json.dumps(findings, ensure_ascii=False)) if findings else 0,
+                cases_count=len(findings),
+                error_code="" if not err else "RULE_ENGINE",
+                error_message=err[:512] if err else "",
+                meta={"scopes": scopes, "max_findings": max_findings},
+            )
+        except Exception:
+            pass
+        try:
+            if slot:
+                release_ai_concurrency_slot(user_id=int(getattr(request.user, "id", 0) or 0))
+        except Exception:
+            pass
+
+        if err:
+            return Response({"success": False, "message": err, "findings": []}, status=400)
+        return Response({"success": True, "findings": findings, "engine": "rule_engine"})
+
+
+class AiSecurityAnalyzeExecutionAPIView(APIView):
+    """
+    POST /api/ai/security/analyze-execution/
+    基于单条 ExecutionLog 做轻量安全信号分析（规则/启发式，不等价于渗透）。
+
+    body:
+    - execution_log_id: int
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from testcase.models import ExecutionLog
+        from assistant.services.case_fix_from_execution import can_user_access_execution_log
+        from assistant.services.security_rules import analyze_execution_log_security
+        from assistant.services.ai_governance import write_ai_usage_event
+
+        started = time.monotonic()
+        slot, denied = _guard_ai_request_or_429(request, action="security_analyze")
+        if denied is not None:
+            return denied
+
+        body = request.data if isinstance(request.data, dict) else {}
+        try:
+            el_id = int(body.get("execution_log_id"))
+        except (TypeError, ValueError):
+            return Response({"success": False, "message": "execution_log_id 必填且为整数"}, status=400)
+
+        log = (
+            ExecutionLog.objects.select_related("test_case__module__project", "test_case__creator")
+            .filter(pk=el_id, is_deleted=False)
+            .first()
+        )
+        if not log:
+            return Response({"success": False, "message": "执行日志不存在"}, status=404)
+        if not can_user_access_execution_log(request.user, log):
+            return Response({"success": False, "message": "无权限查看该执行记录"}, status=403)
+
+        findings = analyze_execution_log_security(
+            response_status=getattr(log, "response_status_code", None),
+            response_text=str(getattr(log, "response_body_text", "") or ""),
+            response_headers=getattr(log, "response_headers", None) if hasattr(log, "response_headers") else {},
+        )
+
+        latency_ms = int((time.monotonic() - started) * 1000)
+        try:
+            tc = getattr(log, "test_case", None)
+            write_ai_usage_event(
+                user=request.user,
+                action="security_analyze",
+                endpoint=_request_path(request),
+                success=True,
+                status_code=200,
+                model_used="rule_engine",
+                test_type="security",
+                module_id=getattr(getattr(tc, "module", None), "id", None),
+                streamed=False,
+                latency_ms=latency_ms,
+                prompt_chars=0,
+                output_chars=len(json.dumps(findings, ensure_ascii=False)),
+                cases_count=len(findings),
+                error_code="",
+                error_message="",
+                meta={"execution_log_id": int(el_id), "test_case_id": getattr(tc, "id", None)},
+            )
+        except Exception:
+            pass
+        try:
+            if slot:
+                release_ai_concurrency_slot(user_id=int(getattr(request.user, "id", 0) or 0))
+        except Exception:
+            pass
+
+        return Response({"success": True, "execution_log_id": int(el_id), "findings": findings, "engine": "rule_engine"})
+
+
+class AiKnowledgeAskAPIView(APIView):
+    """
+    POST /api/ai/knowledge/ask/
+    企业知识库可追溯问答：返回 answer_markdown + citations[]。
+
+    body:
+    - question: string（必填）
+    - project_id?: int（可选；提供后会额外检索该项目内的用例/缺陷，并作为 citations 返回）
+    - top_k?: number（默认 5，最大 10）
+    - category?: string（可选）
+    - tag?: string（可选）
+    - min_score?: float（可选）
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        started_at = time.monotonic()
+        slot, denied = _guard_ai_request_or_429(request, action="knowledge_ask")
+        if denied is not None:
+            return denied
+
+        body = request.data if isinstance(request.data, dict) else {}
+        q = str(body.get("question") or body.get("query") or "").strip()
+        if not q:
+            try:
+                if slot:
+                    release_ai_concurrency_slot(user_id=int(getattr(request.user, "id", 0) or 0))
+            except Exception:
+                pass
+            return Response({"success": False, "message": "question 不能为空", "answer_markdown": "", "citations": []}, status=400)
+
+        top_k = body.get("top_k", 5)
+        try:
+            top_k = int(top_k)
+        except (TypeError, ValueError):
+            top_k = 5
+        top_k = max(1, min(top_k, 10))
+        category = (body.get("category") or "").strip() or None
+        tag = (body.get("tag") or "").strip() or None
+        raw_min_score = body.get("min_score")
+        min_score = None
+        if raw_min_score not in (None, ""):
+            try:
+                min_score = float(raw_min_score)
+            except (TypeError, ValueError):
+                min_score = None
+
+        results = KnowledgeSearcher.search_similar(
+            q,
+            top_k=top_k,
+            category=category,
+            tag=tag,
+            min_score=min_score,
+        )
+
+        citations = []
+        ctx_blocks = []
+
+        # 1) 知识文章 citations
+        for i, r in enumerate(results, start=1):
+            aid = r.get("article_id")
+            title = str(r.get("title") or f"KnowledgeArticle#{aid or ''}").strip()
+            idx = len(citations) + 1
+            citations.append(
+                {
+                    "idx": idx,
+                    "type": "doc",
+                    "id": int(aid) if aid is not None else None,
+                    "title": title,
+                    "url": f"/knowledge?article_id={aid}" if aid is not None else "/knowledge",
+                    "category": r.get("category") or "",
+                    "tags": r.get("tags") or [],
+                    "retrieve_mode": r.get("retrieve_mode") or "",
+                    "score": r.get("score"),
+                }
+            )
+            doc = str(r.get("document") or "")[:4000]
+            ctx_blocks.append(f"[C{idx}] (doc) {title}\n{doc}")
+
+        # 2) 可选：项目内用例/缺陷检索
+        project_id = body.get("project_id")
+        pid = None
+        if project_id not in (None, ""):
+            try:
+                pid = int(project_id)
+            except (TypeError, ValueError):
+                pid = None
+        if pid is not None:
+            from project.models import TestProject
+            from testcase.models import TestCase
+            from defect.models import TestDefect
+
+            proj = TestProject.objects.filter(pk=pid, is_deleted=False).first()
+            if proj:
+                can = (
+                    getattr(request.user, "is_system_admin", False)
+                    or getattr(request.user, "is_superuser", False)
+                    or getattr(request.user, "is_staff", False)
+                    or proj.members.filter(pk=request.user.pk, is_deleted=False).exists()
+                )
+                if can:
+                    # 用例：标题匹配
+                    case_qs = (
+                        TestCase.objects.filter(is_deleted=False, module__project_id=int(pid))
+                        .filter(case_name__icontains=q)
+                        .order_by("-id")[:5]
+                        .values("id", "case_name", "test_type")
+                    )
+                    for r in list(case_qs):
+                        cid = int(r["id"])
+                        tt = str(r.get("test_type") or "").strip() or "functional"
+                        # api 特殊路由：/test-case/api
+                        url = (
+                            f"/test-case/api?case_id={cid}"
+                            if tt == "api"
+                            else f"/test-case/{tt}?case_id={cid}"
+                        )
+                        idx = len(citations) + 1
+                        title = str(r.get("case_name") or f"TestCase#{cid}")
+                        citations.append({"idx": idx, "type": "case", "id": cid, "title": title, "url": url})
+                        ctx_blocks.append(f"[C{idx}] (case) id={cid} test_type={tt} title={title}")
+
+                    defect_qs = (
+                        TestDefect.objects.filter(is_deleted=False, module__project_id=int(pid))
+                        .filter(defect_name__icontains=q)
+                        .order_by("-id")[:5]
+                        .values("id", "defect_no", "defect_name", "severity", "status")
+                    )
+                    for r in list(defect_qs):
+                        did = int(r["id"])
+                        title = str(r.get("defect_name") or f"Defect#{did}")
+                        no = str(r.get("defect_no") or "")
+                        url = f"/defect/detail/{did}"
+                        idx = len(citations) + 1
+                        citations.append(
+                            {
+                                "idx": idx,
+                                "type": "defect",
+                                "id": did,
+                                "title": title,
+                                "defect_no": no,
+                                "severity": r.get("severity"),
+                                "status": r.get("status"),
+                                "url": url,
+                            }
+                        )
+                        ctx_blocks.append(f"[C{idx}] (defect) {no} title={title} severity={r.get('severity')} status={r.get('status')}")
+
+        api_key, api_base_url, model_used = _get_active_ai_model_credentials()
+        if not api_key or not OPENAI_SDK_AVAILABLE:
+            latency_ms = int((time.monotonic() - started_at) * 1000)
+            try:
+                write_ai_usage_event(
+                    user=request.user,
+                    action="knowledge_ask",
+                    endpoint=_request_path(request),
+                    success=True,
+                    status_code=200,
+                    model_used="rule_engine",
+                    test_type="knowledge",
+                    module_id=None,
+                    streamed=False,
+                    latency_ms=latency_ms,
+                    prompt_chars=len(q),
+                    output_chars=0,
+                    cases_count=0,
+                    error_code="",
+                    error_message="",
+                    meta={"top_k": top_k, "category": category, "tag": tag},
+                )
+            except Exception:
+                pass
+            try:
+                if slot:
+                    release_ai_concurrency_slot(user_id=int(getattr(request.user, "id", 0) or 0))
+            except Exception:
+                pass
+            answer = "未配置可用 AI 模型，已返回检索到的引用列表（citations）。"
+            return Response(
+                {
+                    "success": True,
+                    "question": q,
+                    "answer_markdown": answer,
+                    "citations": citations,
+                    "engine": "search_only",
+                    "top_k": top_k,
+                }
+            )
+
+        ctx_text = "\n\n".join(ctx_blocks) if ctx_blocks else "（无可引用来源）"
+
+        system_prompt = (
+            "你是企业测试平台的知识库助手。你必须严格基于给定的引用来源回答问题，"
+            "不得编造。回答中如果使用了来源信息，必须在句末标注引用编号，如 [C1]。"
+            "若来源不足以回答，请说明缺失信息，并仍返回当前可引用的结论。"
+        )
+        user_msg = f"问题：{q}\n\n可引用来源：\n{ctx_text}"
+
+        answer_md = ""
+        err_msg = ""
+        try:
+            _debug_log_openai_target("ai_knowledge_ask", model_used, api_base_url)
+            client = OpenAI(api_key=api_key, base_url=api_base_url, timeout=60.0)
+            completion = client.chat.completions.create(
+                model=model_used,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_msg},
+                ],
+                temperature=0.2,
+                max_tokens=1200,
+            )
+            answer_md = (completion.choices[0].message.content or "").strip()
+        except Exception as exc:
+            err_msg = str(exc)
+
+        latency_ms = int((time.monotonic() - started_at) * 1000)
+        try:
+            write_ai_usage_event(
+                user=request.user,
+                action="knowledge_ask",
+                endpoint=_request_path(request),
+                success=bool(answer_md) and not err_msg,
+                status_code=200 if (answer_md and not err_msg) else 502,
+                model_used=str(model_used or ""),
+                test_type="knowledge",
+                module_id=None,
+                streamed=False,
+                latency_ms=latency_ms,
+                prompt_chars=len(user_msg),
+                output_chars=len(answer_md or ""),
+                cases_count=0,
+                error_code="" if not err_msg else "UPSTREAM",
+                error_message=err_msg[:512] if err_msg else "",
+                meta={"top_k": top_k, "category": category, "tag": tag, "citations": len(citations)},
+            )
+        except Exception:
+            pass
+        try:
+            if slot:
+                release_ai_concurrency_slot(user_id=int(getattr(request.user, "id", 0) or 0))
+        except Exception:
+            pass
+
+        if err_msg or not answer_md:
+            return Response(
+                {
+                    "success": False,
+                    "message": err_msg or "生成失败",
+                    "question": q,
+                    "answer_markdown": "",
+                    "citations": citations,
+                },
+                status=502,
+            )
+
+        return Response(
+            {
+                "success": True,
+                "question": q,
+                "answer_markdown": answer_md,
+                "citations": citations,
+                "model": model_used,
+                "top_k": top_k,
+            }
+        )

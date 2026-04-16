@@ -307,6 +307,7 @@
             </template>
             <el-menu-item index="/test-case/functional">功能测试</el-menu-item>
             <el-menu-item index="/test-case/api">接口测试</el-menu-item>
+            <el-menu-item index="/execution/api-scenario-generator">接口场景生成</el-menu-item>
             <el-menu-item index="/test-case/performance">性能测试</el-menu-item>
             <el-menu-item index="/test-case/security">安全测试</el-menu-item>
             <el-menu-item index="/test-case/ui-automation">UI 自动化</el-menu-item>
@@ -348,6 +349,11 @@
             <el-menu-item index="/system/message">消息设置</el-menu-item>
             <el-menu-item index="/system/messages">消息管理</el-menu-item>
             <el-menu-item index="/system/ai-usage">AI 用量与审计</el-menu-item>
+            <el-menu-item index="/system/ai-quota">AI 配额策略</el-menu-item>
+            <el-menu-item index="/system/audit">
+              <el-icon><Tickets /></el-icon>
+              <span>审计中心</span>
+            </el-menu-item>
             <el-menu-item index="/system/org">组织管理</el-menu-item>
             <el-menu-item index="/system/role">角色管理</el-menu-item>
             <el-menu-item index="/system/user">用户管理</el-menu-item>
@@ -355,6 +361,10 @@
           <el-menu-item v-else index="/system/message">
             <el-icon><Tools /></el-icon>
             <span>消息设置</span>
+          </el-menu-item>
+          <el-menu-item v-if="!isSystemAdmin" index="/user/audit">
+            <el-icon><Tickets /></el-icon>
+            <span>我的审计</span>
           </el-menu-item>
           <el-menu-item index="/ai-assistant">
             <el-icon><MagicStick /></el-icon>
@@ -435,7 +445,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh, ArrowDown,
   HomeFilled, Document, EditPen, Calendar, List,
-  DataLine, Warning, Tools, MagicStick, Back, Monitor
+  DataLine, Warning, Tools, MagicStick, Back, Monitor, Tickets
 } from '@element-plus/icons-vue'
 import { TEST_CASE_TYPE_LABEL_ZH } from '@/constants/testCaseTypeLabels'
 import { changePasswordApi, getCurrentUserApi, getUserProfileApi, getSystemMessagesApi } from '@/api/user'
@@ -614,6 +624,7 @@ const BREADCRUMB_MAP = {
   '/test-plan': ['测试计划', '引导页'],
   '/test-case/functional': ['测试用例', '功能测试'],
   '/test-case/api': ['测试用例', '接口测试'],
+  '/execution/api-scenario-generator': ['测试用例', '接口场景生成'],
   '/test-case/performance': ['测试用例', '性能测试'],
   '/test-case/security': ['测试用例', '安全测试'],
   '/test-case/ui-automation': ['测试用例', 'UI 自动化'],
@@ -629,10 +640,14 @@ const BREADCRUMB_MAP = {
   '/system/message': ['系统管理', '消息设置'],
   '/system/messages': ['系统管理', '消息管理'],
   '/system/ai-usage': ['系统管理', 'AI 用量与审计'],
+  '/system/ai-quota': ['系统管理', 'AI 配额策略'],
+  '/system/audit': ['系统管理', '审计中心'],
   '/system/org': ['系统管理', '组织管理'],
   '/system/role': ['系统管理', '角色管理'],
   '/system/user': ['系统管理', '用户管理'],
+  '/user/audit': ['合规与审计', '我的审计'],
   '/knowledge': ['知识中心', ''],
+  '/knowledge/ask': ['知识中心', '知识库问答'],
   '/help': ['帮助中心', ''],
 }
 

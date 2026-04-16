@@ -25,6 +25,8 @@ from testcase.models import (
     TestEnvironment,
 )
 from testcase.services.variable_runtime import VariableExtractor, VariableResolver
+from testcase.services.assertions import evaluate_assertions
+from testcase.services.auth_runtime import inject_environment_auth, AuthConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -239,58 +241,35 @@ def build_requests_kwargs(
 
 
 def collect_assertions(
+    *,
     response: Optional[requests.Response],
+    response_payload: Dict[str, Any],
+    response_headers: Dict[str, Any],
+    duration_ms: Optional[int],
     expected_status: Optional[int],
     expected_substring: str,
+    custom_assertions: List[Dict[str, Any]] | None,
     error_text: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], bool]:
-    results: List[Dict[str, Any]] = []
-    if error_text:
-        results.append(
-            {
-                "name": "transport",
-                "passed": False,
-                "detail": truncate_log_text(error_text, 2000),
-            }
-        )
-        return results, False
-    assert response is not None
-    code = response.status_code
-    if expected_status is not None:
-        ok_code = code == int(expected_status)
-        results.append(
-            {
-                "name": "http_status",
-                "passed": ok_code,
-                "detail": f"实际 {code}，期望 {expected_status}",
-            }
-        )
-    else:
-        ok_code = 200 <= code < 300
-        results.append(
-            {
-                "name": "http_status_2xx",
-                "passed": ok_code,
-                "detail": f"实际 {code}，期望 2xx",
-            }
-        )
-    ok = ok_code
-    if expected_substring:
-        text = response.text or ""
-        sub_ok = expected_substring in text
-        results.append(
-            {
-                "name": "body_contains",
-                "passed": sub_ok,
-                "detail": (
-                    "响应体包含预期子串"
-                    if sub_ok
-                    else f"响应体未包含: {truncate_log_text(expected_substring, 200)}"
-                ),
-            }
-        )
-        ok = ok and sub_ok
-    return results, ok
+    """
+    统一断言入口（基础断言 + DSL 扩展断言）。
+    为兼容旧逻辑：expected_substring 仍来自 TestCaseStep.expected_result。
+    """
+
+    resp_json = response_payload.get("body_json") if isinstance(response_payload, dict) else None
+    resp_text = (response.text if response is not None else "") or ""
+    status_code = response.status_code if response is not None else None
+    return evaluate_assertions(
+        response_status=status_code,
+        response_text=resp_text,
+        response_json=resp_json if resp_json is not None else resp_text,
+        response_headers=response_headers or {},
+        duration_ms=duration_ms,
+        expected_status=expected_status,
+        expected_substring=expected_substring,
+        custom_assertions=custom_assertions,
+        transport_error=truncate_log_text(error_text, 2000) if error_text else None,
+    )
 
 
 def response_headers_to_dict(resp: requests.Response) -> Dict[str, str]:
@@ -427,6 +406,17 @@ def run_api_case(
     resolver = VariableResolver(missing_policy="keep")
     extractor = VariableExtractor(keep_none_on_error=True)
 
+    # 环境鉴权注入：基于环境的 auth_config 与运行时变量池填充请求头（如 Authorization / X-API-Key）
+    try:
+        headers, body = inject_environment_auth(
+            headers=headers,
+            body=body,
+            variables=merged_runtime_vars,
+            environment_id=env_id,
+        )
+    except AuthConfigError as exc:
+        logger.warning("环境鉴权配置不支持或非法: env_id=%s err=%s", env_id, exc)
+
     # 执行前变量替换：支持 URL / Header / Body 中的 ${var_name}
     url = resolver.resolve(url, merged_runtime_vars)
     headers = resolver.resolve(headers, merged_runtime_vars)
@@ -442,6 +432,7 @@ def run_api_case(
 
     step = case.steps.filter(is_deleted=False).order_by("step_number").first()
     expected_sub = (step.expected_result or "").strip() if step else ""
+    custom_assertions = step.assertions if step and isinstance(getattr(step, "assertions", None), list) else []
 
     if err:
         resp_payload = build_response_payload_from_error(error=err)
@@ -462,7 +453,9 @@ def run_api_case(
             response_body_text="",
             duration_ms=0,
             execution_status=ExecutionLog.ExecutionStatus.REQUEST_ERROR,
-            assertion_results=[{"name": "validation", "passed": False, "detail": err}],
+            assertion_results=[
+                {"name": "validation", "type": "validation", "passed": False, "detail": err}
+            ],
             is_passed=False,
             error_message=err,
             trace_id=trace_id,
@@ -494,10 +487,17 @@ def run_api_case(
     except requests.RequestException as exc:
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
         err_text = str(exc)
-        assertions, _ = collect_assertions(
-            None, expected_status, expected_sub, error_text=err_text
-        )
         resp_payload = build_response_payload_from_error(error=err_text)
+        assertions, _ = collect_assertions(
+            response=None,
+            response_payload=resp_payload,
+            response_headers={},
+            duration_ms=elapsed_ms,
+            expected_status=expected_status,
+            expected_substring=expected_sub,
+            custom_assertions=custom_assertions,
+            error_text=err_text,
+        )
         extracted_vars: Dict[str, Any] = {}
         if extraction_rules:
             extracted_vars = extractor.extract(
@@ -541,16 +541,23 @@ def run_api_case(
         return RunApiResult(log_ex, legacy, "请求失败（网络或超时）", extracted_vars)
 
     elapsed_ms = int((time.perf_counter() - t0) * 1000)
+    resp_headers = response_headers_to_dict(resp)
+    resp_payload = build_response_payload_from_response(resp)
     assertions, passed = collect_assertions(
-        resp, expected_status, expected_sub, error_text=None
+        response=resp,
+        response_payload=resp_payload,
+        response_headers=resp_headers,
+        duration_ms=elapsed_ms,
+        expected_status=expected_status,
+        expected_substring=expected_sub,
+        custom_assertions=custom_assertions,
+        error_text=None,
     )
     ex_status = (
         ExecutionLog.ExecutionStatus.SUCCESS
         if passed
         else ExecutionLog.ExecutionStatus.ASSERTION_FAILED
     )
-    resp_headers = response_headers_to_dict(resp)
-    resp_payload = build_response_payload_from_response(resp)
     extracted_vars: Dict[str, Any] = {}
     if extraction_rules:
         response_data = {
@@ -620,6 +627,15 @@ def preview_resolved_request(
     merged_runtime_vars = {**env_runtime_vars, **(runtime_vars or {})}
 
     resolver = VariableResolver(missing_policy="keep")
+    try:
+        headers, body = inject_environment_auth(
+            headers=headers,
+            body=body,
+            variables=merged_runtime_vars,
+            environment_id=env_id,
+        )
+    except AuthConfigError:
+        pass
     final_url = resolver.resolve(url, merged_runtime_vars)
     final_headers = resolver.resolve(headers, merged_runtime_vars)
     final_body = resolver.resolve(body, merged_runtime_vars)

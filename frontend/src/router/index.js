@@ -22,9 +22,21 @@ const routes = [
     meta: { public: false },
   },
   {
+    path: "/performance/scheduled-tasks",
+    name: "ScheduledTaskList",
+    component: () => import("@/views/performance/ScheduledTaskList.vue"),
+    meta: { public: false },
+  },
+  {
     path: "/performance/scheduled-task-logs",
     name: "ScheduledTaskLog",
     component: () => import("@/views/performance/ScheduledTaskLog.vue"),
+    meta: { public: false },
+  },
+  {
+    path: "/performance/k6-sessions",
+    name: "K6SessionList",
+    component: () => import("@/views/performance/K6SessionList.vue"),
     meta: { public: false },
   },
 
@@ -48,6 +60,11 @@ const routes = [
         path: "test-case/api",
         name: "ApiTest",
         component: () => import("@/views/ApiTest.vue"),
+      },
+      {
+        path: "execution/api-scenario-generator",
+        name: "ApiScenarioGenerator",
+        component: () => import("@/views/execution/ApiScenarioGenerator.vue"),
       },
       {
         path: "test-case/:type",
@@ -91,7 +108,11 @@ const routes = [
       { path: "system/role", component: () => import("@/views/system/RoleManagement.vue") },
       { path: "system/user", component: () => import("@/views/system/UserManagement.vue") },
       { path: "system/ai-usage", component: () => import("@/views/system/AiUsageDashboard.vue") },
+      { path: "system/ai-quota", component: () => import("@/views/system/AiQuotaPolicies.vue") },
+      { path: "system/audit", component: () => import("@/views/system/AuditEvents.vue") },
+      { path: "user/audit", component: () => import("@/views/system/AuditEvents.vue") },
       { path: "knowledge", component: () => import("@/views/system/KnowledgeCenter.vue") },
+      { path: "knowledge/ask", component: () => import("@/views/system/KnowledgeAsk.vue") },
       { path: "help", component: () => import("@/views/system/HelpCenter.vue") },
     ],
   },
@@ -117,6 +138,8 @@ const SYSTEM_ADMIN_ONLY_PREFIXES = [
   "/system/user",
   "/system/messages",
   "/system/ai-usage",
+  "/system/ai-quota",
+  "/system/audit",
 ];
 
 router.beforeEach((to, _from, next) => {

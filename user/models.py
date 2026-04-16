@@ -213,6 +213,66 @@ class Organization(BaseModel):
         verbose_name = "组织管理"
 
 
+class AiQuotaPolicy(BaseModel):
+    """
+    AI 配额策略（企业治理）：
+    - scope_type=project：按项目配额
+    - scope_type=org：按组织配额
+    - scope_type=user：按用户覆盖（优先级最高）
+    """
+
+    SCOPE_PROJECT = "project"
+    SCOPE_ORG = "org"
+    SCOPE_USER = "user"
+    SCOPE_CHOICES = [
+        (SCOPE_PROJECT, "项目"),
+        (SCOPE_ORG, "组织"),
+        (SCOPE_USER, "用户"),
+    ]
+
+    scope_type = models.CharField(max_length=16, choices=SCOPE_CHOICES, db_index=True)
+    project = models.ForeignKey(
+        "project.TestProject",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="ai_quota_policies",
+    )
+    org = models.ForeignKey(
+        Organization,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="ai_quota_policies",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="ai_quota_policies",
+    )
+
+    # 0 表示不限制（不推荐对 org/project 使用 0）
+    daily_requests = models.PositiveIntegerField(default=0, verbose_name="每日调用上限(0=不限制)")
+    max_concurrency = models.PositiveIntegerField(default=0, verbose_name="最大并发(0=不限制)")
+    concurrency_ttl_seconds = models.PositiveIntegerField(default=180, verbose_name="并发槽 TTL(秒)")
+
+    # 为空表示对全部 action 生效；否则为 action 白名单
+    allowed_actions = models.JSONField(default=list, blank=True, verbose_name="允许/生效的 action 列表")
+    is_enabled = models.BooleanField(default=True, db_index=True, verbose_name="是否启用")
+    notes = models.CharField(max_length=255, blank=True, default="", verbose_name="备注")
+
+    class Meta:
+        db_table = "ai_quota_policy"
+        indexes = [
+            models.Index(fields=["scope_type", "is_enabled", "-create_time"]),
+            models.Index(fields=["project", "is_enabled"]),
+            models.Index(fields=["org", "is_enabled"]),
+            models.Index(fields=["user", "is_enabled"]),
+        ]
+
+
 class SystemMessageSetting(BaseModel):
     """
     消息设置（用于“系统管理-消息设置”页面）

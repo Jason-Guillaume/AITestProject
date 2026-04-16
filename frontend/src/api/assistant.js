@@ -15,6 +15,10 @@ export const testAiConnectionApi = (data) =>
 export const previewAiPhase1Api = (data) =>
   request.post("/ai/phase1-preview/", data);
 
+/** POST /api/ai/suggest-case-fix/：基于失败 ExecutionLog 生成用例修订建议（不落库） */
+export const suggestCaseFixFromExecutionLogApi = (data) =>
+  request.post("/ai/suggest-case-fix/", data);
+
 /**
  * POST /api/ai/generate-cases/：按需求描述生成测试用例（JSON，非流式）。
  * 成功时 body 含 success、cases、message；若 RAG 判定已有用例全覆盖则为 all_covered: true、cases: []。

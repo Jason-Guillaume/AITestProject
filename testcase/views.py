@@ -8,7 +8,7 @@ from urllib.parse import urljoin
 
 import requests
 from django.utils import timezone
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import get_object_or_404
 from common.views import *
 from testcase.models import *
 from testcase.serialize import *
@@ -16,8 +16,10 @@ from testcase.services.case_subtypes import (
     create_typed_case,
     get_api_profile_for_execute,
 )
+from testcase.services.ai_import_precheck_core import precheck_api_draft_item
 from testcase.services.api_execution import preview_resolved_request, run_api_case
 from testcase.services.ai_openai import ai_fill_test_data, ai_import_api_cases
+from testcase.services.ai_case_gate import gate_ai_api_cases
 from testcase.services.variable_runtime import suggest_extractions
 from assistant.knowledge_rag import KnowledgeSearcher
 from rest_framework.decorators import action
@@ -359,6 +361,10 @@ class TestCaseViewSet(BaseModelViewSet):
         s_flag = str(strict).strip().lower()
         strict = s_flag in ("1", "true", "yes")
 
+        precheck_overrides = request.data.get("precheck_overrides")
+        if not isinstance(precheck_overrides, dict):
+            precheck_overrides = {}
+
         if default_module_id not in (None, ""):
             try:
                 default_module_id = int(default_module_id)
@@ -576,6 +582,20 @@ class TestCaseViewSet(BaseModelViewSet):
                                 raise ValidationError("API 用例缺少 api_url")
                             if not method:
                                 raise ValidationError("API 用例缺少 api_method")
+                            pr = precheck_api_draft_item(raw, precheck_overrides)
+                            if not pr.get("ok"):
+                                msg_parts = []
+                                if pr.get("error"):
+                                    msg_parts.append(str(pr["error"]))
+                                uv = pr.get("unresolved_vars") or []
+                                if uv:
+                                    msg_parts.append(
+                                        "未替换变量: "
+                                        + ", ".join(str(x) for x in uv[:20])
+                                    )
+                                raise ValidationError(
+                                    "; ".join(msg_parts) or "API 导入前预检未通过"
+                                )
                         if isinstance(raw.get("api_headers"), dict):
                             payload["api_headers"] = raw.get("api_headers")
                         if raw.get("api_body") is not None:
@@ -904,68 +924,20 @@ class TestCaseViewSet(BaseModelViewSet):
         if test_type and test_type != TestCase.TEST_TYPE_API:
             return Response({"success": True, "results": [{"index": i, "ok": True} for i in range(len(items))]})
 
-        from testcase.services.api_execution import (
-            case_api_headers_to_dict,
-            load_environment_runtime_variables,
-            normalize_api_body,
-            resolve_url_with_environment,
-            validate_before_request,
-        )
-        from testcase.services.variable_runtime import VariableResolver
-
-        var_pat = re.compile(r"\$\{[^}]+\}")
-
-        def _find_unresolved_vars(obj):
-            try:
-                text = json.dumps(obj, ensure_ascii=False)
-            except Exception:
-                text = str(obj)
-            return sorted(set(var_pat.findall(text or "")))[:50]
-
-        env_id = overrides.get("environment_id")
-        try:
-            env_id = int(env_id) if env_id is not None else None
-        except (TypeError, ValueError):
-            env_id = None
-        runtime_vars = overrides.get("variables") or overrides.get("runtime_variables")
-        if not isinstance(runtime_vars, dict):
-            runtime_vars = {}
-        env_runtime_vars = load_environment_runtime_variables(env_id)
-        merged_vars = {**env_runtime_vars, **runtime_vars}
-        resolver = VariableResolver(missing_policy="keep")
-
         results = []
         for i, it in enumerate(items):
-            if not isinstance(it, dict):
-                results.append({"index": i, "ok": False, "error": "item 必须为对象"})
-                continue
-            url = str(it.get("api_url") or it.get("url") or "").strip()
-            method = str(it.get("api_method") or it.get("method") or "GET").strip().upper()[:16] or "GET"
-            headers = case_api_headers_to_dict(it.get("api_headers"))
-            body = normalize_api_body(it.get("api_body"))
-            if env_id:
-                url = resolve_url_with_environment(url, env_id)
-            final_url = resolver.resolve(url, merged_vars)
-            final_headers = resolver.resolve(headers, merged_vars)
-            final_body = resolver.resolve(body, merged_vars)
-            req = {
-                "method": method,
-                "url": final_url,
-                "headers": final_headers,
-                "body": final_body,
-                "environment_id": env_id,
-            }
-            err = validate_before_request(final_url, method)
-            unresolved = _find_unresolved_vars(req)
-            ok = (not err) and (not unresolved)
+            row_name = ""
+            if isinstance(it, dict):
+                row_name = str(it.get("case_name") or "").strip()
+            pr = precheck_api_draft_item(it if isinstance(it, dict) else {}, overrides)
             results.append(
                 {
                     "index": i,
-                    "case_name": str(it.get("case_name") or "").strip(),
-                    "ok": ok,
-                    "error": err or "",
-                    "unresolved_vars": unresolved,
-                    "request": req,
+                    "case_name": row_name,
+                    "ok": pr["ok"],
+                    "error": pr.get("error") or "",
+                    "unresolved_vars": pr.get("unresolved_vars") or [],
+                    "request": pr.get("request") or {},
                 }
             )
         return Response({"success": True, "results": results})
@@ -1022,6 +994,137 @@ class TestCaseViewSet(BaseModelViewSet):
             return self.get_paginated_response(ser.data)
         ser = ExecutionLogSerializer(qs, many=True, context={"request": request})
         return Response({"results": ser.data, "count": qs.count()})
+
+    @action(detail=True, methods=["post"], url_path="apply-ai-suggested-steps")
+    def apply_ai_suggested_steps(self, request, pk=None):
+        """
+        将用户确认的「AI 修订建议步骤」写回用例（软删除旧步骤后按序新建）。
+        POST /api/testcase/cases/<id>/apply-ai-suggested-steps/
+
+        body:
+        - execution_log_id: 必填，须为该用例下、未删除、**未通过**的 ExecutionLog
+        - suggested_steps: 必填非空数组，每项 { step_desc, expected_result? }
+        - confirm_replace_all: 必须为 true（防误触）
+        """
+        from assistant.services.case_fix_from_execution import can_user_access_execution_log
+
+        case = self.get_object()
+        if not isinstance(request.data, dict):
+            return Response(
+                {"success": False, "message": "请求体必须为 JSON 对象"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        body = request.data
+        confirm = body.get("confirm_replace_all")
+        if confirm is not True:
+            return Response(
+                {
+                    "success": False,
+                    "message": "须将 confirm_replace_all 设为布尔 true 以确认替换全部步骤",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            el_id = int(body.get("execution_log_id"))
+        except (TypeError, ValueError):
+            return Response(
+                {"success": False, "message": "execution_log_id 必填且为整数"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_steps = body.get("suggested_steps")
+        if not isinstance(raw_steps, list) or not raw_steps:
+            return Response(
+                {"success": False, "message": "suggested_steps 必须为非空数组"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        log = (
+            ExecutionLog.objects.select_related(
+                "test_case__module__project", "test_case__creator"
+            )
+            .filter(pk=el_id, is_deleted=False)
+            .first()
+        )
+        if not log or not log.test_case_id:
+            return Response(
+                {"success": False, "message": "执行日志不存在"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if int(log.test_case_id) != int(case.id):
+            return Response(
+                {"success": False, "message": "该执行记录不属于当前用例"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not can_user_access_execution_log(request.user, log):
+            return Response(
+                {"success": False, "message": "无权限使用该执行记录"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if bool(log.is_passed):
+            return Response(
+                {
+                    "success": False,
+                    "message": "仅允许基于未通过的执行记录应用修订步骤",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        _max_steps = 60
+        if len(raw_steps) > _max_steps:
+            return Response(
+                {
+                    "success": False,
+                    "message": f"suggested_steps 最多 {_max_steps} 条",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        normalized: list[tuple[str, str]] = []
+        for it in raw_steps:
+            if not isinstance(it, dict):
+                continue
+            desc = str(it.get("step_desc") or it.get("desc") or "").strip()
+            exp = str(it.get("expected_result") or it.get("expected") or "").strip() or "—"
+            if not desc:
+                continue
+            normalized.append(
+                (
+                    desc[:4000],
+                    exp[:2000],
+                )
+            )
+        if not normalized:
+            return Response(
+                {"success": False, "message": "suggested_steps 中无有效步骤（需含 step_desc）"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+        with transaction.atomic():
+            TestCaseStep.objects.filter(testcase=case, is_deleted=False).update(
+                is_deleted=True
+            )
+            for idx, (desc, exp) in enumerate(normalized, start=1):
+                TestCaseStep.objects.create(
+                    testcase=case,
+                    step_number=idx,
+                    step_desc=desc,
+                    expected_result=exp,
+                    creator=user if getattr(user, "is_authenticated", False) else None,
+                    updater=user if getattr(user, "is_authenticated", False) else None,
+                )
+            case.save(update_fields=["update_time"])
+
+        return Response(
+            {
+                "success": True,
+                "message": "已替换步骤",
+                "test_case_id": case.id,
+                "steps_count": len(normalized),
+            }
+        )
 
     @action(detail=True, methods=["get"], url_path="versions")
     def versions(self, request, pk=None):
@@ -1310,36 +1413,21 @@ class ApiImportFromSpecAPIView(APIView):
 
         user = request.user
         created_ids = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            name = (item.get("case_name") or "未命名接口").strip()[:255]
-            headers = item.get("api_headers")
-            if not isinstance(headers, dict):
-                headers = {}
-            body = item.get("api_body")
-            if not isinstance(body, (dict, list)):
-                body = {}
-            exp = item.get("api_expected_status")
-            if exp is not None:
-                try:
-                    exp = int(exp)
-                except (TypeError, ValueError):
-                    exp = None
+
+        gated, errors = gate_ai_api_cases(items if isinstance(items, list) else [])
+        for item in gated:
             api_payload = {
-                "api_url": str(item.get("api_url", "") or "")[:2048],
-                "api_method": str(item.get("api_method", "GET") or "GET")
-                .strip()
-                .upper()[:16],
-                "api_headers": headers,
-                "api_body": body,
-                "api_expected_status": exp,
+                "api_url": item["api_url"],
+                "api_method": item["api_method"],
+                "api_headers": item["api_headers"],
+                "api_body": item["api_body"],
+                "api_expected_status": item["api_expected_status"],
             }
             if stored_curl:
                 api_payload["api_source_curl"] = stored_curl
             base = {
                 "module": module,
-                "case_name": name,
+                "case_name": item["case_name"],
                 "test_type": TEST_CASE_TYPE_API,
                 "level": "P2",
                 "is_valid": True,
@@ -1357,4 +1445,6 @@ class ApiImportFromSpecAPIView(APIView):
             )
             created_ids.append(case.id)
 
-        return Response({"created": len(created_ids), "ids": created_ids})
+        return Response(
+            {"created": len(created_ids), "ids": created_ids, "errors": errors}
+        )

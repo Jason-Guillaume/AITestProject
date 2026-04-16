@@ -1,7 +1,8 @@
-from django.shortcuts import render
 from rest_framework import viewsets
 from django.db.models import Q
 from django.db import models
+from common.models import AuditEvent
+from common.services.audit import record_audit_event
 
 # Create your views here.
 
@@ -113,19 +114,53 @@ class BaseModelViewSet(viewsets.ModelViewSet):
         # 假设前端请求带有token.且通过了认证
         user = self.request.user
         if user.is_authenticated:
-            serializer.save(creator=user)
+            instance = serializer.save(creator=user)
         else:
-            serializer.save()
+            instance = serializer.save()
+
+        record_audit_event(
+            action=AuditEvent.ACTION_CREATE,
+            actor=user,
+            instance=instance,
+            request=self.request,
+            before=None,
+            after=None,
+        )
 
     def perform_update(self, serializer):
         """更新时,自动填充updater"""
         user = self.request.user
+        before = None
+        try:
+            before = serializer.instance
+        except Exception:
+            before = None
         if user.is_authenticated:
-            serializer.save(updater=user)
+            instance = serializer.save(updater=user)
         else:
-            serializer.save()
+            instance = serializer.save()
+
+        record_audit_event(
+            action=AuditEvent.ACTION_UPDATE,
+            actor=user,
+            instance=instance,
+            request=self.request,
+            before=before,
+            after=None,
+        )
 
     def perform_destroy(self, instance):
         """重写删除逻辑,实现软删除"""
+        user = getattr(self.request, "user", None)
+        before = instance
         instance.is_deleted = True
         instance.save()
+
+        record_audit_event(
+            action=AuditEvent.ACTION_DELETE,
+            actor=user,
+            instance=instance,
+            request=self.request,
+            before=before,
+            after=None,
+        )

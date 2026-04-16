@@ -24,7 +24,7 @@
 | `/api/defect/` | `defect/urls.py` | 缺陷管理 |
 | `/api/assistant/` | `assistant/urls.py` | 助手兼容接口（旧路径） |
 | `/api/ai/` | `assistant/ai_urls.py` | AI 连接测试、用例生成（同步/流式） |
-| `/api/sys/` | `user/sys_urls.py` | 系统级 AI 模型配置 |
+| `/api/sys/` | `user/sys_urls.py` | 系统级配置与系统管理员能力（AI 模型配置、系统审计等） |
 | `/api/change-requests/` | `user/approval_urls.py` | 敏感信息审批动作接口 |
 
 ### 1.2 前端 API 分层
@@ -33,11 +33,13 @@
 
 - `frontend/src/api/auth.js`：登录、注册、验证码
 - `frontend/src/api/user.js`：用户中心、敏感信息审批流
-- `frontend/src/api/project.js`：项目/任务/发布计划
+- `frontend/src/api/project.js`：项目/任务/发布计划（含发布计划「从未执行用例」清单与 CSV 导出）
 - `frontend/src/api/testcase.js`：用例与扩展动作（回收站、执行、导入等）
 - `frontend/src/api/execution.js`、`perfTask.js`：测试执行与性能任务
 - `frontend/src/api/defect.js`：缺陷管理
 - `frontend/src/api/assistant.js`、`sysAiConfig.js`：AI 能力与系统配置
+- `frontend/src/api/audit.js`：审计事件查询与 CSV 导出（系统管理员）
+- `frontend/src/utils/downloadAuthedGet.js`：带 Token 的 GET blob 下载（CSV 等）
 
 ---
 
@@ -70,7 +72,7 @@ Authorization: Token <token>
 
 - 未登录访问非公开路由，重定向到登录页
 - 已登录访问登录页，重定向到 `/dashboard`
-- 非系统管理员访问系统管理路由（`/system/org`、`/system/role`、`/system/user`、`/system/messages`）时，重定向到 `/system/message`
+- 非系统管理员访问系统管理路由（`/system/org`、`/system/role`、`/system/user`、`/system/messages`、`/system/ai-usage`、`/system/audit`）时，重定向到 `/system/message`
 
 ---
 
@@ -96,17 +98,30 @@ Authorization: Token <token>
 - 同步：`POST /api/ai/generate-cases/` 响应新增 `run_id`
 - 流式：`POST /api/ai/generate-cases-stream/` 的 SSE `done` 事件新增 `run_id`
 
-### 9.2 AI 批量导入用例
+### 9.2 发布计划风险简报（只读）
+
+- `GET /api/project/releases/<id>/risk-brief/?days=7`
+  - 用途：按发布计划聚合关联用例数、测试计划状态、缺陷分布、近 N 天关联用例的 `ExecutionLog` 通过/失败；返回 `markdown` 摘要
+  - 权限：与 `ReleasePlan` 列表一致的数据范围（项目成员）
+- `GET /api/project/releases/<id>/never-executed-cases/?days=7&limit=500`
+  - 用途：列出近 N 天窗口内「从未执行」的关联用例（分页上限由 `limit` 控制，最大 5000）
+  - 返回：`{ success, days, total, items[] }`（`items` 含 `id/case_name/test_type/module_id/module_name`）
+- `GET /api/project/releases/<id>/never-executed-cases/export.csv?days=7&limit=20000`
+  - 用途：导出同上窗口的 CSV（流式）；前端下载须使用 blob + `Authorization: Token ...`（参考 `frontend/src/utils/downloadAuthedGet.js`、`frontend/src/api/project.js`）
+
+参考：`开发文档/33-后续功能规划-MVP与安全加固.md` §2
+
+### 9.3 AI 批量导入用例
 
 - `POST /api/testcase/cases/ai-import/`
   - 用途：将 AI 预览结果一次性导入到用例库（事务 + 逐条结果）
-  - 关键参数：`project_id/test_type/run_id/default_module_id/items[]`
+  - 关键参数：`project_id/test_type/run_id/default_module_id/items[]`；可选 `strict`、`precheck_overrides`（API+strict 预检与环境变量）
   - 返回：`imported[]/failed[]/skipped`
 
 参考开发文档：
 - `开发文档/26-AI生成用例-Run追溯与批量导入开发文档.md`
 
-### 9.3 AI 导入后批量预检（API）
+### 9.4 AI 导入后批量预检（API）
 
 - `POST /api/testcase/cases/batch-preview-run-api/`
   - 用途：导入后对 API 用例做静态预检（最终请求预览 + 未替换变量检测），不发网络请求
@@ -114,21 +129,39 @@ Authorization: Token <token>
 参考开发文档：
 - `开发文档/28-AI导入后批量预检（API Preview-Run）开发文档.md`
 
-### 9.4 AI 导入前质量闸门（前端）与 strict（后端）
+### 9.5 AI 导入前质量闸门（前端）与 strict（后端）
 
 - 前端：AI 生成预览表会对问题行标红，并可选择是否阻断导入
 - 后端：`POST /api/testcase/cases/ai-import/` 支持 `strict=true`，对关键字段做严格校验
+- **strict + API**：后端对每条 item 执行与 `ai-import-precheck` 相同的静态预检（`testcase/services/ai_import_precheck_core.py`），请求体可带 **`precheck_overrides`**（`environment_id`、`variables`），与前端预检面板一致，避免绕过 UI 直连导入坏数据
 
 参考开发文档：
 - `开发文档/29-AI导入前质量闸门开发文档.md`
 
-### 9.5 AI 导入前批量预检（草稿 items）
+### 9.6 AI 导入前批量预检（草稿 items）
 
 - `POST /api/testcase/cases/ai-import-precheck/`
   - 用途：对 AI 生成的草稿 API items 做静态预检（URL 拼接 + 变量替换 + 未替换变量检测），不要求落库
 
 参考开发文档：
 - `开发文档/30-AI导入前批量预检（草稿 API 用例）开发文档.md`
+
+### 9.7 失败执行 → 用例修订建议（AI，不落库）
+
+- `POST /api/ai/suggest-case-fix/`
+  - Body：`{ "execution_log_id": number, "hint"?: string }`
+  - 用途：基于未通过的 `testcase.ExecutionLog` 与当前用例步骤，调用大模型生成 `summary` / `suggested_steps` / `risks`（仅建议，不写库）
+  - 权限：登录 + 与用例相同的数据范围；**通过**的执行记录返回 400
+
+参考：`开发文档/33-后续功能规划-MVP与安全加固.md` §1
+
+### 9.8 应用 AI 建议步骤（写库）
+
+- `POST /api/testcase/cases/<id>/apply-ai-suggested-steps/`
+  - Body：`{ "execution_log_id": number, "suggested_steps": [{ "step_desc", "expected_result"? }, ...], "confirm_replace_all": true }`
+  - 行为：校验该 `ExecutionLog` 属于该用例且 **未通过**、调用方数据权限与 `suggest-case-fix` 一致后，**软删除**现有步骤并按数组顺序 **新建**步骤（最多 60 条；`step_desc` / `expected_result` 长度与 AI 导入对齐截断）。
+  - `confirm_replace_all` 必须为 JSON 布尔 **`true`**，否则 400。
+  - 自动化：`python manage.py test testcase.tests.ApplyAiSuggestedStepsApiTests`（需可连 MySQL；与 CI `api-tests` 中该步一致）。
 
 ### 3.2 请求体格式
 
@@ -151,6 +184,29 @@ Authorization: Token <token>
 - 用例列表（`TestCaseViewSet`）
 - 缺陷列表（`TestDefectViewSet`）
 - 性能任务列表（`PerfTaskViewSet`）
+- 测试计划（`TestPlanViewSet`）：`/api/execution/plans/`
+  - 批量删除：`POST /api/execution/plans/batch-delete/`，Body `{ "ids": number[] }`
+  - 批量更新：`POST /api/execution/plans/batch-update/`，Body `{ "ids": number[], "patch": object }`
+  - 批量复制：`POST /api/execution/plans/batch-copy/`，Body `{ "ids": number[], "name_suffix"?: string }`
+- 测试报告（`TestReportViewSet`）：`/api/execution/reports/`
+  - 批量删除：`POST /api/execution/reports/batch-delete/`，Body `{ "ids": number[] }`
+  - 批量更新：`POST /api/execution/reports/batch-update/`，Body `{ "ids": number[], "patch": object }`
+  - 批量复制：`POST /api/execution/reports/batch-copy/`，Body `{ "ids": number[], "name_suffix"?: string }`
+- 定时任务（`ScheduledTaskViewSet`）：`/api/execution/scheduled-tasks/`
+  - 批量删除：`POST /api/execution/scheduled-tasks/batch-delete/`，Body `{ "ids": number[] }`
+  - 批量更新：`POST /api/execution/scheduled-tasks/batch-update/`，Body `{ "ids": number[], "patch": object }`
+  - 批量复制：`POST /api/execution/scheduled-tasks/batch-copy/`，Body `{ "ids": number[], "name_suffix"?: string }`
+- 调度日志（`ScheduledTaskLogViewSet`）：`/api/execution/scheduled-task-logs/`
+  - 批量删除：`POST /api/execution/scheduled-task-logs/batch-delete/`，Body `{ "ids": number[] }`
+  - 按筛选清理：`POST /api/execution/scheduled-task-logs/batch-delete-by-filter/`，Body `{ "scheduled_task"?, "status"?, "message"?, "before_days"?, "max_delete"? }`
+- 性能任务（`PerfTaskViewSet`）：`/api/perf/tasks/`
+  - 批量删除：`POST /api/perf/tasks/batch-delete/`，Body `{ "task_ids": string[] }`
+  - 批量更新：`POST /api/perf/tasks/batch-update/`，Body `{ "task_ids": string[], "patch": object }`
+  - 批量复制：`POST /api/perf/tasks/batch-copy/`，Body `{ "task_ids": string[], "name_suffix"?: string }`
+- k6 压测会话（`K6LoadTestSessionViewSet`）：`/api/perf/k6-sessions/`
+  - 列表：`GET /api/perf/k6-sessions/`（分页；支持 query: `status`、`run_id`、`created_by_me`、`created_days`、`created_start`、`created_end`、`ordering`）
+  - 批量删除：`POST /api/perf/k6-sessions/batch-delete/`，Body `{ "ids": number[] }`
+  - 批量复制并执行：`POST /api/perf/k6-sessions/batch-copy/`，Body `{ "ids": number[] }`
 
 ### 3.4 筛选与搜索约定
 
@@ -375,6 +431,69 @@ TokenAuthentication 校验身份
 
 ---
 
+## 10. 审计事件查询与导出（补充）
+
+### 10.1 个人审计（当前用户）
+
+- **接口**：`GET /api/user/me/audit/events/`
+- **权限**：登录即可
+- **用途**：查询“由当前用户触发/产生”的 `AuditEvent`（后端过滤 `creator=request.user`）
+- **分页参数**：
+  - `page`：默认 `1`
+  - `page_size`：默认 `50`，最大 `200`
+- **筛选参数（可选）**：
+  - `action` / `object_app` / `object_model` / `object_id`
+- **响应**（统一 `{code,msg,data}`）：
+
+```json
+{
+  "code": 200,
+  "msg": "ok",
+  "data": {
+    "page": 1,
+    "page_size": 50,
+    "total": 123,
+    "items": [
+      {
+        "id": 1,
+        "action": "export",
+        "object_app": "project",
+        "object_model": "ReleasePlan",
+        "object_id": "12",
+        "object_repr": "ReleasePlan#12",
+        "request_path": "/api/project/releases/12/never-executed-cases/export.csv",
+        "ip": "127.0.0.1",
+        "extra": {},
+        "create_time": "2026-04-16T10:00:00+08:00"
+      }
+    ]
+  }
+}
+```
+
+### 10.2 系统审计（系统管理员）
+
+- **列表接口**：`GET /api/sys/audit/events/`
+- **权限**：系统管理员（`IsSystemAdmin`）
+- **分页参数**：同 10.1
+- **筛选参数（可选）**：
+  - `action` / `object_app` / `object_model` / `object_id`
+  - `start_date` / `end_date`：`YYYY-MM-DD`（按 `create_time` 的日期包含边界过滤）
+- **响应**（统一 `{code,msg,data}`）：`data` 结构同 10.1，但 `items` 额外包含 `user_agent`、`before`、`after`、`creator_id` 等字段（以实际 `values()` 为准）。
+
+### 10.3 系统审计 CSV 导出（系统管理员）
+
+- **接口**：`GET /api/sys/audit/export.csv`
+- **权限**：系统管理员
+- **筛选参数（可选）**：同 10.2 的文本筛选 + 日期筛选
+- **额外参数**：
+  - `limit`：默认 `5000`，最大 `200000`
+- **响应**：`text/csv` 文件下载（流式输出）
+- **前端注意**：CSV 下载不要用 `<a href="/api/...">` 裸链（浏览器请求不会自动带 `Authorization`），应使用 Axios `responseType: "blob"` 并手动注入 `Authorization: Token ...`（通用封装：`frontend/src/utils/downloadAuthedGet.js`；业务封装示例：`frontend/src/api/audit.js`）。`downloadAuthedGet` 在 4xx/JSON 错误体时会解析 Blob 中的 `detail`/`msg` 并 `throw new Error(…)`，前端可直接 `ElMessage.error(e.message)`。
+- **同类端点**：`GET /api/sys/ai-usage/export.csv`（AI 用量审计导出）同样适用上述约定，参考 `frontend/src/api/sysAiUsage.js`。
+
+---
+
 ## 7. 前后端联调注意事项
 
 1. **路径拼接**
@@ -407,4 +526,4 @@ TokenAuthentication 校验身份
 
 ---
 
-*文档版本：v1.1 | 最后更新：2026-04-10*
+*文档版本：v1.2 | 最后更新：2026-04-16*

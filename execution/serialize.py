@@ -168,3 +168,35 @@ class K6LoadTestSessionDetailSerializer(BaseModelSerializers):
             "update_time",
         )
         read_only_fields = fields
+
+
+class ApiScenarioSerializer(BaseModelSerializers):
+    creator_name = serializers.CharField(source="creator.real_name", read_only=True)
+
+    class Meta:
+        model = ApiScenario
+        fields = "__all__"
+        read_only_fields = ("creator", "updater", "create_time", "update_time")
+
+
+class ApiScenarioStepSerializer(BaseModelSerializers):
+    creator_name = serializers.CharField(source="creator.real_name", read_only=True)
+
+    class Meta:
+        model = ApiScenarioStep
+        fields = "__all__"
+        read_only_fields = ("creator", "updater", "create_time", "update_time")
+
+
+class ApiScenarioRunSerializer(BaseModelSerializers):
+    class Meta:
+        model = ApiScenarioRun
+        fields = "__all__"
+        read_only_fields = ("creator", "updater", "create_time", "update_time")
+
+
+class ApiScenarioStepRunSerializer(BaseModelSerializers):
+    class Meta:
+        model = ApiScenarioStepRun
+        fields = "__all__"
+        read_only_fields = ("creator", "updater", "create_time", "update_time")

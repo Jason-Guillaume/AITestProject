@@ -5,12 +5,13 @@ import uuid
 import re
 
 from rest_framework.authtoken.models import Token
-from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticated
 from django.core.cache import cache
 from common.views import *
+from common.models import AuditEvent
 from user.models import *
 from user.serialize import *
 from user.serialize import UserRegisterSerializer
@@ -487,6 +488,74 @@ class SystemMessageMarkReadAPIView(APIView):
                     status=503,
                 )
             raise
+
+
+class UserAuditEventListAPIView(APIView):
+    """
+    当前用户审计事件查询（只读）：
+    GET /api/user/me/audit/events/?page=1&page_size=50
+    - 普通用户：仅返回自己产生的审计事件（creator=self）
+    - 系统管理员全量审计请使用：GET /api/sys/audit/events/
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            page = int(request.query_params.get("page", "1"))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(request.query_params.get("page_size", "50"))
+        except (TypeError, ValueError):
+            page_size = 50
+        page = max(1, page)
+        page_size = max(1, min(page_size, 200))
+        offset = (page - 1) * page_size
+
+        action = (request.query_params.get("action") or "").strip()
+        object_app = (request.query_params.get("object_app") or "").strip()
+        object_model = (request.query_params.get("object_model") or "").strip()
+        object_id = (request.query_params.get("object_id") or "").strip()
+
+        qs = AuditEvent.objects.filter(is_deleted=False, creator=request.user)
+        if action:
+            qs = qs.filter(action=action)
+        if object_app:
+            qs = qs.filter(object_app=object_app)
+        if object_model:
+            qs = qs.filter(object_model=object_model)
+        if object_id:
+            qs = qs.filter(object_id=object_id)
+
+        total = qs.count()
+        qs = qs.order_by("-create_time")[offset : offset + page_size]
+        rows = list(
+            qs.values(
+                "id",
+                "action",
+                "object_app",
+                "object_model",
+                "object_id",
+                "object_repr",
+                "request_path",
+                "ip",
+                "extra",
+                "create_time",
+            )
+        )
+        return Response(
+            {
+                "code": 200,
+                "msg": "ok",
+                "data": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total,
+                    "items": rows,
+                },
+            }
+        )
 
 
 class AdminUserChangeRequestListAPIView(APIView):

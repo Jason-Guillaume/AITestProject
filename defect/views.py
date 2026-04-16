@@ -4,6 +4,13 @@ from rest_framework.pagination import PageNumberPagination
 from common.views import *
 from defect.models import *
 from defect.serialize import *
+from testcase.models import ExecutionLog
+from execution.models import ApiScenarioRun, ApiScenarioStepRun
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from common.models import AuditEvent
+from common.services.audit import record_audit_event
 
 
 class DefectPagination(PageNumberPagination):
@@ -120,6 +127,276 @@ class TestDefectViewSet(BaseModelViewSet):
             serializer.save(creator=user, **kwargs)
         else:
             serializer.save(**kwargs)
+
+
+class DefectFromExecutionAPIView(APIView):
+    """
+    从执行证据包快速创建缺陷（企业内网常用闭环入口）。
+
+    POST /api/defect/defects/from-execution/
+    body:
+    - execution_log_id: int (可选)
+    - scenario_run_id: int (可选)
+    - defect_name: string (可选，缺省自动生成)
+    - severity/priority: int (可选)
+    - handler_id: int (可选，缺省为当前用户)
+    """
+
+    def post(self, request):
+        payload = request.data if isinstance(request.data, dict) else {}
+        execution_log_id = payload.get("execution_log_id")
+        scenario_run_id = payload.get("scenario_run_id")
+        if execution_log_id in (None, "") and scenario_run_id in (None, ""):
+            return Response(
+                {"msg": "请提供 execution_log_id 或 scenario_run_id"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return Response({"msg": "认证失败"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        severity = payload.get("severity")
+        priority = payload.get("priority")
+        try:
+            severity = int(severity) if severity not in (None, "") else 3
+        except (TypeError, ValueError):
+            severity = 3
+        try:
+            priority = int(priority) if priority not in (None, "") else 2
+        except (TypeError, ValueError):
+            priority = 2
+
+        defect_name = (payload.get("defect_name") or "").strip()
+        reproduction_steps = []
+        attachments = []
+        module = None
+        environment = ""
+        content_lines = []
+
+        if execution_log_id not in (None, ""):
+            try:
+                eid = int(execution_log_id)
+            except (TypeError, ValueError):
+                return Response({"msg": "execution_log_id 非法"}, status=400)
+            ex = (
+                ExecutionLog.objects.filter(pk=eid)
+                .select_related("test_case", "test_case__module")
+                .first()
+            )
+            if not ex:
+                return Response({"msg": "执行日志不存在"}, status=404)
+            tc = ex.test_case
+            module = getattr(tc, "module", None)
+            defect_name = defect_name or f"接口用例失败: {tc.case_name}"
+            environment = ""
+            content_lines.append(f"trace_id: {ex.trace_id or ''}")
+            content_lines.append(f"url: {ex.request_url}")
+            content_lines.append(f"method: {ex.request_method}")
+            content_lines.append(f"status: {ex.response_status_code}")
+            if ex.error_message:
+                content_lines.append(f"error: {ex.error_message}")
+            reproduction_steps.append(
+                {
+                    "title": "请求与响应摘要",
+                    "request": ex.request_payload or {},
+                    "response": ex.response_payload or {},
+                    "assertions": ex.assertion_results or [],
+                }
+            )
+        else:
+            try:
+                rid = int(scenario_run_id)
+            except (TypeError, ValueError):
+                return Response({"msg": "scenario_run_id 非法"}, status=400)
+            run = ApiScenarioRun.objects.filter(pk=rid).select_related("scenario").first()
+            if not run:
+                return Response({"msg": "场景运行不存在"}, status=404)
+            defect_name = defect_name or f"场景失败: {run.scenario.name}"
+            content_lines.append(f"scenario_trace_id: {run.trace_id}")
+            content_lines.append(f"scenario_status: {run.status}")
+            # 取失败步骤证据
+            step_runs = list(
+                ApiScenarioStepRun.objects.filter(run_id=run.id)
+                .order_by("order", "id")
+                .values("order", "test_case_id", "execution_log_id", "passed", "message")
+            )
+            for sr in step_runs:
+                if sr.get("passed"):
+                    continue
+                ex_id = sr.get("execution_log_id")
+                ex = ExecutionLog.objects.filter(pk=ex_id).first() if ex_id else None
+                reproduction_steps.append(
+                    {
+                        "title": f"失败步骤(order={sr.get('order')})",
+                        "step": sr,
+                        "request": (ex.request_payload if ex else {}) if ex else {},
+                        "response": (ex.response_payload if ex else {}) if ex else {},
+                        "assertions": (ex.assertion_results if ex else []) if ex else [],
+                    }
+                )
+            environment = ""
+
+        defect = TestDefect.objects.create(
+            defect_no="",
+            defect_name=defect_name[:255],
+            release_version=None,
+            severity=severity,
+            priority=priority,
+            status=1,
+            handler=user,
+            module=module,
+            defect_content="\n".join([x for x in content_lines if x])[:8000],
+            reproduction_steps=reproduction_steps,
+            attachments=attachments,
+            environment=str(environment or "")[:255],
+            creator=user,
+            updater=user,
+        )
+        record_audit_event(
+            action=AuditEvent.ACTION_CREATE,
+            actor=user,
+            instance=defect,
+            request=request,
+            extra={
+                "source": "from_execution",
+                "execution_log_id": int(execution_log_id) if execution_log_id not in (None, "") else None,
+                "scenario_run_id": int(scenario_run_id) if scenario_run_id not in (None, "") else None,
+            },
+        )
+        return Response({"success": True, "id": defect.id})
+
+
+class DefectFromSecurityFindingAPIView(APIView):
+    """
+    从安全 finding 快速创建缺陷（用于 AI 安全分析闭环）。
+
+    POST /api/defect/defects/from-security-finding/
+    body:
+    - finding: object（必填，包含 rule_id/title/description/suggested_request 等）
+    - module_id: int（可选）
+    - release_version_id: int（可选）
+    - severity/priority: int（可选）
+    - handler_id: int（可选，缺省为当前用户）
+    - environment: string（可选）
+    """
+
+    def post(self, request):
+        import json as _json
+
+        from project.models import ReleasePlan
+        from testcase.models import TestModule
+        from user.models import User
+
+        payload = request.data if isinstance(request.data, dict) else {}
+        finding = payload.get("finding")
+        if not isinstance(finding, dict):
+            return Response({"msg": "finding 必填且为对象"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return Response({"msg": "认证失败"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        title = str(finding.get("title") or "").strip()
+        rule_id = str(finding.get("rule_id") or "").strip()
+        desc = str(finding.get("description") or "").strip()
+        suggested = finding.get("suggested_request") if isinstance(finding.get("suggested_request"), dict) else {}
+
+        defect_name = (payload.get("defect_name") or "").strip() or f"[安全] {rule_id} {title}".strip()
+
+        severity = payload.get("severity")
+        priority = payload.get("priority")
+        try:
+            severity = int(severity) if severity not in (None, "") else 2
+        except (TypeError, ValueError):
+            severity = 2
+        try:
+            priority = int(priority) if priority not in (None, "") else 1
+        except (TypeError, ValueError):
+            priority = 1
+
+        handler_id = payload.get("handler_id")
+        handler = None
+        if handler_id not in (None, ""):
+            try:
+                hid = int(handler_id)
+            except (TypeError, ValueError):
+                return Response({"msg": "handler_id 非法"}, status=400)
+            handler = User.objects.filter(pk=hid, is_deleted=False).first()
+            if not handler:
+                return Response({"msg": "handler 不存在"}, status=404)
+        else:
+            handler = user
+
+        module_id = payload.get("module_id")
+        module = None
+        if module_id not in (None, ""):
+            try:
+                mid = int(module_id)
+            except (TypeError, ValueError):
+                return Response({"msg": "module_id 非法"}, status=400)
+            module = TestModule.objects.filter(pk=mid, is_deleted=False).first()
+
+        rv_id = payload.get("release_version_id")
+        release_version = None
+        if rv_id not in (None, ""):
+            try:
+                rid = int(rv_id)
+            except (TypeError, ValueError):
+                return Response({"msg": "release_version_id 非法"}, status=400)
+            release_version = ReleasePlan.objects.filter(pk=rid, is_deleted=False).first()
+
+        environment = str(payload.get("environment") or "").strip()[:255]
+
+        content_lines = []
+        if title:
+            content_lines.append(f"title: {title}")
+        if rule_id:
+            content_lines.append(f"rule_id: {rule_id}")
+        if desc:
+            content_lines.append(desc)
+        if suggested:
+            content_lines.append("")
+            content_lines.append("suggested_request:")
+            content_lines.append(_json.dumps(suggested, ensure_ascii=False)[:4000])
+        defect_content = "\n".join(content_lines)[:10000]
+
+        reproduction_steps = [{"title": "安全 Finding", "finding": finding}]
+
+        defect = TestDefect.objects.create(
+            defect_no="",
+            defect_name=defect_name[:255],
+            release_version=release_version,
+            severity=severity,
+            priority=priority,
+            status=1,
+            handler=handler,
+            module=module,
+            defect_content=defect_content,
+            reproduction_steps=reproduction_steps,
+            attachments=[],
+            environment=environment,
+            creator=user,
+            updater=user,
+        )
+        if not defect.defect_no:
+            for _ in range(5):
+                last = TestDefect.objects.filter(is_deleted=False).order_by("-id").first()
+                next_id = 1 if not last else last.id + 1
+                no = f"DEF-{next_id:05d}"
+                if not TestDefect.objects.filter(defect_no=no, is_deleted=False).exists():
+                    defect.defect_no = no
+                    defect.save(update_fields=["defect_no", "update_time"])
+                    break
+
+        record_audit_event(
+            action=AuditEvent.ACTION_CREATE,
+            actor=user,
+            instance=defect,
+            request=request,
+            extra={"source": "security_finding", "rule_id": rule_id, "finding": finding},
+        )
+        return Response({"success": True, "id": defect.id, "defect_no": defect.defect_no, "defect_name": defect.defect_name})
 
     def perform_update(self, serializer):
         from rest_framework.exceptions import ValidationError

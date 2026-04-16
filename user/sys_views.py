@@ -8,9 +8,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from common.models import AuditEvent
 from user.models import AIModelConfig
 from user.permissions import IsSystemAdmin
-from user.serialize import AIModelConfigReadSerializer, AIModelConfigWriteSerializer
+from user.serialize import (
+    AIModelConfigReadSerializer,
+    AIModelConfigWriteSerializer,
+    AiQuotaPolicySerializer,
+)
+from common.services.audit import record_audit_event, record_export_audit
 
 
 def _parse_date_yyyymmdd(s: str):
@@ -170,6 +176,140 @@ class AIModelConfigReconnectAPIView(APIView):
                 "data": AIModelConfigReadSerializer(row).data,
             }
         )
+
+
+# ---------------------------------------------------------------------------
+# AI 配额治理（项目/组织/用户）
+# ---------------------------------------------------------------------------
+
+
+class AiQuotaPolicyListCreateAPIView(APIView):
+    """
+    GET /api/sys/ai-quota/policies/  列表
+    POST /api/sys/ai-quota/policies/ 创建
+    """
+
+    permission_classes = [IsAuthenticated, IsSystemAdmin]
+
+    def get(self, request):
+        from user.models import AiQuotaPolicy
+
+        qs = AiQuotaPolicy.objects.filter(is_deleted=False).order_by("-id")
+        scope_type = (request.query_params.get("scope_type") or "").strip()
+        if scope_type:
+            qs = qs.filter(scope_type=scope_type)
+        project_id = request.query_params.get("project_id")
+        if project_id not in (None, ""):
+            try:
+                qs = qs.filter(project_id=int(project_id))
+            except Exception:
+                pass
+        org_id = request.query_params.get("org_id")
+        if org_id not in (None, ""):
+            try:
+                qs = qs.filter(org_id=int(org_id))
+            except Exception:
+                pass
+        user_id = request.query_params.get("user_id")
+        if user_id not in (None, ""):
+            try:
+                qs = qs.filter(user_id=int(user_id))
+            except Exception:
+                pass
+
+        limit = request.query_params.get("limit")
+        try:
+            limit_n = max(1, min(500, int(limit))) if limit not in (None, "") else 200
+        except Exception:
+            limit_n = 200
+
+        items = list(qs[:limit_n])
+        return Response(
+            {
+                "code": 200,
+                "msg": "ok",
+                "data": AiQuotaPolicySerializer(items, many=True).data,
+            }
+        )
+
+    def post(self, request):
+        ser = AiQuotaPolicySerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        obj = ser.save(creator=request.user, updater=request.user)
+        record_audit_event(
+            request=request,
+            action=AuditEvent.ACTION_CREATE,
+            obj=obj,
+            before=None,
+            after=AiQuotaPolicySerializer(obj).data,
+        )
+        return Response(
+            {"code": 200, "msg": "创建成功", "data": AiQuotaPolicySerializer(obj).data}
+        )
+
+
+class AiQuotaPolicyDetailAPIView(APIView):
+    """
+    GET /api/sys/ai-quota/policies/<id>/
+    PUT /api/sys/ai-quota/policies/<id>/
+    DELETE /api/sys/ai-quota/policies/<id>/
+    """
+
+    permission_classes = [IsAuthenticated, IsSystemAdmin]
+
+    def get(self, request, policy_id: int):
+        from user.models import AiQuotaPolicy
+
+        obj = AiQuotaPolicy.objects.filter(pk=policy_id, is_deleted=False).first()
+        if not obj:
+            return Response({"code": 404, "msg": "不存在", "data": None}, status=404)
+        return Response(
+            {"code": 200, "msg": "ok", "data": AiQuotaPolicySerializer(obj).data}
+        )
+
+    def put(self, request, policy_id: int):
+        from user.models import AiQuotaPolicy
+
+        obj = AiQuotaPolicy.objects.filter(pk=policy_id, is_deleted=False).first()
+        if not obj:
+            return Response({"code": 404, "msg": "不存在", "data": None}, status=404)
+        before = AiQuotaPolicySerializer(obj).data
+        ser = AiQuotaPolicySerializer(
+            instance=obj,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        ser.is_valid(raise_exception=True)
+        obj = ser.save(updater=request.user)
+        after = AiQuotaPolicySerializer(obj).data
+        record_audit_event(
+            request=request,
+            action=AuditEvent.ACTION_UPDATE,
+            obj=obj,
+            before=before,
+            after=after,
+        )
+        return Response({"code": 200, "msg": "保存成功", "data": after})
+
+    def delete(self, request, policy_id: int):
+        from user.models import AiQuotaPolicy
+
+        obj = AiQuotaPolicy.objects.filter(pk=policy_id, is_deleted=False).first()
+        if not obj:
+            return Response({"code": 404, "msg": "不存在", "data": None}, status=404)
+        before = AiQuotaPolicySerializer(obj).data
+        obj.is_deleted = True
+        obj.updater = request.user
+        obj.save(update_fields=["is_deleted", "updater", "update_time"])
+        record_audit_event(
+            request=request,
+            action=AuditEvent.ACTION_DELETE,
+            obj=obj,
+            before=before,
+            after=None,
+        )
+        return Response({"code": 200, "msg": "删除成功", "data": None})
 
 
 class AiUsageEventListAPIView(APIView):
@@ -635,4 +775,190 @@ class AiUsageExportCsvAPIView(APIView):
         filename = f"ai-usage-events-{timezone.now().strftime('%Y%m%d-%H%M')}.csv"
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         resp["Cache-Control"] = "no-store"
+        record_export_audit(
+            actor=request.user,
+            instance=None,
+            request=request,
+            extra={"export": "ai_usage_events", "rows": int(limit)},
+        )
+        return resp
+
+
+class AuditEventListAPIView(APIView):
+    """
+    GET /api/sys/audit/events/
+    系统审计事件查询（系统管理员）。
+
+    query params:
+    - action: create/update/delete/export/execute（可选）
+    - object_app/object_model/object_id（可选）
+    - start_date/end_date: YYYY-MM-DD（可选，包含边界）
+    - page/page_size：默认 1/50，page_size 最大 200
+    """
+
+    permission_classes = [IsAuthenticated, IsSystemAdmin]
+
+    def get(self, request):
+        try:
+            page = int(request.query_params.get("page", "1"))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(request.query_params.get("page_size", "50"))
+        except (TypeError, ValueError):
+            page_size = 50
+        page = max(1, page)
+        page_size = max(1, min(page_size, 200))
+        offset = (page - 1) * page_size
+
+        qs = AuditEvent.objects.filter(is_deleted=False)
+
+        action = (request.query_params.get("action") or "").strip()
+        if action:
+            qs = qs.filter(action=action)
+        object_app = (request.query_params.get("object_app") or "").strip()
+        if object_app:
+            qs = qs.filter(object_app=object_app)
+        object_model = (request.query_params.get("object_model") or "").strip()
+        if object_model:
+            qs = qs.filter(object_model=object_model)
+        object_id = (request.query_params.get("object_id") or "").strip()
+        if object_id:
+            qs = qs.filter(object_id=object_id)
+
+        start_date = _parse_date_yyyymmdd(request.query_params.get("start_date") or "")
+        end_date = _parse_date_yyyymmdd(request.query_params.get("end_date") or "")
+        if start_date:
+            qs = qs.filter(create_time__date__gte=start_date)
+        if end_date:
+            qs = qs.filter(create_time__date__lte=end_date)
+
+        total = qs.count()
+        rows = list(
+            qs.order_by("-create_time")
+            .values(
+                "id",
+                "action",
+                "object_app",
+                "object_model",
+                "object_id",
+                "object_repr",
+                "request_path",
+                "ip",
+                "user_agent",
+                "before",
+                "after",
+                "extra",
+                "creator_id",
+                "create_time",
+            )[offset : offset + page_size]
+        )
+        return Response(
+            {
+                "code": 200,
+                "msg": "ok",
+                "data": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total,
+                    "items": rows,
+                },
+            }
+        )
+
+
+class AuditEventExportCsvAPIView(APIView):
+    """
+    GET /api/sys/audit/export.csv
+    按筛选条件导出系统审计 CSV（流式输出）。
+
+    query params:
+    - action/object_app/object_model/object_id（可选）
+    - start_date/end_date（可选）
+    - limit: 默认 5000，最大 200000
+    """
+
+    permission_classes = [IsAuthenticated, IsSystemAdmin]
+
+    def get(self, request):
+        from django.http import StreamingHttpResponse
+
+        limit = request.query_params.get("limit", 5000)
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            limit = 5000
+        limit = max(1, min(limit, 200000))
+
+        qs = AuditEvent.objects.filter(is_deleted=False)
+
+        action = (request.query_params.get("action") or "").strip()
+        if action:
+            qs = qs.filter(action=action)
+        object_app = (request.query_params.get("object_app") or "").strip()
+        if object_app:
+            qs = qs.filter(object_app=object_app)
+        object_model = (request.query_params.get("object_model") or "").strip()
+        if object_model:
+            qs = qs.filter(object_model=object_model)
+        object_id = (request.query_params.get("object_id") or "").strip()
+        if object_id:
+            qs = qs.filter(object_id=object_id)
+
+        start_date = _parse_date_yyyymmdd(request.query_params.get("start_date") or "")
+        end_date = _parse_date_yyyymmdd(request.query_params.get("end_date") or "")
+        if start_date:
+            qs = qs.filter(create_time__date__gte=start_date)
+        if end_date:
+            qs = qs.filter(create_time__date__lte=end_date)
+
+        qs = qs.order_by("-create_time")[:limit]
+
+        columns = [
+            "create_time",
+            "action",
+            "object_app",
+            "object_model",
+            "object_id",
+            "object_repr",
+            "request_path",
+            "ip",
+            "creator_id",
+        ]
+
+        def _csv_escape(v):
+            s = "" if v is None else str(v)
+            s = s.replace("\r", " ").replace("\n", " ")
+            if '"' in s:
+                s = s.replace('"', '""')
+            if any(ch in s for ch in [",", '"']):
+                return f'"{s}"'
+            return s
+
+        def stream():
+            yield ",".join(columns) + "\n"
+            for r in qs.iterator(chunk_size=1000):
+                row = [
+                    getattr(r, "create_time", None),
+                    getattr(r, "action", None),
+                    getattr(r, "object_app", None),
+                    getattr(r, "object_model", None),
+                    getattr(r, "object_id", None),
+                    getattr(r, "object_repr", None),
+                    getattr(r, "request_path", None),
+                    getattr(r, "ip", None),
+                    getattr(r, "creator_id", None),
+                ]
+                yield ",".join(_csv_escape(x) for x in row) + "\n"
+
+        resp = StreamingHttpResponse(stream(), content_type="text/csv; charset=utf-8")
+        filename = f"audit-events-{timezone.now().strftime('%Y%m%d-%H%M')}.csv"
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        resp["Cache-Control"] = "no-store"
+        record_export_audit(
+            actor=request.user,
+            instance=None,
+            request=request,
+            extra={"export": "audit_events", "rows": int(limit)},
+        )
         return resp

@@ -36,3 +36,57 @@ class BaseModel(models.Model):
 
     class Meta:
         abstract = True  # 标记为抽象类,django不会在数据库中为他单独建表
+
+
+class AuditEvent(BaseModel):
+    """
+    审计事件（追加写）：
+    - 记录关键业务对象的增删改（以及可扩展的导出/执行/审批等动作）
+    - before/after 默认做脱敏与截断，避免泄漏敏感信息或写入超大 payload
+    """
+
+    ACTION_CREATE = "create"
+    ACTION_UPDATE = "update"
+    ACTION_DELETE = "delete"
+    ACTION_EXPORT = "export"
+    ACTION_EXECUTE = "execute"
+
+    ACTION_CHOICES = [
+        (ACTION_CREATE, "创建"),
+        (ACTION_UPDATE, "更新"),
+        (ACTION_DELETE, "删除"),
+        (ACTION_EXPORT, "导出"),
+        (ACTION_EXECUTE, "执行"),
+    ]
+
+    action = models.CharField(
+        max_length=16, choices=ACTION_CHOICES, verbose_name="动作"
+    )
+    object_app = models.CharField(max_length=64, blank=True, default="", verbose_name="对象 app")
+    object_model = models.CharField(
+        max_length=64, blank=True, default="", verbose_name="对象模型"
+    )
+    object_id = models.CharField(
+        max_length=64, blank=True, default="", verbose_name="对象 ID"
+    )
+    object_repr = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="对象摘要"
+    )
+    request_path = models.CharField(
+        max_length=512, blank=True, default="", verbose_name="请求路径"
+    )
+    ip = models.CharField(max_length=64, blank=True, default="", verbose_name="IP")
+    user_agent = models.CharField(
+        max_length=512, blank=True, default="", verbose_name="User-Agent"
+    )
+    before = models.JSONField(null=True, blank=True, verbose_name="变更前快照")
+    after = models.JSONField(null=True, blank=True, verbose_name="变更后快照")
+    extra = models.JSONField(default=dict, blank=True, verbose_name="扩展字段")
+
+    class Meta:
+        db_table = "audit_event"
+        ordering = ("-create_time",)
+        indexes = [
+            models.Index(fields=["action", "-create_time"]),
+            models.Index(fields=["object_app", "object_model", "object_id"]),
+        ]

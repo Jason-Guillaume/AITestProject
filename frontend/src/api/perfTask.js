@@ -15,3 +15,15 @@ export function runPerfTask(taskId) {
 export function deletePerfTask(taskId) {
   return request.delete(`/perf/tasks/${taskId}/`);
 }
+
+export function batchDeletePerfTasks(data) {
+  return request.post("/perf/tasks/batch-delete/", data);
+}
+
+export function batchUpdatePerfTasks(data) {
+  return request.post("/perf/tasks/batch-update/", data);
+}
+
+export function batchCopyPerfTasks(data) {
+  return request.post("/perf/tasks/batch-copy/", data);
+}

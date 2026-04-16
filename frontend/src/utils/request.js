@@ -3,6 +3,32 @@ import { ElMessage } from "element-plus";
 
 let backendUnhealthyNotified = false;
 
+function normalizeDetail(detail) {
+  if (detail == null) return "";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((x) => {
+        if (typeof x === "string") return x;
+        if (x && typeof x === "object" && String(x.string || "").trim()) return String(x.string);
+        try {
+          return JSON.stringify(x);
+        } catch {
+          return String(x);
+        }
+      })
+      .join("；");
+  }
+  if (typeof detail === "object") {
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return String(detail);
+    }
+  }
+  return String(detail);
+}
+
 function notifyBackendHealth(status, message) {
   if (typeof window === "undefined") return;
   if (status === "healthy") {
@@ -63,10 +89,7 @@ request.interceptors.response.use(
       rawData?.error ||
       (typeof rawData === "string" ? rawData : "");
     if (!dataMsg && rawData?.detail != null) {
-      dataMsg =
-        typeof rawData.detail === "string"
-          ? rawData.detail
-          : JSON.stringify(rawData.detail);
+      dataMsg = normalizeDetail(rawData.detail);
     }
 
     // 后端返回 HTML 错误页（常见于 Django debug/500），给出可读错误提示。

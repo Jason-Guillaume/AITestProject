@@ -76,14 +76,50 @@
 
           <div class="mb-4 perf-task-toolbar">
             <el-button type="primary" @click="openCreateDialog">新建任务</el-button>
+            <el-button
+              type="danger"
+              plain
+              :disabled="selectedTaskIds.length === 0"
+              :loading="batchDeleting"
+              @click="batchDeleteSelected"
+            >
+              批量删除（{{ selectedTaskIds.length }}）
+            </el-button>
+            <el-button
+              type="warning"
+              plain
+              :disabled="selectedTaskIds.length === 0"
+              @click="openBatchUpdateStatus"
+            >
+              批量修改状态
+            </el-button>
+            <el-button
+              type="success"
+              plain
+              :disabled="selectedTaskIds.length === 0"
+              :loading="batchCopying"
+              @click="batchCopySelected"
+            >
+              批量复制
+            </el-button>
             <el-button @click="toEnvironmentManagement">环境管理</el-button>
             <CurrentEnvironmentSelect :show-label="true" compact />
             <el-button type="warning" plain @click="toLoadTestMonitor">k6 压测看板</el-button>
+            <el-button type="warning" plain @click="toK6Sessions">k6 会话列表</el-button>
             <el-button type="success" plain @click="toScheduledTaskCreate">新建定时任务</el-button>
+            <el-button type="success" plain @click="toScheduledTaskList">定时任务列表</el-button>
             <el-button type="info" plain @click="toScheduledTaskLogs">调度日志</el-button>
           </div>
 
-          <el-table v-loading="loading" :data="tableData" stripe border class="w-full perf-task-table">
+          <el-table
+            v-loading="loading"
+            :data="tableData"
+            stripe
+            border
+            class="w-full perf-task-table"
+            @selection-change="onSelectionChange"
+          >
+            <el-table-column type="selection" width="44" fixed="left" />
             <el-table-column prop="task_id" label="任务ID" width="120" align="left" show-overflow-tooltip />
             <el-table-column prop="task_name" label="任务名称" min-width="180" align="left" show-overflow-tooltip />
             <el-table-column prop="scenario" label="测试场景" min-width="180" align="center">
@@ -165,6 +201,37 @@
         <el-descriptions-item label="创建时间">{{ detailTask.created_at || "-" }}</el-descriptions-item>
       </el-descriptions>
     </el-drawer>
+
+    <el-dialog v-model="batchUpdateVisible" title="批量修改任务状态" width="420px" destroy-on-close>
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        title="将对已选任务应用同一状态更新；若某些记录无权限，会被跳过。"
+        class="mb-3"
+      />
+      <el-form label-width="110px">
+        <el-form-item label="目标状态">
+          <el-select v-model="batchStatus" placeholder="请选择" class="w-full">
+            <el-option label="待执行" value="pending" />
+            <el-option label="运行中" value="running" />
+            <el-option label="已完成" value="completed" />
+            <el-option label="失败" value="failed" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchUpdateVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="batchUpdating"
+          :disabled="selectedTaskIds.length === 0 || !batchStatus"
+          @click="submitBatchUpdateStatus"
+        >
+          应用到 {{ selectedTaskIds.length }} 条
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -175,7 +242,15 @@ import { ArrowDown, Delete, VideoPlay, View } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import CurrentEnvironmentSelect from "@/components/CurrentEnvironmentSelect.vue";
 import TableActionGroup from "@/components/common/TableActionGroup.vue";
-import { createPerfTask, deletePerfTask, getPerfTasks, runPerfTask } from "@/api/perfTask";
+import {
+  batchDeletePerfTasks,
+  batchCopyPerfTasks,
+  batchUpdatePerfTasks,
+  createPerfTask,
+  deletePerfTask,
+  getPerfTasks,
+  runPerfTask,
+} from "@/api/perfTask";
 
 const activeMenu = ref("perf-task-management");
 const router = useRouter();
@@ -189,6 +264,12 @@ const detailTask = ref(null);
 const searchForm = ref({ name: "", status: "", executor: "" });
 const pagination = ref({ page: 1, pageSize: 5, total: 0 });
 const tableData = ref([]);
+const selectedTaskIds = ref([]);
+const batchDeleting = ref(false);
+const batchUpdateVisible = ref(false);
+const batchUpdating = ref(false);
+const batchStatus = ref("");
+const batchCopying = ref(false);
 
 const createForm = ref({
   task_name: "",
@@ -360,6 +441,124 @@ function scenarioLabel(scenario) {
   }[scenario] || scenario;
 }
 
+function onSelectionChange(rows) {
+  selectedTaskIds.value = (rows || [])
+    .map((r) => r?.task_id)
+    .filter((id) => typeof id === "string" && id.trim());
+}
+
+async function batchDeleteSelected() {
+  if (!selectedTaskIds.value.length) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定批量删除 ${selectedTaskIds.value.length} 条性能任务？`,
+      "警告",
+      { type: "warning" },
+    );
+  } catch {
+    return;
+  }
+  batchDeleting.value = true;
+  try {
+    const { data } = await batchDeletePerfTasks({ task_ids: selectedTaskIds.value });
+    const deleted = Number(data?.deleted ?? data?.data?.deleted ?? 0);
+    const skipped = Number(data?.skipped ?? data?.data?.skipped ?? 0);
+    ElMessage.success(`删除成功：${deleted}，跳过：${skipped}`);
+    selectedTaskIds.value = [];
+    fetchTasks();
+  } catch (err) {
+    const msg =
+      err?.response?.data?.msg ||
+      err?.response?.data?.detail ||
+      err?.message ||
+      "批量删除失败";
+    ElMessage.error(typeof msg === "string" ? msg : "批量删除失败");
+  } finally {
+    batchDeleting.value = false;
+  }
+}
+
+function openBatchUpdateStatus() {
+  batchStatus.value = "";
+  batchUpdateVisible.value = true;
+}
+
+async function submitBatchUpdateStatus() {
+  if (!selectedTaskIds.value.length || !batchStatus.value) return;
+  try {
+    await ElMessageBox.confirm(
+      `确认将 ${selectedTaskIds.value.length} 条任务状态批量更新为「${statusText(batchStatus.value)}」？`,
+      "确认",
+      { type: "warning" },
+    );
+  } catch {
+    return;
+  }
+  batchUpdating.value = true;
+  try {
+    const { data } = await batchUpdatePerfTasks({
+      task_ids: selectedTaskIds.value,
+      patch: { status: batchStatus.value },
+    });
+    const d = data?.data && typeof data.data === "object" ? data.data : data;
+    const updated = Number(d?.updated ?? 0);
+    const missing = Array.isArray(d?.missing_task_ids) ? d.missing_task_ids.length : 0;
+    const errors = Array.isArray(d?.errors) ? d.errors.length : 0;
+    if (errors) ElMessage.warning(`已更新 ${updated} 条；缺失/无权限 ${missing} 条；失败 ${errors} 条`);
+    else ElMessage.success(`已更新 ${updated} 条；缺失/无权限 ${missing} 条`);
+    batchUpdateVisible.value = false;
+    fetchTasks();
+  } catch (err) {
+    const msg =
+      err?.response?.data?.msg ||
+      err?.response?.data?.detail ||
+      err?.message ||
+      "批量更新失败";
+    ElMessage.error(typeof msg === "string" ? msg : "批量更新失败");
+  } finally {
+    batchUpdating.value = false;
+  }
+}
+
+async function batchCopySelected() {
+  if (!selectedTaskIds.value.length) return;
+  let suffix = "（复制）";
+  try {
+    const r = await ElMessageBox.prompt("请输入复制后名称后缀（可留空）", "批量复制", {
+      inputValue: suffix,
+      confirmButtonText: "复制",
+      cancelButtonText: "取消",
+    });
+    suffix = String(r?.value ?? "").trim() || "（复制）";
+  } catch {
+    return;
+  }
+  batchCopying.value = true;
+  try {
+    const { data } = await batchCopyPerfTasks({
+      task_ids: selectedTaskIds.value,
+      name_suffix: suffix,
+    });
+    const d = data?.data && typeof data.data === "object" ? data.data : data;
+    const created = Number(d?.created ?? 0);
+    const missing = Array.isArray(d?.missing_task_ids) ? d.missing_task_ids.length : 0;
+    const errors = Array.isArray(d?.errors) ? d.errors.length : 0;
+    if (errors) ElMessage.warning(`已复制 ${created} 条；缺失/无权限 ${missing} 条；失败 ${errors} 条`);
+    else ElMessage.success(`已复制 ${created} 条；缺失/无权限 ${missing} 条`);
+    selectedTaskIds.value = [];
+    fetchTasks();
+  } catch (err) {
+    const msg =
+      err?.response?.data?.msg ||
+      err?.response?.data?.detail ||
+      err?.message ||
+      "批量复制失败";
+    ElMessage.error(typeof msg === "string" ? msg : "批量复制失败");
+  } finally {
+    batchCopying.value = false;
+  }
+}
+
 function toEnvironmentManagement() {
   router.push("/performance/environments");
 }
@@ -368,8 +567,16 @@ function toLoadTestMonitor() {
   router.push("/performance/load-monitor");
 }
 
+function toK6Sessions() {
+  router.push("/performance/k6-sessions");
+}
+
 function toScheduledTaskCreate() {
   router.push("/performance/scheduled-task");
+}
+
+function toScheduledTaskList() {
+  router.push("/performance/scheduled-tasks");
 }
 
 function toScheduledTaskLogs() {

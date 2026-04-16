@@ -156,11 +156,13 @@ npm -s run -C frontend build
 
 ## 5. 验收清单（最小）
 
-- [ ] 调用 `POST /api/ai/generate-cases/` 成功，响应包含 `run_id`
-- [ ] 调用 `POST /api/ai/generate-cases-stream/` 成功，`done` 事件包含 `run_id`
-- [ ] 调用 `POST /api/testcase/cases/ai-import/` 可一次导入多条，返回逐条 `imported/failed`
-- [ ] 导入后的 `TestCase.ai_run_id` 可追溯到对应 Run
-- [ ] `AiUsageEvent.meta` 中包含 `run_id`（同步/流式）
+- [x] 调用 `POST /api/ai/generate-cases/` 成功，响应包含 `run_id`
+- [x] 调用 `POST /api/ai/generate-cases-stream/` 成功，`done` 事件包含 `run_id`
+- [x] 调用 `POST /api/testcase/cases/ai-import/` 可一次导入多条，返回逐条 `imported/failed`
+- [x] 导入后的 `TestCase.ai_run_id` 可追溯到对应 Run
+- [x] `AiUsageEvent.meta` 中包含 `run_id`（同步/流式）
+
+最小复测路径：按 `开发文档/31` §5 步骤 1（P0）走一遍即可。
 
 ---
 
@@ -171,4 +173,12 @@ npm -s run -C frontend build
   - 删除 `test_case.ai_run_id` 字段
   - 删除 `ai_case_generation_run` 表
   - 回滚迁移：按 Django migration 依赖顺序回退对应 migration。
+
+---
+
+## 7. 实现状态与全链路索引
+
+- **结论**：已按设计落地（仓库已包含 `run_id`、`ai-import`、前端批量导入与追溯字段）。
+- **在本全链路中的优先级**：**P0**（须最先具备）。
+- **总览与后续分册顺序**：`开发文档/31-AI用例导入全链路-优先级与实现状态.md`。
 

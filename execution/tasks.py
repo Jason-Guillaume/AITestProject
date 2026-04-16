@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any, Dict
 
 from celery import shared_task
 from celery import group
@@ -13,6 +14,7 @@ from execution.models import ExecutionTask, ScheduledTask, ScheduledTaskLog
 from testcase.models import TestCase
 from testcase.services.case_subtypes import get_api_profile_for_execute
 from testcase.services.api_execution import run_api_case
+from execution.services.scenario_runner import run_api_scenario
 
 
 @shared_task(
@@ -270,6 +272,32 @@ def run_scheduled_task(
         last_message=message,
     )
     return {"ok": True, "status": status, "message": message}
+
+
+@shared_task(
+    bind=True,
+    name="execution.run_api_scenario_run",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=2,
+    soft_time_limit=3600,
+    time_limit=3660,
+)
+def run_api_scenario_run(self, scenario_run_id: int, *, overrides: dict | None = None) -> dict:
+    """
+    异步执行一次 API 场景运行（按步骤顺序执行 TestCase，贯穿变量上下文）。
+    """
+
+    run, summary = run_api_scenario(run_id=int(scenario_run_id), runtime_overrides=overrides or {})
+    return {
+        "ok": True,
+        "run_id": int(run.id),
+        "scenario_id": int(run.scenario_id),
+        "status": run.status,
+        "trace_id": run.trace_id,
+        "summary": summary,
+    }
 
 
 try:

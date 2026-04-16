@@ -18,7 +18,6 @@ AITesta 全流程 AI 测试平台 - 接口自动化测试脚本
 import os
 import pytest
 import requests
-import time
 import uuid
 from datetime import datetime, timedelta
 
@@ -506,7 +505,7 @@ class TestKnowledgeRAG:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data.get("success") == True
+        assert data.get("success")
         assert "counters" in data
 
 

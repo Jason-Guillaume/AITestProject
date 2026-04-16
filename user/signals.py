@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from django.db.models.signals import m2m_changed
+from django.db import transaction
+from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
 
-from user.models import Organization
+from user.change_request_actions import create_inbox_messages_for_change_request
+from user.models import Organization, UserChangeRequest
 
 
 def _sync_org_project_members(org: Organization) -> None:
@@ -26,14 +28,6 @@ def on_org_projects_changed(sender, instance: Organization, action, **kwargs):
     if action not in ("post_add", "post_remove", "post_clear"):
         return
     _sync_org_project_members(instance)
-
-
-from django.db import transaction
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-
-from user.change_request_actions import create_inbox_messages_for_change_request
-from user.models import UserChangeRequest
 
 
 @receiver(post_save, sender=UserChangeRequest)

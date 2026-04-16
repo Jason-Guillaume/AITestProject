@@ -203,8 +203,8 @@ import { ElMessage } from "element-plus";
 import { Refresh } from "@element-plus/icons-vue";
 import * as echarts from "echarts";
 import {
+  downloadAiUsageExportCsv,
   getAiUsageEventsApi,
-  getAiUsageExportCsvUrl,
   getAiUsageLatencyTrendApi,
   getAiUsageMetricsApi,
   getAiUsageSummaryApi,
@@ -461,13 +461,9 @@ async function exportCsv() {
       ...dateRangeParams(),
       limit: 200000,
     };
-    const url = getAiUsageExportCsvUrl(params);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ai-usage-events.csv`;
-    a.click();
-  } catch {
-    ElMessage.error("导出失败");
+    await downloadAiUsageExportCsv(params);
+  } catch (e) {
+    ElMessage.error(e?.message || "导出失败");
   } finally {
     exporting.value = false;
   }

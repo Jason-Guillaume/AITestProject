@@ -71,8 +71,52 @@
       </div>
 
       <div class="right-panel cyber-glass">
-        <div class="panel-title">测试结果</div>
-        <el-empty description="暂无与版本绑定的用例执行数据（需执行/报告模块对接）" :image-size="72" />
+        <div class="panel-title">风险简报（ORM 聚合，无大模型）</div>
+        <div class="risk-toolbar">
+          <span class="risk-toolbar__label">执行统计窗口（天）</span>
+          <el-input-number v-model="briefDays" :min="1" :max="90" size="small" controls-position="right" />
+          <el-button type="primary" size="small" :loading="briefLoading" @click="loadRiskBrief">刷新简报</el-button>
+        </div>
+        <el-skeleton v-if="briefLoading && !briefData" :rows="4" animated />
+        <template v-else-if="briefData">
+          <el-descriptions :column="2" size="small" border class="risk-desc">
+            <el-descriptions-item label="关联用例">{{ briefData.coverage?.linked_cases ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="测试计划（总数）">{{ briefData.coverage?.test_plans?.total ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="计划·未开始">{{ briefData.coverage?.test_plans?.not_started ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="计划·进行中">{{ briefData.coverage?.test_plans?.in_progress ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="计划·已完成">{{ briefData.coverage?.test_plans?.completed ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="缺陷·未关闭">{{ briefData.defects?.open_not_closed ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="缺陷·总数">{{ briefData.defects?.total ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="API 执行·窗口内总次数">{{ briefData.executions?.total_runs ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="API 执行·通过">{{ briefData.executions?.passed ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="API 执行·未通过">{{ briefData.executions?.failed ?? 0 }}</el-descriptions-item>
+            <el-descriptions-item label="近窗从未执行用例数">{{ briefData.executions?.never_executed_cases ?? 0 }}</el-descriptions-item>
+          </el-descriptions>
+          <div class="panel-title" style="margin-top: 14px">从未执行用例（与上方统计窗口天数一致）</div>
+          <div class="risk-toolbar">
+            <el-button type="primary" size="small" :loading="neverLoading" @click="loadNeverExecuted">加载清单</el-button>
+            <el-button size="small" :disabled="neverExporting" :loading="neverExporting" @click="exportNeverCsv">
+              导出 CSV
+            </el-button>
+            <span v-if="neverTotal != null" class="never-total">合计 {{ neverTotal }} 条（列表最多展示 500 条）</span>
+          </div>
+          <el-table
+            :data="neverItems"
+            size="small"
+            v-loading="neverLoading"
+            class="admin-data-table"
+            max-height="280"
+            empty-text="点击「加载清单」"
+          >
+            <el-table-column prop="id" label="用例ID" width="88" align="center" />
+            <el-table-column prop="case_name" label="标题" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="test_type" label="类型" width="100" align="center" />
+            <el-table-column prop="module_name" label="模块" min-width="120" show-overflow-tooltip />
+          </el-table>
+          <div class="panel-title" style="margin-top: 14px">Markdown 摘要</div>
+          <pre class="risk-md">{{ briefData.markdown || '—' }}</pre>
+        </template>
+        <el-empty v-else description="暂无简报数据" :image-size="72" />
       </div>
     </div>
   </div>
@@ -82,7 +126,13 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getReleaseDetailApi, updateReleaseApi } from '@/api/project'
+import {
+  getReleaseDetailApi,
+  updateReleaseApi,
+  getReleaseRiskBriefApi,
+  getReleaseNeverExecutedCasesApi,
+  downloadReleaseNeverExecutedCsv,
+} from '@/api/project'
 import { getDefectsApi } from '@/api/defect'
 
 const route = useRoute()
@@ -91,6 +141,13 @@ const defectList = ref([])
 const defectLoading = ref(false)
 const formRef = ref()
 const saving = ref(false)
+const briefLoading = ref(false)
+const briefDays = ref(7)
+const briefData = ref(null)
+const neverLoading = ref(false)
+const neverExporting = ref(false)
+const neverItems = ref([])
+const neverTotal = ref(null)
 const form = ref({
   release_name: '',
   version_no: '',
@@ -139,6 +196,56 @@ function syncFormFromDetail() {
   }
 }
 
+async function loadRiskBrief() {
+  const id = route.params.id
+  if (!id) return
+  briefLoading.value = true
+  try {
+    const { data } = await getReleaseRiskBriefApi(id, { days: briefDays.value })
+    briefData.value = data?.data ?? data ?? null
+    neverItems.value = []
+    neverTotal.value = null
+  } catch (err) {
+    briefData.value = null
+    const msg = err?.response?.data?.detail || err?.response?.data?.msg || err?.message || '加载简报失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '加载简报失败')
+  } finally {
+    briefLoading.value = false
+  }
+}
+
+async function loadNeverExecuted() {
+  const id = route.params.id
+  if (!id) return
+  neverLoading.value = true
+  try {
+    const { data } = await getReleaseNeverExecutedCasesApi(id, { days: briefDays.value, limit: 500 })
+    neverItems.value = Array.isArray(data?.items) ? data.items : []
+    neverTotal.value = Number(data?.total ?? neverItems.value.length) || 0
+  } catch (err) {
+    neverItems.value = []
+    neverTotal.value = null
+    const msg = err?.response?.data?.detail || err?.response?.data?.msg || err?.message || '加载失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '加载从未执行清单失败')
+  } finally {
+    neverLoading.value = false
+  }
+}
+
+async function exportNeverCsv() {
+  const id = route.params.id
+  if (!id) return
+  neverExporting.value = true
+  try {
+    await downloadReleaseNeverExecutedCsv(id, { days: briefDays.value, limit: 200000 })
+  } catch (err) {
+    const msg = err?.message || err?.response?.data?.detail || '导出失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '导出失败')
+  } finally {
+    neverExporting.value = false
+  }
+}
+
 async function saveRelease() {
   const id = route.params.id
   if (!id) return
@@ -170,6 +277,7 @@ onMounted(async () => {
     const { data } = await getReleaseDetailApi(id)
     detail.value = data?.data || data || {}
     syncFormFromDetail()
+    await loadRiskBrief()
   } catch (err) {
     const msg = err?.response?.data?.msg || err?.message || '加载失败'
     ElMessage.error(typeof msg === 'string' ? msg : '加载发布计划失败')
@@ -270,5 +378,38 @@ onMounted(async () => {
 
 .release-detail :deep(.right-panel .el-empty__description) {
   color: rgba(226, 232, 240, 0.5);
+}
+
+.risk-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.risk-toolbar__label {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.65);
+}
+.never-total {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.6);
+}
+.risk-desc {
+  margin-top: 4px;
+}
+.risk-md {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(10, 16, 28, 0.45);
+  border: 1px solid rgba(0, 255, 255, 0.12);
+  border-radius: 8px;
+  color: rgba(226, 232, 240, 0.88);
+  max-height: 320px;
+  overflow: auto;
 }
 </style>

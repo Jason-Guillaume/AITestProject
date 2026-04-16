@@ -620,9 +620,62 @@
         <el-table-column prop="duration_ms" label="耗时ms" width="88" align="right" />
         <el-table-column prop="trace_id" label="trace_id" min-width="120" show-overflow-tooltip />
         <el-table-column prop="create_time" label="时间" width="160" show-overflow-tooltip />
+        <el-table-column label="修订建议" width="100" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="!row.is_passed"
+              type="primary"
+              link
+              size="small"
+              :loading="caseFixSuggestLoading && caseFixSuggestLogId === row.id"
+              @click="runCaseFixSuggest(row)"
+            >
+              AI
+            </el-button>
+            <span v-else style="color: rgba(148, 163, 184, 0.6)">—</span>
+          </template>
+        </el-table-column>
       </el-table>
       <template #footer>
         <el-button @click="executionLogsDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="caseFixSuggestResultVisible"
+      title="AI 用例修订建议（建议不落库；可一键替换步骤）"
+      width="720px"
+      class="cyber-dialog-dark"
+      destroy-on-close
+      @closed="resetCaseFixSuggestDialogState"
+    >
+      <template v-if="caseFixSuggestResult">
+        <el-alert type="info" :closable="false" show-icon class="mb-3" title="请人工审核后再修改用例；模型可能遗漏上下文。" />
+        <div class="case-fix-summary">{{ caseFixSuggestResult.summary }}</div>
+        <div class="panel-subtitle">建议步骤</div>
+        <el-table :data="caseFixSuggestResult.suggested_steps || []" size="small" border stripe max-height="260">
+          <el-table-column type="index" label="#" width="48" />
+          <el-table-column prop="step_desc" label="步骤描述" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="expected_result" label="预期" min-width="140" show-overflow-tooltip />
+        </el-table>
+        <div class="panel-subtitle" style="margin-top: 12px">风险提示</div>
+        <div class="case-fix-risks">{{ caseFixSuggestResult.risks }}</div>
+      </template>
+      <template #footer>
+        <el-button
+          type="danger"
+          plain
+          :disabled="
+            !caseFixSuggestResult?.suggested_steps?.length ||
+            !caseFixSuggestExecutionLogId ||
+            !caseDetailRow?.id
+          "
+          :loading="caseFixSuggestApplyLoading"
+          @click="applyCaseFixSuggestedSteps"
+        >
+          一键替换全部步骤
+        </el-button>
+        <el-button type="primary" @click="caseFixSuggestResultVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -922,7 +975,9 @@ import {
   getCaseExecutionLogsApi,
   getCaseVersionsApi,
   rollbackCaseVersionApi,
+  applyCaseAiSuggestedStepsApi,
 } from '@/api/testcase'
+import { suggestCaseFixFromExecutionLogApi } from '@/api/assistant'
 import { TEST_CASE_TYPE_LABEL_ZH } from '@/constants/testCaseTypeLabels'
 import { CASE_DETAIL_DRAWER_FULLSCREEN_BREAKPOINT_PX } from '@/constants/caseDrawerUi'
 import type { TestCaseRow } from '@/types/testcase'
@@ -960,6 +1015,13 @@ const activeTestCaseTypeLabel = computed(
 const isRecycleMode = computed(() => String(route.query.recycle || '') === '1')
 const recycleFocusCaseId = computed(() => {
   const raw = String(route.query.recycle_case_id || '').trim()
+  if (!raw) return null
+  const n = Number(raw)
+  return Number.isInteger(n) && n > 0 ? n : null
+})
+
+const focusCaseId = computed(() => {
+  const raw = String(route.query.case_id || '').trim()
   if (!raw) return null
   const n = Number(raw)
   return Number.isInteger(n) && n > 0 ? n : null
@@ -1076,6 +1138,17 @@ const drawerSaveExecuteLoading = ref(false)
 const executionLogsDialogVisible = ref(false)
 const executionLogsLoading = ref(false)
 const executionLogsRows = ref<Record<string, unknown>[]>([])
+const caseFixSuggestLoading = ref(false)
+const caseFixSuggestLogId = ref<number | null>(null)
+/** 生成建议所基于的 ExecutionLog.id，供「一键应用」写库校验 */
+const caseFixSuggestExecutionLogId = ref<number | null>(null)
+const caseFixSuggestApplyLoading = ref(false)
+const caseFixSuggestResultVisible = ref(false)
+const caseFixSuggestResult = ref<{
+  summary?: string
+  suggested_steps?: { step_desc: string; expected_result: string }[]
+  risks?: string
+} | null>(null)
 const rollbackDialogVisible = ref(false)
 const rollbackVersionsLoading = ref(false)
 const rollbackSubmitting = ref(false)
@@ -1377,6 +1450,123 @@ async function loadExecutionLogsForDialog() {
     ElMessage.error('加载执行日志失败')
   } finally {
     executionLogsLoading.value = false
+  }
+}
+
+function resetCaseFixSuggestDialogState() {
+  caseFixSuggestExecutionLogId.value = null
+  caseFixSuggestResult.value = null
+  caseFixSuggestApplyLoading.value = false
+}
+
+async function runCaseFixSuggest(row: Record<string, unknown>) {
+  const lid = Number(row?.id)
+  if (!Number.isFinite(lid)) return
+  caseFixSuggestLoading.value = true
+  caseFixSuggestLogId.value = lid
+  caseFixSuggestResult.value = null
+  caseFixSuggestExecutionLogId.value = null
+  try {
+    const { data } = await suggestCaseFixFromExecutionLogApi({ execution_log_id: lid })
+    const d = (data && typeof data === 'object' && 'data' in data
+      ? (data as { data: unknown }).data
+      : data) as Record<string, unknown> | null
+    if (!d || d.success !== true) {
+      const msg =
+        (d?.message as string) ||
+        (data as { message?: string })?.message ||
+        '生成修订建议失败'
+      ElMessage.error(typeof msg === 'string' ? msg : '生成修订建议失败')
+      return
+    }
+    caseFixSuggestExecutionLogId.value = lid
+    caseFixSuggestResult.value = {
+      summary: String(d.summary || ''),
+      suggested_steps: Array.isArray(d.suggested_steps)
+        ? (d.suggested_steps as { step_desc: string; expected_result: string }[])
+        : [],
+      risks: String(d.risks || ''),
+    }
+    caseFixSuggestResultVisible.value = true
+  } catch (err: unknown) {
+    caseFixSuggestExecutionLogId.value = null
+    const ax = err as { response?: { data?: { message?: string; detail?: string } } }
+    const msg =
+      ax.response?.data?.detail ||
+      ax.response?.data?.message ||
+      (err instanceof Error ? err.message : '') ||
+      '请求失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '请求失败')
+  } finally {
+    caseFixSuggestLoading.value = false
+    caseFixSuggestLogId.value = null
+  }
+}
+
+async function applyCaseFixSuggestedSteps() {
+  const cid = caseDetailRow.value?.id
+  const eid = caseFixSuggestExecutionLogId.value
+  const steps = caseFixSuggestResult.value?.suggested_steps
+  if (!cid || !eid || !steps?.length) return
+  try {
+    await ElMessageBox.confirm(
+      '将软删除当前用例的全部现有步骤，并按上表「建议步骤」重建。请确认已人工审核；可用「版本回溯」恢复此前内容。',
+      '确认替换全部步骤',
+      {
+        type: 'warning',
+        confirmButtonText: '确认替换',
+        cancelButtonText: '取消',
+      },
+    )
+  } catch {
+    return
+  }
+  caseFixSuggestApplyLoading.value = true
+  try {
+    const { data } = await applyCaseAiSuggestedStepsApi(cid, {
+      execution_log_id: eid,
+      suggested_steps: steps,
+      confirm_replace_all: true,
+    })
+    const d = (data && typeof data === 'object' && 'data' in data
+      ? (data as { data: unknown }).data
+      : data) as Record<string, unknown> | null
+    if (!d || d.success !== true) {
+      const msg =
+        (d?.message as string) ||
+        (data as { message?: string })?.message ||
+        '替换步骤失败'
+      ElMessage.error(typeof msg === 'string' ? msg : '替换步骤失败')
+      return
+    }
+    ElMessage.success(typeof d.message === 'string' ? d.message : '已替换步骤')
+    caseFixSuggestResultVisible.value = false
+    await fetchTestCases()
+    if (Number(caseDetailRow.value?.id) === Number(cid)) {
+      try {
+        const detailRes = await getCaseDetailApi(cid)
+        const raw = detailRes.data
+        const payload =
+          raw && typeof raw === 'object' && 'data' in raw
+            ? (raw as { data: unknown }).data
+            : raw
+        if (payload && typeof payload === 'object' && Number((payload as TestCaseRow).id) === Number(cid)) {
+          caseDetailRow.value = payload as TestCaseRow
+        }
+      } catch {
+        /* 忽略详情刷新失败 */
+      }
+    }
+  } catch (err: unknown) {
+    const ax = err as { response?: { data?: { message?: string; detail?: string } } }
+    const msg =
+      ax.response?.data?.detail ||
+      ax.response?.data?.message ||
+      (err instanceof Error ? err.message : '') ||
+      '请求失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '请求失败')
+  } finally {
+    caseFixSuggestApplyLoading.value = false
   }
 }
 
@@ -2286,6 +2476,19 @@ onMounted(() => {
   if (TEST_CASE_ROUTE_TYPES.includes(activeTestCaseType.value)) {
     fetchTestCases()
   }
+  nextTick(() => {
+    if (isRecycleMode.value) return
+    const cid = focusCaseId.value
+    if (!cid) return
+    getCaseDetailApi(cid)
+      .then(({ data }) => {
+        const payload = data && typeof data === 'object' && 'data' in data ? (data as { data: unknown }).data : data
+        if (payload && typeof payload === 'object' && Number((payload as TestCaseRow).id) === Number(cid)) {
+          openCaseDetailDrawer(payload as TestCaseRow)
+        }
+      })
+      .catch(() => {})
+  })
 })
 
 onUnmounted(() => {
@@ -3174,5 +3377,23 @@ onUnmounted(() => {
   justify-content: flex-end;
   flex-shrink: 0;
   padding-top: 4px;
+}
+
+.mb-3 {
+  margin-bottom: 12px;
+}
+.panel-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.88);
+  margin: 10px 0 8px;
+}
+.case-fix-summary,
+.case-fix-risks {
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(226, 232, 240, 0.88);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

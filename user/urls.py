@@ -18,6 +18,7 @@ from .views import (
     SystemMessageMarkReadAPIView,
     AdminUserChangeRequestListAPIView,
     AdminUserChangeRequestDecisionAPIView,
+    UserAuditEventListAPIView,
 )
 
 # 1. 实例化路由器，专门用来注册 ViewSet
@@ -63,6 +64,7 @@ urlpatterns = [
         name="admin-change-request-decision",
     ),
     path("change-password/", ChangePasswordAPIView.as_view(), name="change-password"),
+    path("me/audit/events/", UserAuditEventListAPIView.as_view(), name="my-audit-events"),
     # 将 router 自动生成的接口全部挂载到当前路径下
     path("", include(router.urls)),
 ]

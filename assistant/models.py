@@ -167,6 +167,9 @@ class AiUsageEvent(models.Model):
     ACTION_TEST_CONNECTION = "test_connection"
     ACTION_VERIFY_CONNECTION = "verify_connection"
     ACTION_KNOWLEDGE_AUTOFILL = "knowledge_autofill"
+    ACTION_KNOWLEDGE_ASK = "knowledge_ask"
+    ACTION_SECURITY_GENERATE = "security_generate"
+    ACTION_SECURITY_ANALYZE = "security_analyze"
     ACTION_CHOICES = [
         (ACTION_GENERATE_CASES, "生成用例（同步）"),
         (ACTION_GENERATE_CASES_STREAM, "生成用例（流式）"),
@@ -174,6 +177,9 @@ class AiUsageEvent(models.Model):
         (ACTION_TEST_CONNECTION, "模型连通性测试"),
         (ACTION_VERIFY_CONNECTION, "固定模型连通性校验"),
         (ACTION_KNOWLEDGE_AUTOFILL, "知识库自动填表"),
+        (ACTION_KNOWLEDGE_ASK, "知识库问答（可追溯）"),
+        (ACTION_SECURITY_GENERATE, "安全用例生成（规则）"),
+        (ACTION_SECURITY_ANALYZE, "执行安全分析（规则）"),
     ]
 
     user = models.ForeignKey(
@@ -227,6 +233,76 @@ class AiUsageEvent(models.Model):
         indexes = [
             models.Index(fields=["action", "-created_at"]),
             models.Index(fields=["user", "-created_at"]),
+        ]
+
+
+class AiPatch(models.Model):
+    """
+    AI 变更补丁（最小可用）：
+    - 由 AI 建议生成，但默认不自动写入业务对象
+    - 支持 apply / rollback，并可审计
+    """
+
+    STATUS_DRAFT = "draft"
+    STATUS_APPLIED = "applied"
+    STATUS_ROLLED_BACK = "rolled_back"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "草稿"),
+        (STATUS_APPLIED, "已应用"),
+        (STATUS_ROLLED_BACK, "已回滚"),
+        (STATUS_CANCELLED, "已取消"),
+    ]
+
+    RISK_LOW = "low"
+    RISK_MEDIUM = "medium"
+    RISK_HIGH = "high"
+    RISK_CHOICES = [
+        (RISK_LOW, "低"),
+        (RISK_MEDIUM, "中"),
+        (RISK_HIGH, "高"),
+    ]
+
+    creator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ai_patches",
+        verbose_name="创建人",
+    )
+    target_type = models.CharField(
+        max_length=64, db_index=True, verbose_name="目标类型（app.Model）"
+    )
+    target_id = models.CharField(max_length=64, db_index=True, verbose_name="目标ID")
+    source_execution_log_id = models.IntegerField(
+        null=True, blank=True, db_index=True, verbose_name="来源执行日志ID（可选）"
+    )
+
+    status = models.CharField(
+        max_length=32, choices=STATUS_CHOICES, default=STATUS_DRAFT, db_index=True
+    )
+    risk_level = models.CharField(
+        max_length=16, choices=RISK_CHOICES, default=RISK_MEDIUM, db_index=True
+    )
+    summary = models.CharField(max_length=512, blank=True, default="", verbose_name="摘要")
+    risks = models.CharField(max_length=1000, blank=True, default="", verbose_name="风险说明")
+
+    before = models.JSONField(default=dict, blank=True, verbose_name="应用前快照（最小）")
+    after = models.JSONField(default=dict, blank=True, verbose_name="应用后目标（最小）")
+    changes = models.JSONField(default=list, blank=True, verbose_name="变更描述（结构化）")
+
+    applied_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    rolled_back_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ai_patch"
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["target_type", "target_id", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
         ]
 
 

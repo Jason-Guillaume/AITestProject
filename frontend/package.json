@@ -12,7 +12,7 @@
     "@element-plus/icons-vue": "^2.3.1",
     "@tsparticles/slim": "^3.9.1",
     "@tsparticles/vue3": "^3.0.1",
-    "axios": "^1.9.0",
+    "axios": "^1.15.0",
     "echarts": "^5.5.1",
     "element-plus": "^2.10.0",
     "lucide-vue-next": "^1.0.0",

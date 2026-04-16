@@ -48,6 +48,10 @@ export const executeApiCaseApi = (id) => request.post(`/testcase/cases/${id}/exe
 /** 执行 API 用例（覆盖参数，落库 ExecutionLog） */
 export const runApiCaseApi = (id, data) =>
   request.post(`/testcase/cases/${id}/run-api/`, data ?? {});
+
+/** 将已确认的 AI 建议步骤写回用例（软删旧步骤后新建）；须 confirm_replace_all: true */
+export const applyCaseAiSuggestedStepsApi = (id, data) =>
+  request.post(`/testcase/cases/${id}/apply-ai-suggested-steps/`, data);
 /** 预览 API 用例执行前最终请求（不发请求） */
 export const previewRunApiCaseApi = (id, data) =>
   request.post(`/testcase/cases/${id}/preview-run-api/`, data ?? {});

@@ -1,4 +1,5 @@
 import request from "@/utils/request";
+import { downloadAuthedGet } from "@/utils/downloadAuthedGet";
 
 /** GET /api/sys/ai-usage/events/ */
 export const getAiUsageEventsApi = (params) =>
@@ -20,10 +21,14 @@ export const getAiUsageTopErrorsApi = (params) =>
 export const getAiUsageLatencyTrendApi = (params) =>
   request.get("/sys/ai-usage/latency-trend/", { params });
 
-/** GET /api/sys/ai-usage/export.csv */
-export const getAiUsageExportCsvUrl = (params) => {
-  const q = new URLSearchParams(params || {});
-  const qs = q.toString();
-  return `/api/sys/ai-usage/export.csv${qs ? `?${qs}` : ""}`;
-};
+/**
+ * 下载 AI 用量审计 CSV（需 Token Header；勿用 window.open / <a href> 裸链）。
+ * GET /api/sys/ai-usage/export.csv
+ */
+export async function downloadAiUsageExportCsv(params) {
+  return downloadAuthedGet("/api/sys/ai-usage/export.csv", {
+    params,
+    defaultFilename: "ai-usage-events.csv",
+  });
+}
 

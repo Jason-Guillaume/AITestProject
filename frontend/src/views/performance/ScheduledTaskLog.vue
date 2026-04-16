@@ -37,13 +37,39 @@
           />
           <el-button type="primary" :loading="loading" @click="onSearch">查询</el-button>
           <el-button :disabled="loading" @click="onReset">重置</el-button>
+          <el-button
+            type="danger"
+            plain
+            :disabled="selectedIds.length === 0"
+            :loading="batchDeleting"
+            @click="batchDeleteSelected"
+          >
+            批量删除（{{ selectedIds.length }}）
+          </el-button>
+          <el-button
+            type="danger"
+            plain
+            :disabled="rows.length === 0"
+            :loading="batchDeletingByFilter"
+            @click="batchDeleteByFilter"
+          >
+            按筛选清理
+          </el-button>
           <el-button type="success" plain :disabled="rows.length === 0" @click="exportCurrentRowsJson">
             导出当前页 JSON
           </el-button>
         </div>
       </div>
 
-      <el-table v-loading="loading" :data="rows" border stripe class="admin-data-table">
+      <el-table
+        v-loading="loading"
+        :data="rows"
+        border
+        stripe
+        class="admin-data-table"
+        @selection-change="onSelectionChange"
+      >
+        <el-table-column type="selection" width="44" fixed="left" />
         <el-table-column prop="id" label="日志ID" width="90" align="center" />
         <el-table-column prop="scheduled_task" label="任务ID" width="100" align="center" />
         <el-table-column prop="trigger_time" label="触发时间" min-width="170" />
@@ -93,13 +119,22 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
-import { getScheduledTaskLogs, getScheduledTasks } from "@/api/scheduledTask";
+import { ElMessageBox } from "element-plus";
+import {
+  batchDeleteScheduledTaskLogs,
+  batchDeleteScheduledTaskLogsByFilter,
+  getScheduledTaskLogs,
+  getScheduledTasks,
+} from "@/api/scheduledTask";
 
 const loading = ref(false);
 const rows = ref([]);
 const taskOptions = ref([]);
 const detailDialogVisible = ref(false);
 const detailJsonText = ref("{}");
+const selectedIds = ref([]);
+const batchDeleting = ref(false);
+const batchDeletingByFilter = ref(false);
 const filters = ref({
   scheduled_task: null,
   status: "",
@@ -188,6 +223,110 @@ function openDetail(row) {
     detailJsonText.value = String(row?.detail || "{}");
   }
   detailDialogVisible.value = true;
+}
+
+function onSelectionChange(sel) {
+  selectedIds.value = (sel || []).map((r) => r?.id).filter((id) => id != null);
+}
+
+async function batchDeleteSelected() {
+  if (!selectedIds.value.length) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定批量删除 ${selectedIds.value.length} 条调度日志？`,
+      "警告",
+      { type: "warning" },
+    );
+  } catch {
+    return;
+  }
+  batchDeleting.value = true;
+  try {
+    const { data } = await batchDeleteScheduledTaskLogs({ ids: selectedIds.value });
+    const deleted = Number(data?.deleted ?? data?.data?.deleted ?? 0);
+    const skipped = Number(data?.skipped ?? data?.data?.skipped ?? 0);
+    ElMessage.success(`删除成功：${deleted}，跳过：${skipped}`);
+    selectedIds.value = [];
+    await fetchLogs();
+  } catch (error) {
+    const msg =
+      error?.response?.data?.msg ||
+      error?.response?.data?.detail ||
+      error?.message ||
+      "批量删除失败";
+    ElMessage.error(typeof msg === "string" ? msg : "批量删除失败");
+  } finally {
+    batchDeleting.value = false;
+  }
+}
+
+async function batchDeleteByFilter() {
+  // 两次 prompt：先 days 后 max_delete（避免写额外对话框组件）
+  let beforeDays = 7;
+  let maxDelete = 500;
+  try {
+    const r1 = await ElMessageBox.prompt("删除多少天之前的日志？（>=1）", "按筛选清理", {
+      inputValue: String(beforeDays),
+      confirmButtonText: "下一步",
+      cancelButtonText: "取消",
+      inputPattern: /^\d+$/,
+      inputErrorMessage: "请输入整数天数",
+    });
+    beforeDays = Math.max(1, Number(r1?.value || 7));
+  } catch {
+    return;
+  }
+  try {
+    const r2 = await ElMessageBox.prompt("本次最多删除多少条？（1-5000）", "按筛选清理", {
+      inputValue: String(maxDelete),
+      confirmButtonText: "清理",
+      cancelButtonText: "取消",
+      inputPattern: /^\d+$/,
+      inputErrorMessage: "请输入整数条数",
+    });
+    maxDelete = Number(r2?.value || 500);
+    if (!Number.isFinite(maxDelete)) maxDelete = 500;
+    maxDelete = Math.min(Math.max(1, maxDelete), 5000);
+  } catch {
+    return;
+  }
+  const taskId = filters.value.scheduled_task || null;
+  const status = filters.value.status || "";
+  const message = filters.value.message || "";
+  try {
+    await ElMessageBox.confirm(
+      `将按当前筛选条件清理 trigger_time 早于 ${beforeDays} 天的日志，最多 ${maxDelete} 条。确定继续？`,
+      "警告",
+      { type: "warning" },
+    );
+  } catch {
+    return;
+  }
+  batchDeletingByFilter.value = true;
+  try {
+    const { data } = await batchDeleteScheduledTaskLogsByFilter({
+      scheduled_task: taskId,
+      status,
+      message,
+      before_days: beforeDays,
+      max_delete: maxDelete,
+    });
+    const deleted = Number(data?.deleted ?? data?.data?.deleted ?? 0);
+    const msg = data?.message;
+    if (deleted > 0) ElMessage.success(`已清理 ${deleted} 条`);
+    else ElMessage.info(typeof msg === "string" ? msg : "无可清理日志");
+    selectedIds.value = [];
+    await fetchLogs();
+  } catch (error) {
+    const msg =
+      error?.response?.data?.msg ||
+      error?.response?.data?.detail ||
+      error?.message ||
+      "清理失败";
+    ElMessage.error(typeof msg === "string" ? msg : "清理失败");
+  } finally {
+    batchDeletingByFilter.value = false;
+  }
 }
 
 function exportCurrentRowsJson() {

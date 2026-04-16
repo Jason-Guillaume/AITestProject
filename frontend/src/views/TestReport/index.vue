@@ -6,6 +6,24 @@
           <el-button type="primary" @click="openCreate">
             <el-icon><Plus /></el-icon> 新增测试报告
           </el-button>
+          <el-button
+            type="danger"
+            plain
+            :disabled="selectedIds.length === 0"
+            :loading="batchDeleting"
+            @click="batchDeleteSelected"
+          >
+            批量删除（{{ selectedIds.length }}）
+          </el-button>
+          <el-button
+            type="success"
+            plain
+            :disabled="selectedIds.length === 0"
+            :loading="batchCopying"
+            @click="batchCopySelected"
+          >
+            批量复制
+          </el-button>
         </div>
         <div class="admin-toolbar-row__right">
           <el-input v-model="searchKw" placeholder="请输入测试报告名称" clearable class="search-input">
@@ -15,7 +33,16 @@
       </div>
 
       <div class="admin-table-panel">
-        <el-table :data="filteredList" v-loading="loading" stripe border class="admin-data-table" size="default">
+        <el-table
+          :data="filteredList"
+          v-loading="loading"
+          stripe
+          border
+          class="admin-data-table"
+          size="default"
+          @selection-change="onSelectionChange"
+        >
+          <el-table-column type="selection" width="44" fixed="left" />
           <el-table-column prop="report_name" label="测试报告名称" min-width="160" align="left">
             <template #default="{ row }">
               <el-button link type="primary" @click="router.push(`/test-report/${row.id}`)">{{ row.report_name }}</el-button>
@@ -92,7 +119,15 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus, Reading, Search, View } from '@element-plus/icons-vue'
 import TableActionGroup from '@/components/common/TableActionGroup.vue'
-import { getReportsApi, createReportApi, updateReportApi, deleteReportApi, getPlansApi } from '@/api/execution'
+import {
+  getReportsApi,
+  createReportApi,
+  updateReportApi,
+  deleteReportApi,
+  getPlansApi,
+  batchDeleteReportsApi,
+  batchCopyReportsApi,
+} from '@/api/execution'
 
 const router = useRouter()
 const list = ref([])
@@ -105,6 +140,9 @@ const editingId = ref(null)
 const formRef = ref()
 const page = ref(1)
 const PAGE_SIZE = 10
+const selectedIds = ref([])
+const batchDeleting = ref(false)
+const batchCopying = ref(false)
 function reportTableActions(row) {
   return [
     { key: 'detail', tooltip: '查看详情', icon: View, type: 'primary' },
@@ -218,6 +256,65 @@ async function delItem(row) {
   } catch (err) {
     const msg = err?.response?.data?.msg || err?.message || '删除失败'
     ElMessage.error(typeof msg === 'string' ? msg : '删除失败')
+  }
+}
+
+function onSelectionChange(rows) {
+  selectedIds.value = (rows || []).map((r) => r.id).filter((id) => id != null)
+}
+
+async function batchDeleteSelected() {
+  if (!selectedIds.value.length) return
+  try {
+    await ElMessageBox.confirm(`确定批量删除 ${selectedIds.value.length} 条测试报告？`, '警告', { type: 'warning' })
+  } catch {
+    return
+  }
+  batchDeleting.value = true
+  try {
+    const { data } = await batchDeleteReportsApi({ ids: selectedIds.value })
+    const deleted = Number(data?.deleted ?? data?.data?.deleted ?? 0)
+    const skipped = Number(data?.skipped ?? data?.data?.skipped ?? 0)
+    ElMessage.success(`删除成功：${deleted}，跳过：${skipped}`)
+    selectedIds.value = []
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '批量删除失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量删除失败')
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+async function batchCopySelected() {
+  if (!selectedIds.value.length) return
+  let suffix = '（复制）'
+  try {
+    const { value } = await ElMessageBox.prompt('请输入复制后名称后缀（可留空）', '批量复制', {
+      inputValue: suffix,
+      confirmButtonText: '复制',
+      cancelButtonText: '取消',
+    })
+    suffix = String(value ?? '').trim() || '（复制）'
+  } catch {
+    return
+  }
+  batchCopying.value = true
+  try {
+    const { data } = await batchCopyReportsApi({ ids: selectedIds.value, name_suffix: suffix })
+    const d = data?.data && typeof data.data === 'object' ? data.data : data
+    const created = Number(d?.created ?? 0)
+    const missing = Array.isArray(d?.missing_ids) ? d.missing_ids.length : 0
+    const errors = Array.isArray(d?.errors) ? d.errors.length : 0
+    if (errors) ElMessage.warning(`已复制 ${created} 条；缺失/无权限 ${missing} 条；失败 ${errors} 条`)
+    else ElMessage.success(`已复制 ${created} 条；缺失/无权限 ${missing} 条`)
+    selectedIds.value = []
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '批量复制失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量复制失败')
+  } finally {
+    batchCopying.value = false
   }
 }
 

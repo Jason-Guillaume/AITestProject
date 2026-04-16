@@ -1263,6 +1263,10 @@ async function confirmAiImport() {
       default_module_id: aiImportModule.value ?? null,
       module_match_threshold: 0.92,
       strict: true,
+      precheck_overrides: {
+        environment_id: precheckEnvId.value,
+        variables: parsePrecheckVars(),
+      },
       items,
     })
     const d = res?.data || {}

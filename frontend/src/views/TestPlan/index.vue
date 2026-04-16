@@ -6,6 +6,32 @@
           <el-button type="primary" @click="showDialog = true">
             <el-icon><Plus /></el-icon> 新增测试计划
           </el-button>
+          <el-button
+            type="danger"
+            plain
+            :disabled="selectedIds.length === 0"
+            :loading="batchDeleting"
+            @click="batchDeleteSelected"
+          >
+            批量删除（{{ selectedIds.length }}）
+          </el-button>
+          <el-button
+            type="warning"
+            plain
+            :disabled="selectedIds.length === 0"
+            @click="openBatchUpdateStatus"
+          >
+            批量修改状态
+          </el-button>
+          <el-button
+            type="success"
+            plain
+            :disabled="selectedIds.length === 0"
+            :loading="batchCopying"
+            @click="batchCopySelected"
+          >
+            批量复制
+          </el-button>
         </div>
         <div class="admin-toolbar-row__right">
           <el-input
@@ -20,7 +46,16 @@
       </div>
 
       <div class="admin-table-panel">
-        <el-table :data="filteredList" v-loading="loading" stripe border class="admin-data-table" size="default">
+        <el-table
+          :data="filteredList"
+          v-loading="loading"
+          stripe
+          border
+          class="admin-data-table"
+          size="default"
+          @selection-change="onSelectionChange"
+        >
+          <el-table-column type="selection" width="44" fixed="left" />
           <el-table-column prop="plan_name" label="测试计划名称" min-width="168" align="left">
             <template #default="{ row }">
               <el-button link type="primary" @click="router.push(`/test-plan/${row.id}`)">{{ row.plan_name }}</el-button>
@@ -113,6 +148,36 @@
         <el-button type="primary" :loading="saving" @click="submit">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="batchUpdateVisible" title="批量修改计划状态" width="420px" class="cyber-dialog-dark" destroy-on-close>
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        title="将对已选计划应用同一状态更新；若某些记录无权限，会被跳过。"
+        class="mb-3"
+      />
+      <el-form label-width="110px">
+        <el-form-item label="目标状态">
+          <el-select v-model="batchStatus" placeholder="请选择">
+            <el-option label="未开始" :value="1" />
+            <el-option label="进行中" :value="2" />
+            <el-option label="已完成" :value="3" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchUpdateVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="batchUpdating"
+          :disabled="selectedIds.length === 0 || batchStatus == null"
+          @click="submitBatchUpdateStatus"
+        >
+          应用到 {{ selectedIds.length }} 条
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -122,7 +187,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, Delete, Edit, FolderOpened, Plus, Search, View } from '@element-plus/icons-vue'
 import TableActionGroup from '@/components/common/TableActionGroup.vue'
-import { getPlansApi, createPlanApi, deletePlanApi } from '@/api/execution'
+import { getPlansApi, createPlanApi, deletePlanApi, batchDeletePlansApi, batchUpdatePlansApi, batchCopyPlansApi } from '@/api/execution'
 import { getReleasesApi } from '@/api/project'
 import { getUsersApi } from '@/api/system'
 
@@ -137,6 +202,12 @@ const saving = ref(false)
 const formRef = ref()
 const page = ref(1)
 const PAGE_SIZE = 10
+const selectedIds = ref([])
+const batchDeleting = ref(false)
+const batchUpdateVisible = ref(false)
+const batchUpdating = ref(false)
+const batchStatus = ref(null)
+const batchCopying = ref(false)
 function planTableActions(row) {
   if (row.plan_status === 3) {
     return [
@@ -256,6 +327,100 @@ async function delItem(row) {
   } catch (err) {
     const msg = err?.response?.data?.msg || err?.message || '删除失败'
     ElMessage.error(typeof msg === 'string' ? msg : '删除失败')
+  }
+}
+
+function onSelectionChange(rows) {
+  selectedIds.value = (rows || []).map((r) => r.id).filter((id) => id != null)
+}
+
+async function batchDeleteSelected() {
+  if (!selectedIds.value.length) return
+  try {
+    await ElMessageBox.confirm(`确定批量删除 ${selectedIds.value.length} 条测试计划？`, '警告', { type: 'warning' })
+  } catch {
+    return
+  }
+  batchDeleting.value = true
+  try {
+    const { data } = await batchDeletePlansApi({ ids: selectedIds.value })
+    const deleted = Number(data?.deleted ?? data?.data?.deleted ?? 0)
+    const skipped = Number(data?.skipped ?? data?.data?.skipped ?? 0)
+    ElMessage.success(`删除成功：${deleted}，跳过：${skipped}`)
+    selectedIds.value = []
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '批量删除失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量删除失败')
+  } finally {
+    batchDeleting.value = false
+  }
+}
+
+function openBatchUpdateStatus() {
+  batchStatus.value = null
+  batchUpdateVisible.value = true
+}
+
+async function submitBatchUpdateStatus() {
+  if (!selectedIds.value.length || batchStatus.value == null) return
+  try {
+    await ElMessageBox.confirm(
+      `确认将 ${selectedIds.value.length} 条计划状态批量更新为「${planLabel(batchStatus.value)}」？`,
+      '确认',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  batchUpdating.value = true
+  try {
+    const { data } = await batchUpdatePlansApi({ ids: selectedIds.value, patch: { plan_status: batchStatus.value } })
+    const d = data?.data && typeof data.data === 'object' ? data.data : data
+    const updated = Number(d?.updated ?? 0)
+    const missing = Array.isArray(d?.missing_ids) ? d.missing_ids.length : 0
+    const errors = Array.isArray(d?.errors) ? d.errors.length : 0
+    if (errors) ElMessage.warning(`已更新 ${updated} 条；缺失/无权限 ${missing} 条；失败 ${errors} 条`)
+    else ElMessage.success(`已更新 ${updated} 条；缺失/无权限 ${missing} 条`)
+    batchUpdateVisible.value = false
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '批量更新失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量更新失败')
+  } finally {
+    batchUpdating.value = false
+  }
+}
+
+async function batchCopySelected() {
+  if (!selectedIds.value.length) return
+  let suffix = '（复制）'
+  try {
+    const { value } = await ElMessageBox.prompt('请输入复制后名称后缀（可留空）', '批量复制', {
+      inputValue: suffix,
+      confirmButtonText: '复制',
+      cancelButtonText: '取消',
+    })
+    suffix = String(value ?? '').trim() || '（复制）'
+  } catch {
+    return
+  }
+  batchCopying.value = true
+  try {
+    const { data } = await batchCopyPlansApi({ ids: selectedIds.value, name_suffix: suffix })
+    const d = data?.data && typeof data.data === 'object' ? data.data : data
+    const created = Number(d?.created ?? 0)
+    const missing = Array.isArray(d?.missing_ids) ? d.missing_ids.length : 0
+    const errors = Array.isArray(d?.errors) ? d.errors.length : 0
+    if (errors) ElMessage.warning(`已复制 ${created} 条；缺失/无权限 ${missing} 条；失败 ${errors} 条`)
+    else ElMessage.success(`已复制 ${created} 条；缺失/无权限 ${missing} 条`)
+    selectedIds.value = []
+    loadList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.response?.data?.detail || err?.message || '批量复制失败'
+    ElMessage.error(typeof msg === 'string' ? msg : '批量复制失败')
+  } finally {
+    batchCopying.value = false
   }
 }
 

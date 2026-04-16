@@ -33,7 +33,6 @@ from assistant.views import (
     IFLYTEK_MAAS_MODEL_TYPE,
     IFLYTEK_MAAS_CHAT_COMPLETIONS,
     IFLYTEK_MAAS_OPENAI_BASE,
-    IFLYTEK_MAAS_PAYLOAD_MODEL,
     _get_active_ai_model_credentials,
     _prepare_ai_generate_context,
     _resolve_openai_target,
@@ -41,7 +40,13 @@ from assistant.views import (
 from user.models import AIModelConfig
 from project.models import TestProject
 from testcase.models import TestModule
-from assistant.models import KnowledgeArticle
+from assistant.models import KnowledgeArticle, AiPatch
+from testcase.models import (
+    TEST_CASE_TYPE_FUNCTIONAL,
+    ExecutionLog,
+    TestCase as TestCaseModel,
+    TestCaseStep,
+)
 
 
 class IflytekMaasRoutingTests(TestCase):
@@ -51,7 +56,7 @@ class IflytekMaasRoutingTests(TestCase):
             IFLYTEK_MAAS_MODEL_TYPE,
             custom_base,
         )
-        self.assertEqual(model, IFLYTEK_MAAS_PAYLOAD_MODEL)
+        self.assertEqual(model, IFLYTEK_MAAS_MODEL_TYPE)
         self.assertEqual(base, custom_base)
 
     def test_get_active_ai_model_credentials_keep_custom_iflytek_base(self):
@@ -65,7 +70,7 @@ class IflytekMaasRoutingTests(TestCase):
         api_key, base_url, model = _get_active_ai_model_credentials()
         self.assertEqual(api_key, "sk-test")
         self.assertEqual(base_url, custom_base)
-        self.assertEqual(model, IFLYTEK_MAAS_PAYLOAD_MODEL)
+        self.assertEqual(model, IFLYTEK_MAAS_MODEL_TYPE)
 
     def test_prepare_context_keep_custom_iflytek_base_when_api_key_provided(self):
         custom_base = "https://not-used.example.com/v1"
@@ -82,7 +87,7 @@ class IflytekMaasRoutingTests(TestCase):
         self.assertIsNone(err)
         self.assertEqual(ctx["api_key"], "sk-live")
         self.assertEqual(ctx["api_base_url"], custom_base)
-        self.assertEqual(ctx["model_used"], IFLYTEK_MAAS_PAYLOAD_MODEL)
+        self.assertEqual(ctx["model_used"], IFLYTEK_MAAS_MODEL_TYPE)
 
     def test_prepare_context_api_spec_only_sets_default_requirement(self):
         class DummyRequest:
@@ -354,7 +359,7 @@ class IflytekMaasRoutingTests(TestCase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data.get("success"))
-        self.assertEqual(resp.data.get("model"), IFLYTEK_MAAS_PAYLOAD_MODEL)
+        self.assertEqual(resp.data.get("model"), IFLYTEK_MAAS_MODEL_TYPE)
 
         mock_openai_cls.assert_called_once_with(
             api_key="sk-iflytek",
@@ -363,7 +368,7 @@ class IflytekMaasRoutingTests(TestCase):
         )
         mock_client.chat.completions.create.assert_called_once()
         kwargs = mock_client.chat.completions.create.call_args.kwargs
-        self.assertEqual(kwargs.get("model"), IFLYTEK_MAAS_PAYLOAD_MODEL)
+        self.assertEqual(kwargs.get("model"), IFLYTEK_MAAS_MODEL_TYPE)
 
 
 class KnowledgeRagTests(TestCase):
@@ -666,3 +671,105 @@ class AiBatchAndSemanticDedupTests(TestCase):
         )
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["case_name"], "注册成功")
+
+
+class AiPatchApplyRollbackTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="aipatch_u1",
+            password="pass-aipatch-1",
+            real_name="AiPatch User",
+        )
+        self.project = TestProject.objects.create(
+            project_name="ProjAiPatch",
+            creator=self.user,
+        )
+        self.project.members.add(self.user)
+        self.module = TestModule.objects.create(
+            project=self.project,
+            name="ModAiPatch",
+            test_type=TEST_CASE_TYPE_FUNCTIONAL,
+        )
+        self.case = TestCaseModel.objects.create(
+            module=self.module,
+            case_name="Case AiPatch",
+            test_type=TEST_CASE_TYPE_FUNCTIONAL,
+            creator=self.user,
+            updater=self.user,
+        )
+        TestCaseStep.objects.create(
+            testcase=self.case,
+            step_number=1,
+            step_desc="旧步骤1",
+            expected_result="旧预期1",
+            creator=self.user,
+            updater=self.user,
+        )
+        TestCaseStep.objects.create(
+            testcase=self.case,
+            step_number=2,
+            step_desc="旧步骤2",
+            expected_result="旧预期2",
+            creator=self.user,
+            updater=self.user,
+        )
+        self.log = ExecutionLog.objects.create(
+            test_case=self.case,
+            request_url="http://example.com/api",
+            request_method="GET",
+            is_passed=False,
+            execution_status=ExecutionLog.ExecutionStatus.ASSERTION_FAILED,
+            creator=self.user,
+            updater=self.user,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_apply_and_rollback_patch_replace_steps(self):
+        patch = AiPatch.objects.create(
+            creator=self.user,
+            target_type="testcase.TestCase",
+            target_id=str(self.case.id),
+            source_execution_log_id=self.log.id,
+            status=AiPatch.STATUS_DRAFT,
+            before={},
+            after={
+                "steps": [
+                    {"step_desc": "新步骤A", "expected_result": "新预期A"},
+                    {"step_desc": "新步骤B", "expected_result": "新预期B"},
+                ]
+            },
+            changes=[{"op": "replace_all_steps"}],
+        )
+
+        r = self.client.post(
+            f"/api/ai/patches/{patch.id}/apply/",
+            {"confirm": True},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 200)
+        patch.refresh_from_db()
+        self.assertEqual(patch.status, AiPatch.STATUS_APPLIED)
+
+        active = list(
+            TestCaseStep.objects.filter(testcase=self.case, is_deleted=False).order_by(
+                "step_number"
+            )
+        )
+        self.assertEqual([s.step_desc for s in active], ["新步骤A", "新步骤B"])
+
+        r2 = self.client.post(
+            f"/api/ai/patches/{patch.id}/rollback/",
+            {"confirm": True},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, 200)
+        patch.refresh_from_db()
+        self.assertEqual(patch.status, AiPatch.STATUS_ROLLED_BACK)
+
+        active2 = list(
+            TestCaseStep.objects.filter(testcase=self.case, is_deleted=False).order_by(
+                "step_number"
+            )
+        )
+        self.assertEqual([s.step_desc for s in active2], ["旧步骤1", "旧步骤2"])

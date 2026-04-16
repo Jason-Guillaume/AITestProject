@@ -9,3 +9,15 @@ export function createK6Session(data) {
 export function getK6Session(runId) {
   return request.get(`/perf/k6-sessions/${runId}/`);
 }
+
+export function getK6Sessions(params) {
+  return request.get("/perf/k6-sessions/", { params });
+}
+
+export function batchDeleteK6Sessions(data) {
+  return request.post("/perf/k6-sessions/batch-delete/", data);
+}
+
+export function batchCopyK6Sessions(data) {
+  return request.post("/perf/k6-sessions/batch-copy/", data);
+}

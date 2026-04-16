@@ -247,6 +247,44 @@ def _emit_queue(
         logger.debug("server_logs queue full, dropping one log line")
 
 
+def apply_ssh_host_key_policy(
+    client: Any,
+    paramiko: Any,
+    *,
+    policy: str,
+    known_hosts_path: str = "",
+) -> None:
+    """
+    配置 Paramiko 对未知主机密钥的处理策略。
+    policy: auto_add | warning | reject | known_hosts
+    """
+    p = (policy or "auto_add").strip().lower()
+    if p == "auto_add":
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        return
+    if p == "warning":
+        client.set_missing_host_key_policy(paramiko.WarningPolicy())
+        return
+    if p == "reject":
+        try:
+            client.load_system_host_keys()
+        except OSError:
+            logger.debug("load_system_host_keys failed", exc_info=True)
+        client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        return
+    if p in ("known_hosts", "known-hosts"):
+        path = (known_hosts_path or "").strip()
+        if not path:
+            raise ValueError(
+                "SERVER_LOGS_SSH_HOST_KEY_POLICY=known_hosts 时必须设置 "
+                "SERVER_LOGS_SSH_KNOWN_HOSTS_PATH"
+            )
+        client.load_host_keys(path)
+        client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        return
+    raise ValueError(f"未知的 SERVER_LOGS_SSH_HOST_KEY_POLICY: {policy!r}")
+
+
 def _load_private_key(text: str) -> Any:
     if not (text or "").strip():
         return None
@@ -304,7 +342,25 @@ def ssh_tail_worker(
         return
 
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        from django.conf import settings as dj_settings
+
+        _policy = str(
+            getattr(dj_settings, "SERVER_LOGS_SSH_HOST_KEY_POLICY", "auto_add")
+            or "auto_add"
+        )
+        _known = str(getattr(dj_settings, "SERVER_LOGS_SSH_KNOWN_HOSTS_PATH", "") or "")
+    except Exception:
+        logger.warning("无法读取 Django settings，SSH 主机密钥策略回退为 auto_add")
+        _policy, _known = "auto_add", ""
+    try:
+        apply_ssh_host_key_policy(
+            client, paramiko, policy=_policy, known_hosts_path=_known
+        )
+    except ValueError as e:
+        _emit_queue(out_queue, ("error", str(e)))
+        _emit_queue(out_queue, ("done", None))
+        return
     try:
         pkey = _load_private_key(private_key_text)
         pwd = (password or "").strip() or None

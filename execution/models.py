@@ -414,3 +414,223 @@ class TestQualityMetric(BaseModel):
         indexes = [
             models.Index(fields=["metric_date", "metric_type"]),
         ]
+
+
+class ApiScenario(BaseModel):
+    """
+    API 场景（业务链路）：
+    - 作为“编排单位”，由多个 TestCase 组成，运行时共享同一变量上下文与 trace_id
+    - 绑定 project 以复用数据权限隔离（BaseModelViewSet member scope）
+    """
+
+    STRATEGY_ABORT = "abort"
+    STRATEGY_CONTINUE = "continue"
+    FAILURE_STRATEGY_CHOICES = [
+        (STRATEGY_ABORT, "失败中止"),
+        (STRATEGY_CONTINUE, "失败继续"),
+    ]
+
+    project = models.ForeignKey(
+        "project.TestProject",
+        on_delete=models.CASCADE,
+        related_name="api_scenarios",
+        verbose_name="所属项目",
+    )
+    name = models.CharField(max_length=255, verbose_name="场景名称")
+    environment = models.ForeignKey(
+        "testcase.TestEnvironment",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="api_scenarios",
+        verbose_name="默认执行环境",
+    )
+    default_variables = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="默认变量上下文",
+        help_text="场景级初始变量池（可在运行时 overrides 覆盖）",
+    )
+    failure_strategy = models.CharField(
+        max_length=16,
+        choices=FAILURE_STRATEGY_CHOICES,
+        default=STRATEGY_ABORT,
+        verbose_name="失败策略",
+    )
+    is_active = models.BooleanField(default=True, verbose_name="是否启用")
+
+    class Meta:
+        db_table = "api_scenario"
+        ordering = ("-create_time",)
+        indexes = [
+            models.Index(fields=["project", "-create_time"]),
+        ]
+
+
+class ApiScenarioStep(BaseModel):
+    """
+    场景步骤：引用 TestCase（通常为 API 用例）。
+    - 可配置 step_overrides：运行时覆盖 url/headers/body/environment_id/variables/extraction_rules 等
+    - extraction_rules：默认提取规则（可被 overrides 覆盖）
+    """
+
+    scenario = models.ForeignKey(
+        ApiScenario,
+        on_delete=models.CASCADE,
+        related_name="steps",
+        verbose_name="所属场景",
+    )
+    order = models.PositiveIntegerField(default=1, verbose_name="顺序")
+    name = models.CharField(max_length=255, blank=True, default="", verbose_name="步骤名称")
+    test_case = models.ForeignKey(
+        "testcase.TestCase",
+        on_delete=models.PROTECT,
+        related_name="scenario_steps",
+        verbose_name="关联用例",
+    )
+    is_enabled = models.BooleanField(default=True, verbose_name="是否启用")
+    failure_strategy = models.CharField(
+        max_length=16,
+        choices=ApiScenario.FAILURE_STRATEGY_CHOICES,
+        blank=True,
+        default="",
+        verbose_name="失败策略(可选覆盖)",
+        help_text="留空则继承场景 failure_strategy",
+    )
+    extraction_rules = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="变量提取规则",
+        help_text='示例: [{"var_name":"token","source":"body","expression":"$.data.token"}]',
+    )
+    step_overrides = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="步骤执行覆盖参数",
+        help_text="可覆盖 url/method/headers/body/environment_id/variables/extraction_rules 等",
+    )
+
+    class Meta:
+        db_table = "api_scenario_step"
+        ordering = ("order", "id")
+        indexes = [
+            models.Index(fields=["scenario", "order"]),
+            models.Index(fields=["test_case"]),
+        ]
+
+
+class ApiScenarioRun(BaseModel):
+    """场景运行记录（一次跑批）。"""
+
+    STATUS_PENDING = "pending"
+    STATUS_RUNNING = "running"
+    STATUS_SUCCESS = "success"
+    STATUS_FAILED = "failed"
+    STATUS_PARTIAL = "partial"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "待执行"),
+        (STATUS_RUNNING, "执行中"),
+        (STATUS_SUCCESS, "成功"),
+        (STATUS_FAILED, "失败"),
+        (STATUS_PARTIAL, "部分失败"),
+    ]
+
+    scenario = models.ForeignKey(
+        ApiScenario,
+        on_delete=models.CASCADE,
+        related_name="runs",
+        verbose_name="所属场景",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        verbose_name="运行状态",
+    )
+    trace_id = models.CharField(
+        max_length=36,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="trace_id",
+    )
+    started_at = models.DateTimeField(null=True, blank=True, verbose_name="开始时间")
+    finished_at = models.DateTimeField(null=True, blank=True, verbose_name="结束时间")
+    duration_ms = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name="耗时(ms)"
+    )
+    environment_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="执行环境ID(快照)",
+        help_text="testcase.TestEnvironment 主键（避免跨 app 迁移依赖）",
+    )
+    initial_variables = models.JSONField(
+        default=dict, blank=True, verbose_name="初始变量上下文快照"
+    )
+    final_variables = models.JSONField(
+        default=dict, blank=True, verbose_name="最终变量上下文快照"
+    )
+    summary = models.JSONField(default=dict, blank=True, verbose_name="汇总")
+    celery_task_id = models.CharField(
+        max_length=64, blank=True, default="", verbose_name="Celery 任务 ID"
+    )
+    error_message = models.TextField(blank=True, default="", verbose_name="错误信息")
+
+    class Meta:
+        db_table = "api_scenario_run"
+        ordering = ("-create_time",)
+        indexes = [
+            models.Index(fields=["scenario", "-create_time"]),
+            models.Index(fields=["trace_id"]),
+        ]
+
+
+class ApiScenarioStepRun(BaseModel):
+    """场景步骤运行记录。"""
+
+    STATUS_SKIPPED = "skipped"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_COMPLETED, "执行完成"),
+        (STATUS_FAILED, "执行失败"),
+        (STATUS_SKIPPED, "已跳过"),
+    ]
+
+    run = models.ForeignKey(
+        ApiScenarioRun,
+        on_delete=models.CASCADE,
+        related_name="step_runs",
+        verbose_name="所属运行",
+    )
+    step = models.ForeignKey(
+        ApiScenarioStep,
+        on_delete=models.PROTECT,
+        related_name="runs",
+        verbose_name="所属步骤",
+    )
+    order = models.PositiveIntegerField(default=1, verbose_name="顺序快照")
+    test_case_id = models.PositiveIntegerField(verbose_name="用例ID快照")
+    execution_log_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="关联 ExecutionLog ID",
+        help_text="testcase.ExecutionLog 主键",
+    )
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default=STATUS_COMPLETED, verbose_name="状态"
+    )
+    passed = models.BooleanField(default=False, verbose_name="是否通过")
+    extracted_variables = models.JSONField(
+        default=dict, blank=True, verbose_name="本步骤提取出的变量"
+    )
+    message = models.CharField(max_length=255, blank=True, default="", verbose_name="摘要")
+
+    class Meta:
+        db_table = "api_scenario_step_run"
+        ordering = ("order", "id")
+        indexes = [
+            models.Index(fields=["run", "order"]),
+            models.Index(fields=["test_case_id"]),
+        ]

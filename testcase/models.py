@@ -169,6 +169,16 @@ class TestEnvironment(BaseModel):
     base_url = models.CharField(
         max_length=2048, blank=True, default="", verbose_name="基础地址"
     )
+    auth_config = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="鉴权配置(JSON)",
+        help_text=(
+            "示例: "
+            '{\"type\":\"bearer\",\"token_var\":\"token\",\"header\":\"Authorization\",\"prefix\":\"Bearer \"} 或 '
+            '{\"type\":\"api_key\",\"header\":\"X-API-Key\",\"value_var\":\"api_key\"}'
+        ),
+    )
     health_check_path = models.CharField(
         max_length=512,
         blank=True,
@@ -443,7 +453,6 @@ class TestCase(BaseModel):
         with transaction.atomic():
             seq = self.case_number
             test_type = self.test_type
-            pk = self.pk
             super(TestCase, self).delete()
             if seq is not None:
                 TestCase.all_objects.filter(
@@ -865,6 +874,15 @@ class TestCaseStep(BaseModel):
     step_number = models.IntegerField(verbose_name="步骤编号")
     step_desc = models.TextField(verbose_name="步骤描述")
     expected_result = models.TextField(verbose_name="预期结果")
+    assertions = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="断言配置(JSON)",
+        help_text=(
+            '示例: [{"type":"jsonpath_equals","path":"$.code","expected":200}]；'
+            "为空则仅执行基础断言（状态码 + 预期结果子串）"
+        ),
+    )
 
     class Meta:
         db_table = "test_case_step"
