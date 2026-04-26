@@ -84,9 +84,9 @@ class TestProjectSerializer(BaseModelSerializers):
     def validate_cover_image(self, value):
         if value is None:
             return value
-        max_size = 5 * 1024 * 1024
+        max_size = 20 * 1024 * 1024
         if int(getattr(value, "size", 0) or 0) > max_size:
-            raise serializers.ValidationError("封面图大小不能超过 5MB")
+            raise serializers.ValidationError("封面图大小不能超过 20MB")
         ext = (str(getattr(value, "name", "")).rsplit(".", 1)[-1] or "").lower()
         if ext not in {"jpg", "jpeg", "png", "webp", "gif"}:
             raise serializers.ValidationError("封面图仅支持 jpg/jpeg/png/webp/gif")

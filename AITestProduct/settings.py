@@ -93,9 +93,7 @@ if not SECRET_KEY and not DEBUG:
 
 # 逗号分隔；不设时 DEBUG 下 Django 仅允许 localhost / 127.0.0.1（局域网 IP 直连后端会 DisallowedHost）。
 _allowed = os.environ.get("DJANGO_ALLOWED_HOSTS", "").strip()
-ALLOWED_HOSTS = (
-    [h.strip() for h in _allowed.split(",") if h.strip()] if _allowed else []
-)
+ALLOWED_HOSTS = ['82.157.113.232', 'ai13.yxbzs.top', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -240,25 +238,16 @@ else:
     }
 
 
-if _use_redis_cache and _redis_is_available(_redis_host, _redis_port):
-    CACHES = {
-        "default": {
-            "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": f"redis://{_redis_host}:{_redis_port}/0",
-            "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                "CONNECTION_POOL_KWARGS": {"max_connections": 100},
-            },
-        }
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/0", # 这里的 host 写死 127.0.0.1
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {"max_connections": 100},
+        },
     }
-else:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "unique-per-process",
-            "TIMEOUT": 300,
-        }
-    }
+}
 
 # 可选配置：将会话（Session）引擎也改为使用 Redis，提升 Session 存取速度
 SESSION_ENGINE = "django.contrib.sessions.backends.cache"
@@ -297,7 +286,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
+
 STATIC_URL = "static/"
+
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
 # ----------------------------
 # Media (上传图片/文件)
@@ -471,3 +463,9 @@ if not DEBUG:
         raise RuntimeError(
             "Missing ELASTICSEARCH_PASSWORD while DJANGO_DEBUG=0 (production safety check)."
         )
+
+# 允许上传的最大请求体大小（单位：字节，这里设置为 20MB）
+DATA_UPLOAD_MAX_MEMORY_SIZE = 20971520
+
+# 允许上传的最大文件大小（单位：字节，这里设置为 20MB）
+FILE_UPLOAD_MAX_MEMORY_SIZE = 20971520

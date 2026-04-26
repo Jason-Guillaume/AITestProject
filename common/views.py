@@ -96,18 +96,19 @@ class BaseModelViewSet(viewsets.ModelViewSet):
         return qs.filter(creator=user)
 
     def get_queryset(self):
-        """重写查询集,默认只查未被逻辑删除的数据"""
+        """
+        重写查询集，默认只查未被逻辑删除的数据。
+        非管理员用户也能查看完整数据（方案 A）：移除数据范围过滤，
+        只进行删除状态过滤，不对用户进行数据隔离。
+        数据权限在具体的业务视图中单独控制（如需要）。
+        """
         qs = self.queryset
         user = getattr(self.request, "user", None)
         active = qs.filter(is_deleted=False)
-        if (
-            not self.enable_data_scope
-            or not user
-            or not user.is_authenticated
-            or self._is_admin_user(user)
-        ):
-            return active
-        return self._apply_member_scope(active, user)
+        
+        # 只进行删除状态过滤，不对非管理员进行数据范围限制
+        # 所有已认证用户都能访问未删除的数据
+        return active
 
     def perform_create(self, serializer):
         """创建时,自动填充ceator"""
