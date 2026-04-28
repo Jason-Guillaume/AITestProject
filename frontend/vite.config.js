@@ -36,6 +36,14 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      // AI API Proxy - Bypass CORS for direct AI model testing
+      "/ai-api": {
+        target: "https://api.iamhc.cn",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ai-api/, ""),
+        secure: true,
+        timeout: 30_000,
+      },
     },
   },
 });

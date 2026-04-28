@@ -1004,6 +1004,12 @@ async function runAiGenerate() {
           deltaRun += evt.text
           return
         }
+        if (evt.type === 'malformed') {
+          console.error('[AI Stream] 收到格式错误的 SSE 事件:', evt)
+          ElMessage.error('服务器返回数据格式错误，请重试或联系管理员')
+          finished = true
+          return
+        }
         if (evt.type === 'error') {
           if (deltaRun) {
             aiStreamText.value += deltaRun
@@ -1011,7 +1017,37 @@ async function runAiGenerate() {
           }
           const evtCode = String(evt.code || '').trim()
           const evtMsg = String(evt.message || '').trim() || '生成失败'
-          if (evtCode === 'AUTH_ERROR') {
+
+          // 如果是解析失败，显示更详细的信息
+          if (evt.parse_failed) {
+            console.error('[AI Stream] JSON 解析失败:', {
+              snippet: evt.snippet,
+              failure_fragment: evt.failure_fragment,
+              parse_error: evt.parse_error,
+              truncated: evt.truncated
+            })
+
+            // 将失败片段保存到流式文本中，方便用户查看
+            if (evt.failure_fragment) {
+              aiStreamText.value = String(evt.failure_fragment)
+            }
+
+            // 显示详细错误信息
+            let detailMsg = evtMsg
+            if (evt.parse_error) {
+              detailMsg += `\n\n错误详情: ${evt.parse_error}`
+            }
+            if (evt.truncated) {
+              detailMsg += '\n\n提示: 模型输出可能因长度限制被截断'
+            }
+
+            ElMessage({
+              type: 'error',
+              message: detailMsg,
+              duration: 8000,
+              showClose: true
+            })
+          } else if (evtCode === 'AUTH_ERROR') {
             handleAiAuthExpired(evtMsg)
           } else {
             ElMessage.error(evtMsg)

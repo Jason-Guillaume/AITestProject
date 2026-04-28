@@ -1,4 +1,7 @@
 from django.db import models
+from django.core.validators import FileExtensionValidator
+from django.utils.translation import gettext_lazy as _
+import os
 
 from common.models import BaseModel
 from testcase.models import TestModule
@@ -510,3 +513,225 @@ class AiCaseGenerationRun(models.Model):
             models.Index(fields=["user", "-created_at"]),
             models.Index(fields=["module_id", "-created_at"]),
         ]
+
+
+class UIScriptUpload(models.Model):
+    """UI自动化脚本上传模型"""
+
+    class ScriptType(models.TextChoices):
+        LINEAR = 'LINEAR', _('线性脚本')
+        POM = 'POM', _('Page Object Model')
+
+    id = models.AutoField(primary_key=True, verbose_name='脚本ID')
+    name = models.CharField(
+        max_length=255,
+        verbose_name='脚本名称',
+        help_text='脚本的显示名称'
+    )
+    script_type = models.CharField(
+        max_length=10,
+        choices=ScriptType.choices,
+        default=ScriptType.LINEAR,
+        verbose_name='脚本类型'
+    )
+
+    file_path = models.FileField(
+        upload_to='ui_scripts/%Y/%m/%d/',
+        validators=[FileExtensionValidator(allowed_extensions=['py', 'zip'])],
+        blank=True,
+        null=True,
+        verbose_name='脚本文件',
+        help_text='单文件(.py)或ZIP包'
+    )
+
+    git_repo_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name='Git仓库URL',
+        help_text='关联的Git仓库地址（可选）'
+    )
+
+    entry_point = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name='执行入口路径',
+        help_text='脚本执行的入口文件路径，如: main.py 或 tests/test_login.py'
+    )
+
+    workspace_path = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name='工作空间路径',
+        help_text='ZIP解压后的目录路径'
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='更新时间'
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='是否启用'
+    )
+
+    class Meta:
+        db_table = 'ui_script_upload'
+        verbose_name = 'UI自动化脚本'
+        verbose_name_plural = 'UI自动化脚本'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['script_type']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_script_type_display()})"
+
+    @property
+    def file_extension(self):
+        """获取文件扩展名"""
+        return os.path.splitext(self.file_path.name)[1]
+
+    @property
+    def is_zip(self):
+        """判断是否为ZIP文件"""
+        return self.file_extension.lower() == '.zip'
+
+
+class UIScriptExecution(models.Model):
+    """UI脚本执行记录"""
+
+    STATUS_PENDING = 'pending'
+    STATUS_RUNNING = 'running'
+    STATUS_SUCCESS = 'success'
+    STATUS_FAILED = 'failed'
+    STATUS_TIMEOUT = 'timeout'
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, '等待执行'),
+        (STATUS_RUNNING, '执行中'),
+        (STATUS_SUCCESS, '执行成功'),
+        (STATUS_FAILED, '执行失败'),
+        (STATUS_TIMEOUT, '执行超时'),
+        (STATUS_CANCELLED, '已取消'),
+    ]
+
+    id = models.AutoField(primary_key=True, verbose_name='执行ID')
+    execution_id = models.CharField(
+        max_length=100,
+        unique=True,
+        db_index=True,
+        verbose_name='执行唯一标识'
+    )
+
+    script = models.ForeignKey(
+        UIScriptUpload,
+        on_delete=models.CASCADE,
+        related_name='executions',
+        verbose_name='关联脚本'
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+        verbose_name='执行状态'
+    )
+
+    return_code = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name='返回码'
+    )
+
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='开始时间'
+    )
+
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='完成时间'
+    )
+
+    duration = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name='执行时长(秒)'
+    )
+
+    error_message = models.TextField(
+        blank=True,
+        default='',
+        verbose_name='错误信息'
+    )
+
+    log_file_path = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name='日志文件路径'
+    )
+
+    triggered_by = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        verbose_name='触发方式'
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='更新时间'
+    )
+
+    class Meta:
+        db_table = 'ui_script_execution'
+        verbose_name = 'UI脚本执行记录'
+        verbose_name_plural = 'UI脚本执行记录'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['execution_id']),
+            models.Index(fields=['script', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.script.name} - {self.execution_id} ({self.get_status_display()})"
+
+    @property
+    def is_running(self):
+        """是否正在执行"""
+        return self.status == self.STATUS_RUNNING
+
+    @property
+    def is_completed(self):
+        """是否已完成"""
+        return self.status in [
+            self.STATUS_SUCCESS,
+            self.STATUS_FAILED,
+            self.STATUS_TIMEOUT,
+            self.STATUS_CANCELLED
+        ]
+
+    @property
+    def is_success(self):
+        """是否执行成功"""
+        return self.status == self.STATUS_SUCCESS

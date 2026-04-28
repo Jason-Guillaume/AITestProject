@@ -69,12 +69,14 @@ def parse_batch_json_array(raw_text: str) -> list[dict[str, Any]]:
     容错解析模型输出：
     - 支持纯数组
     - 支持 {"cases": [...]} / {"data":[...]}
+    - 去除 markdown 代码块标记
+    - 提取 JSON 核心内容
     """
     text = (raw_text or "").strip()
     if not text:
         raise ValueError("模型返回为空")
 
-    # 去除常见 markdown fence
+    # 去除常见 markdown fence (```json 或 ```)
     if text.startswith("```"):
         lines = text.splitlines()
         if lines and lines[0].startswith("```"):
@@ -83,15 +85,38 @@ def parse_batch_json_array(raw_text: str) -> list[dict[str, Any]]:
             lines = lines[:-1]
         text = "\n".join(lines).strip()
 
-    data = json.loads(text)
+    # 去除行内的 ```json 和 ``` 标记
+    text = text.replace("```json", "").replace("```", "").strip()
+
+    # 尝试提取 JSON 数组或对象（从第一个 [ 或 { 到最后一个 ] 或 }）
+    if not text.startswith(("[", "{")):
+        # 查找第一个 [ 或 {
+        start_arr = text.find("[")
+        start_obj = text.find("{")
+        if start_arr >= 0 and (start_obj < 0 or start_arr < start_obj):
+            end = text.rfind("]")
+            if end > start_arr:
+                text = text[start_arr:end + 1]
+        elif start_obj >= 0:
+            end = text.rfind("}")
+            if end > start_obj:
+                text = text[start_obj:end + 1]
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"JSON 解析失败: {e}. 文本前100字符: {text[:100]}")
+
     if isinstance(data, list):
         arr = data
     elif isinstance(data, dict):
-        arr = data.get("cases") or data.get("data") or data.get("items")
+        arr = data.get("cases") or data.get("data") or data.get("items") or data.get("test_cases")
     else:
         arr = None
+
     if not isinstance(arr, list):
-        raise ValueError("模型输出不是 JSON 数组")
+        raise ValueError(f"模型输出不是 JSON 数组，而是 {type(data).__name__}")
+
     return [x for x in arr if isinstance(x, dict)]
 
 

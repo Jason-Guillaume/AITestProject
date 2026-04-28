@@ -307,11 +307,14 @@
             </template>
             <el-menu-item index="/test-case/functional">功能测试</el-menu-item>
             <el-menu-item index="/test-case/api">接口测试</el-menu-item>
-            <el-menu-item index="/execution/api-scenario-generator">接口场景生成</el-menu-item>
             <el-menu-item index="/test-case/performance">性能测试</el-menu-item>
             <el-menu-item index="/test-case/security">安全测试</el-menu-item>
             <el-menu-item index="/test-case/ui-automation">UI 自动化</el-menu-item>
           </el-sub-menu>
+          <el-menu-item index="/agent-hub">
+            <el-icon><MagicStick /></el-icon>
+            <span>🤖 智能体中心</span>
+          </el-menu-item>
           <el-menu-item index="/test-report">
             <el-icon><DataLine /></el-icon>
             <span>测试报告</span>
@@ -331,6 +334,10 @@
           <el-menu-item index="/server-logs">
             <el-icon><Monitor /></el-icon>
             <span>服务器日志</span>
+          </el-menu-item>
+          <el-menu-item index="/script-hub">
+            <el-icon><VideoPlay /></el-icon>
+            <span>脚本执行中心</span>
           </el-menu-item>
           <el-sub-menu index="defect">
             <template #title>
@@ -445,7 +452,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh, ArrowDown,
   HomeFilled, Document, EditPen, Calendar, List,
-  DataLine, Warning, Tools, MagicStick, Back, Monitor, Tickets
+  DataLine, Warning, Tools, MagicStick, Back, Monitor, Tickets, VideoPlay
 } from '@element-plus/icons-vue'
 import { TEST_CASE_TYPE_LABEL_ZH } from '@/constants/testCaseTypeLabels'
 import { changePasswordApi, getCurrentUserApi, getUserProfileApi, getSystemMessagesApi } from '@/api/user'
@@ -629,6 +636,9 @@ const BREADCRUMB_MAP = {
   '/test-case/performance': ['测试用例', '性能测试'],
   '/test-case/security': ['测试用例', '安全测试'],
   '/test-case/ui-automation': ['测试用例', 'UI 自动化'],
+  '/agent-hub': ['智能体中心', ''],
+  '/element-library': ['智能体中心', '元素库管理'],
+  '/ui-automation/generate': ['智能体中心', 'AI Web UI Automation'],
   '/test-report': ['测试报告', '引导页'],
   '/quality-dashboard': ['质量分析', '质量看板'],
   '/performance/environments': ['Workspace', 'Performance', 'Environments'],

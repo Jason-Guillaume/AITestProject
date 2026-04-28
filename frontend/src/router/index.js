@@ -65,6 +65,73 @@ const routes = [
         path: "execution/api-scenario-generator",
         name: "ApiScenarioGenerator",
         component: () => import("@/views/execution/ApiScenarioGenerator.vue"),
+        meta: { hiddenInSidebar: true },
+      },
+      {
+        path: "agent-hub",
+        name: "AgentHub",
+        component: () => import("@/views/AgentHub.vue"),
+      },
+      {
+        path: "element-library",
+        name: "ElementLibrary",
+        component: () => import("@/views/ElementLibrary.vue"),
+        meta: { hiddenInSidebar: true },
+      },
+      {
+        path: "ui-automation/generate",
+        name: "UiAutomationGenerator",
+        component: () => import("@/views/UiAutomationGenerator.vue"),
+        meta: { hiddenInSidebar: true },
+      },
+      {
+        path: "ui-automation/workbench",
+        name: "UiAutomationWorkbench",
+        component: () => import("@/views/UiAutomationWorkbench.vue"),
+        meta: { hiddenInSidebar: true },
+      },
+      // Hidden AI Agent Routes - Accessible via Agent Hub
+      {
+        path: "ai-requirement-review",
+        name: "AIRequirementReview",
+        component: () => import("@/views/ai-agents/RequirementReview.vue"),
+        meta: { hiddenInSidebar: true },
+      },
+      {
+        path: "ai-testcase-generator",
+        name: "AITestcaseGenerator",
+        component: () => import("@/views/ai-agents/TestcaseGenerator.vue"),
+        meta: { hiddenInSidebar: true },
+      },
+      {
+        path: "ai-api-doc-analysis",
+        name: "AIApiDocAnalysis",
+        component: () => import("@/views/ai-agents/ApiDocAnalysis.vue"),
+        meta: { hiddenInSidebar: true },
+      },
+      {
+        path: "ai-api-testcase-design",
+        name: "AIApiTestcaseDesign",
+        component: () => import("@/views/ai-agents/ApiTestcaseDesign.vue"),
+        meta: { hiddenInSidebar: true },
+      },
+      {
+        path: "ai-api-script-generator",
+        name: "AIApiScriptGenerator",
+        component: () => import("@/views/ai-agents/ApiScriptGenerator.vue"),
+        meta: { hiddenInSidebar: true },
+      },
+      {
+        path: "ai-test-data-generator",
+        name: "AITestDataGenerator",
+        component: () => import("@/views/ai-agents/TestDataGenerator.vue"),
+        meta: { hiddenInSidebar: true },
+      },
+      {
+        path: "ai-performance-analysis",
+        name: "AIPerformanceAnalysis",
+        component: () => import("@/views/ai-agents/PerformanceAnalysis.vue"),
+        meta: { hiddenInSidebar: true },
       },
       {
         path: "test-case/:type",
@@ -99,6 +166,19 @@ const routes = [
         name: "ServerLogs",
         component: () => import("@/views/server_logs/index.vue"),
         meta: { keepAlive: true },
+      },
+
+      // 脚本执行中心
+      {
+        path: "script-hub",
+        name: "ScriptHub",
+        component: () => import("@/views/ScriptHub.vue"),
+      },
+      {
+        path: "script-hub/webui",
+        name: "WebUIScriptWorkbench",
+        component: () => import("@/views/script/WebUIWorkbench.vue"),
+        meta: { hiddenInSidebar: true },
       },
 
       // system / knowledge / help 占位

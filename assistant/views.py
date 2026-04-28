@@ -20,7 +20,9 @@ from django.views.decorators.csrf import csrf_exempt
 from common.views import BaseModelViewSet
 
 from rest_framework import exceptions as drf_exceptions
+from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
+from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -1077,7 +1079,7 @@ class KnowledgeDocumentIngestAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request):
-        # 1) 解析并校验基础参数。module_id 与 testcase.TestModule 关联，保证“模块分类”可追溯。
+        # 1) 解析并校验基础参数。module_id 与 testcase.TestModule 关联，保证"模块分类"可追溯。
         mode = (request.data.get("mode") or "upload").strip().lower()
         raw_module_id = request.data.get("module_id")
         title = (request.data.get("title") or "").strip()
@@ -1164,7 +1166,7 @@ class KnowledgeDocumentIngestAPIView(APIView):
             if not final_title:
                 final_title = source_url
 
-        # 3) 先落库，初始状态为“待处理”，后续由异步任务更新处理状态。
+        # 3) 先落库，初始状态为"待处理"，后续由异步任务更新处理状态。
         org, denied = _resolve_org_for_request(request, explicit_org_id=request.data.get("org_id"))
         if denied is not None:
             return denied
@@ -1356,7 +1358,7 @@ class KnowledgeDocumentRetryAPIView(APIView):
         )
         if denied is not None:
             return denied
-        # 允许待处理/失败/已完成状态重提任务；仅“处理中”禁止重复触发。
+        # 允许待处理/失败/已完成状态重提任务；仅"处理中"禁止重复触发。
         if doc.status == KnowledgeDocument.STATUS_PROCESSING:
             return Response(
                 {"success": False, "message": "当前任务仍在处理中，无需重试"},
@@ -2138,17 +2140,26 @@ def _resolve_openai_target(model: str, base_url: str):
 
 def _normalize_openai_sdk_base_url(base_url: str, model: str) -> str:
     """
-    OpenAI Python SDK 期望 base_url 是“根路径”（如 .../v2），
-    若传入了 .../chat/completions 会导致 SDK 再拼一次路径而 404。
+    OpenAI Python SDK expects base_url to be root path (like .../v1 or .../v2).
+    If .../chat/completions is passed, SDK will append path again causing 404.
     """
     raw = (base_url or "").strip().rstrip("/")
     if not raw:
         return raw
     if raw.endswith("/chat/completions"):
         raw = raw[: -len("/chat/completions")]
-    # 讯飞模型兜底：若被裁成空或异常，回退到标准 /v2 根路径
+    # Fallback for iFlytek models: return standard /v2 root path
     if _is_iflytek_maas_model(model) and not raw:
         return IFLYTEK_MAAS_OPENAI_BASE
+
+    # For generic OpenAI-compatible APIs, auto-append /v1 if no version path exists
+    if raw and not _is_iflytek_maas_model(model):
+        # Check if version path already exists at the end
+        if not any(raw.endswith(f'/v{i}') for i in range(1, 10)):
+            # Check if version path exists in the middle
+            if not any(f'/v{i}/' in raw for i in range(1, 10)):
+                raw = raw + "/v1"
+
     return raw
 
 
@@ -2858,8 +2869,12 @@ def _sse_event(obj: dict) -> bytes:
     """
     SSE 单条事件：一行 data 字段 + 空行结束（RFC 要求以 \\n\\n 分隔事件）。
     JSON 单行输出，避免 data 内未转义换行破坏帧边界。
+    使用 ensure_ascii=True 确保所有非 ASCII 字符（包括中文）都被转义为 \\uXXXX 格式，
+    避免 UTF-8 编码问题和换行符等特殊字符破坏 SSE 帧结构。
     """
-    payload = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+    # 使用 ensure_ascii=True 将所有 Unicode 字符转义，确保 JSON 是纯 ASCII
+    # 这样可以避免编码问题和特殊字符（如换行符）破坏 SSE 格式
+    payload = json.dumps(obj, ensure_ascii=True, separators=(",", ":"))
     return f"data: {payload}\n\n".encode("utf-8")
 
 
@@ -2928,7 +2943,7 @@ def _phase1_fallback(requirement: str, fallback_module: str = "") -> dict:
     mod = (fallback_module or "").strip() or "通用功能模块"
     points = []
     if req:
-        points.append(f"围绕“{req[:40]}”的主流程验证")
+        points.append(f"围绕\"{req[:40]}\"的主流程验证")
         points.append("关键边界值与异常输入校验")
         points.append("接口/状态一致性与错误处理验证")
     return {"module_name": mod, "key_test_points": points}
@@ -3572,7 +3587,7 @@ def _expand_cases_to_minimum_if_needed(
     supplement_user = (
         user_msg
         + "\n\n【补生成任务】\n"
-        + f"当前仅有 {len(cases)} 条，请补充至少 {needed} 条“新增且不重复”的用例。\n"
+        + f"当前仅有 {len(cases)} 条，请补充至少 {needed} 条\"新增且不重复\"的用例。\n"
         + "新增用例必须覆盖异常/边界，禁止只补正向。\n"
         + "仅输出 JSON 数组（只包含新增项）。\n"
         + "已有用例标题（避免重复）：\n"
@@ -4620,10 +4635,21 @@ class AiGenerateCasesStreamView(View):
                     audit_cases_count = 0
                     return
 
+                parse_error_detail = None
                 try:
                     parsed = parse_batch_json_array(raw)
-                except Exception:
-                    parsed = _parse_ai_cases_json(raw)
+                except Exception as e1:
+                    parse_error_detail = str(e1)
+                    logger.warning(
+                        "AI stream parse_batch_json_array failed: %s, raw length=%d, trying fallback",
+                        e1,
+                        len(raw),
+                    )
+                    try:
+                        parsed = _parse_ai_cases_json(raw)
+                    except Exception as e2:
+                        logger.warning("AI stream fallback parse also failed: %s", e2)
+                        parsed = None
                 if not parsed:
                     snippet = raw[:400] + ("…" if len(raw) > 400 else "")
                     failure_fragment = (
@@ -4633,6 +4659,13 @@ class AiGenerateCasesStreamView(View):
                     )
                     if len(raw) <= 800:
                         failure_fragment = raw
+                    logger.error(
+                        "AI stream parse failed completely. user_id=%s model=%s raw_length=%d snippet=%s",
+                        getattr(drf_request.user, "id", None),
+                        model_used,
+                        len(raw),
+                        snippet,
+                    )
                     yield _sse_event(
                         {
                             "type": "error",
@@ -4641,6 +4674,7 @@ class AiGenerateCasesStreamView(View):
                             "snippet": snippet,
                             "failure_fragment": failure_fragment,
                             "truncated": truncate_by_length,
+                            "parse_error": parse_error_detail,
                         }
                     )
                     return
@@ -5814,3 +5848,271 @@ class AiKnowledgeAskAPIView(APIView):
                 "top_k": top_k,
             }
         )
+
+
+class UIScriptUploadViewSet(BaseModelViewSet):
+    """UI自动化脚本上传视图集"""
+
+    from assistant.models import UIScriptUpload
+    from assistant.serialize import UIScriptUploadSerializer, UIScriptUploadListSerializer
+    from assistant.utils.script_handler import handle_script_upload
+    from rest_framework import status
+    from rest_framework.decorators import action
+
+    queryset = UIScriptUpload.objects.all()
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_serializer_class(self):
+        """根据action选择序列化器"""
+        from assistant.serialize import UIScriptUploadSerializer, UIScriptUploadListSerializer
+        if self.action == 'list':
+            return UIScriptUploadListSerializer
+        return UIScriptUploadSerializer
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """
+        创建脚本上传记录
+
+        请求参数:
+        - name: 脚本名称
+        - script_type: LINEAR 或 POM
+        - file_path: 文件（.py 或 .zip）
+        - git_repo_url: Git仓库URL（可选）
+        - entry_point: 执行入口路径
+        """
+        from assistant.serialize import UIScriptUploadSerializer
+        from assistant.utils.script_handler import handle_script_upload
+        from rest_framework import status
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # 保存模型实例
+        instance = serializer.save()
+
+        try:
+            # 处理文件上传（解压ZIP等）
+            handle_script_upload(instance)
+
+            logger.info(f"脚本上传成功: {instance.name} (ID: {instance.id})")
+
+            return Response(
+                UIScriptUploadSerializer(instance).data,
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            logger.error(f"脚本上传处理失败: {str(e)}", exc_info=True)
+            # 回滚事务
+            instance.delete()
+            return Response(
+                {'error': f'文件处理失败: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'])
+    def toggle_active(self, request, pk=None):
+        """切换脚本启用状态"""
+        instance = self.get_object()
+        instance.is_active = not instance.is_active
+        instance.save()
+
+        return Response({
+            'id': instance.id,
+            'is_active': instance.is_active,
+            'message': f"脚本已{'启用' if instance.is_active else '禁用'}"
+        })
+
+    @action(detail=True, methods=['get'])
+    def workspace_info(self, request, pk=None):
+        """获取工作空间信息"""
+        import os
+        from rest_framework import status
+
+        instance = self.get_object()
+
+        if not instance.workspace_path:
+            return Response(
+                {'error': '该脚本没有工作空间'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        workspace_path = instance.workspace_path
+
+        if not os.path.exists(workspace_path):
+            return Response(
+                {'error': '工作空间目录不存在'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 列出工作空间文件
+        files = []
+        for root, dirs, filenames in os.walk(workspace_path):
+            for filename in filenames:
+                rel_path = os.path.relpath(
+                    os.path.join(root, filename),
+                    workspace_path
+                )
+                files.append(rel_path)
+
+        return Response({
+            'workspace_path': workspace_path,
+            'files': files,
+            'file_count': len(files)
+        })
+
+
+class UIScriptExecutionViewSet(BaseModelViewSet):
+    """UI脚本执行记录视图集"""
+
+    from assistant.models import UIScriptExecution
+    from assistant.serialize import UIScriptExecutionSerializer, UIScriptExecutionListSerializer
+
+    queryset = UIScriptExecution.objects.all()
+
+    def get_serializer_class(self):
+        """根据action选择序列化器"""
+        from assistant.serialize import UIScriptExecutionSerializer, UIScriptExecutionListSerializer
+        if self.action == 'list':
+            return UIScriptExecutionListSerializer
+        return UIScriptExecutionSerializer
+
+    def get_queryset(self):
+        """过滤查询集"""
+        queryset = super().get_queryset()
+
+        # 按脚本ID过滤
+        script_id = self.request.query_params.get('script_id')
+        if script_id:
+            queryset = queryset.filter(script_id=script_id)
+
+        # 按状态过滤
+        status = self.request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return queryset
+
+    @action(detail=False, methods=['post'])
+    def execute(self, request):
+        """
+        执行脚本
+
+        请求参数:
+        - script_id: 脚本ID
+        - triggered_by: 触发方式（可选）
+        """
+        from assistant.models import UIScriptUpload, UIScriptExecution
+        from assistant.utils.script_runner import ScriptRunner
+        from django.utils import timezone
+        import threading
+
+        script_id = request.data.get('script_id')
+        if not script_id:
+            return Response(
+                {'error': '缺少script_id参数'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            script = UIScriptUpload.objects.get(id=script_id, is_active=True)
+        except UIScriptUpload.DoesNotExist:
+            return Response(
+                {'error': '脚本不存在或已禁用'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 生成执行ID
+        import time
+        execution_id = f"{script_id}_{int(time.time())}"
+
+        # 创建执行记录
+        execution = UIScriptExecution.objects.create(
+            execution_id=execution_id,
+            script=script,
+            status=UIScriptExecution.STATUS_PENDING,
+            triggered_by=request.data.get('triggered_by', 'manual')
+        )
+
+        # 异步执行脚本
+        def run_script():
+            try:
+                # 更新状态为运行中
+                execution.status = UIScriptExecution.STATUS_RUNNING
+                execution.started_at = timezone.now()
+                execution.save()
+
+                # 执行脚本
+                runner = ScriptRunner()
+                result = runner.execute_ui_script(
+                    script_upload_instance_id=script_id,
+                    execution_id=execution_id
+                )
+
+                # 更新执行记录
+                execution.status = UIScriptExecution.STATUS_SUCCESS if result['success'] else UIScriptExecution.STATUS_FAILED
+                execution.return_code = result.get('return_code')
+                execution.duration = result.get('duration')
+                execution.error_message = result.get('error', '')
+                execution.completed_at = timezone.now()
+                execution.save()
+
+            except Exception as e:
+                logger.error(f"脚本执行异常: {str(e)}", exc_info=True)
+                execution.status = UIScriptExecution.STATUS_FAILED
+                execution.error_message = str(e)
+                execution.completed_at = timezone.now()
+                execution.save()
+
+        # 启动执行线程
+        thread = threading.Thread(target=run_script, daemon=True)
+        thread.start()
+
+        # 返回执行记录
+        from assistant.serialize import UIScriptExecutionSerializer
+        serializer = UIScriptExecutionSerializer(execution)
+        return Response(serializer.data, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=True, methods=['get'])
+    def logs(self, request, pk=None):
+        """
+        获取执行日志
+
+        查询参数:
+        - start: 起始索引（默认0）
+        - end: 结束索引（默认-1，表示到末尾）
+        """
+        from assistant.utils.script_runner import ScriptRunner
+
+        execution = self.get_object()
+
+        start = int(request.query_params.get('start', 0))
+        end = int(request.query_params.get('end', -1))
+
+        runner = ScriptRunner()
+        logs = runner.get_execution_logs(execution.execution_id, start, end)
+
+        return Response({
+            'execution_id': execution.execution_id,
+            'logs': logs,
+            'total': len(logs)
+        })
+
+    @action(detail=True, methods=['get'])
+    def status_detail(self, request, pk=None):
+        """获取执行状态详情"""
+        from assistant.utils.script_runner import ScriptRunner
+
+        execution = self.get_object()
+
+        runner = ScriptRunner()
+        redis_status = runner.get_execution_status(execution.execution_id)
+
+        from assistant.serialize import UIScriptExecutionSerializer
+        serializer = UIScriptExecutionSerializer(execution)
+
+        return Response({
+            'execution': serializer.data,
+            'redis_status': redis_status
+        })

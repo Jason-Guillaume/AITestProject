@@ -20,10 +20,14 @@ from assistant.views import (
     KnowledgeRuntimeStatusAPIView,
     KnowledgeSearchAPIView,
     LlmTestConnectionAPIView,
+    UIScriptUploadViewSet,
+    UIScriptExecutionViewSet,
 )
 
 router = DefaultRouter()
 router.register(r"knowledge-articles", KnowledgeArticleViewSet)
+router.register(r"ui-scripts", UIScriptUploadViewSet, basename='ui-script')
+router.register(r"ui-script-executions", UIScriptExecutionViewSet, basename='ui-script-execution')
 
 urlpatterns = [
     path("llm/test-connection/", LlmTestConnectionAPIView.as_view()),

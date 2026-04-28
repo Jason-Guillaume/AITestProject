@@ -26,6 +26,10 @@ export const suggestCaseFixFromExecutionLogApi = (data) =>
 export const generateAiCasesApi = (data) =>
   request.post("/ai/generate-cases/", data);
 
+/** POST /api/ai/ui-automation/generate/：生成UI自动化测试脚本（Mock） */
+export const generateUiAutomationScriptApi = (data) =>
+  request.post("/ai/ui-automation/generate/", data);
+
 /** 非流式响应是否表示「模块内已有用例已覆盖需求」、无需新用例 */
 export function isAiGenerateAllCoveredResponse(body) {
   const d = body?.data !== undefined ? body.data : body;
@@ -139,12 +143,16 @@ export async function streamGenerateAiCases(payload, options = {}) {
         if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
       }
       if (!dataLines.length) continue;
-      const dataText = dataLines.join("\n");
+      // SSE 规范：多行 data 字段应该用换行符连接
+      // 但我们的后端保证每个事件的 JSON 都是单行的，所以直接连接即可
+      const dataText = dataLines.join("");
       let evt;
       try {
         evt = JSON.parse(dataText);
-      } catch (_) {
-        emit({ type: "malformed", raw: dataText });
+      } catch (parseErr) {
+        // JSON 解析失败，记录详细错误信息
+        console.error("[SSE] JSON parse failed:", parseErr, "Raw data:", dataText);
+        emit({ type: "malformed", raw: dataText, error: String(parseErr) });
         continue;
       }
       if (evt?.type === "delta" && typeof evt?.text === "string") {

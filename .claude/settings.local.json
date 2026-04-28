@@ -28,7 +28,16 @@
       "Bash(taskkill /F /IM python.exe)",
       "Bash(taskkill //F //PID 2196)",
       "Bash(taskkill //F //PID 27280)",
-      "Bash(python -c \"from assistant.services.ai_governance import acquire_ai_concurrency_slot, acquire_ai_concurrency_slot_for_scope; print\\('导入成功'\\)\")"
+      "Bash(python -c \"from assistant.services.ai_governance import acquire_ai_concurrency_slot, acquire_ai_concurrency_slot_for_scope; print\\('导入成功'\\)\")",
+      "Bash(curl -X POST http://localhost:8000/api/ai/generate-cases-stream/ -H 'Content-Type: application/json' -H 'Authorization: Token c2a582bb19c7cf0a3311c83c6f953f7ab0148bd2' -d '{ *)",
+      "Bash(python manage.py makemigrations assistant)",
+      "Bash(python -c ' *)",
+      "Bash(python)",
+      "Bash(git checkout *)",
+      "Bash(python manage.py migrate assistant)",
+      "Bash(grep -E \"\\\\.md$|\\\\.py$\")",
+      "Bash(python manage.py showmigrations assistant)",
+      "Bash(curl -X GET http://127.0.0.1:8000/api/assistant/ui-scripts/ -H \"Authorization: Bearer test\")"
     ]
   }
 }
