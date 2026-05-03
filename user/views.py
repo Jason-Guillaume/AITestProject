@@ -210,6 +210,73 @@ class CaptchaAPIView(APIView):
         )
 
 
+class CaptchaRecognizeAPIView(APIView):
+    """
+    使用 ddddocr 识别验证码图片（base64），供自动化/E2E 填入登录或注册表单。
+
+    安全：须在环境变量 ``CAPTCHA_OCR_SECRET`` 中配置密钥，并在请求头
+    ``X-Captcha-Ocr-Secret`` 传入相同值；依赖 ``pip install ddddocr``。
+    """
+
+    authentication_classes = []
+    permission_classes = []
+    parser_classes = [JSONParser]
+
+    def post(self, request, *args, **kwargs):
+        from django.conf import settings as dj_settings
+
+        secret = getattr(dj_settings, "CAPTCHA_OCR_SECRET", "") or ""
+        if not secret:
+            return Response(
+                {
+                    "code": 503,
+                    "msg": "服务端未配置 CAPTCHA_OCR_SECRET，未启用 OCR",
+                    "data": None,
+                },
+                status=503,
+            )
+        hdr = (request.headers.get("X-Captcha-Ocr-Secret") or "").strip()
+        if hdr != secret:
+            return Response({"code": 403, "msg": "无权限", "data": None}, status=403)
+
+        try:
+            import ddddocr  # type: ignore
+        except ImportError:
+            return Response(
+                {
+                    "code": 500,
+                    "msg": "未安装 ddddocr，请执行: pip install ddddocr",
+                    "data": None,
+                },
+                status=500,
+            )
+
+        raw = request.data.get("image")
+        if not isinstance(raw, str) or not raw.strip():
+            return Response(
+                {"code": 400, "msg": "请提供 JSON 字段 image（base64 或 data URL）", "data": None},
+                status=400,
+            )
+        s = raw.strip()
+        if "," in s and "base64" in s[:48].lower():
+            s = s.split(",", 1)[-1].strip()
+        try:
+            img_bytes = base64.b64decode(s, validate=False)
+        except Exception:
+            return Response(
+                {"code": 400, "msg": "image 不是合法的 base64", "data": None},
+                status=400,
+            )
+        if not img_bytes or len(img_bytes) > 2 * 1024 * 1024:
+            return Response(
+                {"code": 400, "msg": "图片过大或为空", "data": None}, status=400
+            )
+
+        ocr = ddddocr.DdddOcr(show_ad=False)
+        text = str(ocr.classification(img_bytes) or "").strip()[:16]
+        return Response({"code": 200, "msg": "ok", "data": {"text": text}})
+
+
 class UserRegisterAPIView(APIView):
     """
     用户注册接口

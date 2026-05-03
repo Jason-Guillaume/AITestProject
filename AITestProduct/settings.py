@@ -209,6 +209,10 @@ REST_FRAMEWORK = {
 _redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
 _redis_port = int(os.environ.get("REDIS_PORT", "6379"))
 _use_redis_cache = os.environ.get("USE_REDIS_CACHE", "1") == "1"
+# UI 脚本执行（ScriptRunner）写日志用；与 redis-cli / Channels 使用同一套 host:port 即可
+REDIS_DB = int(os.environ.get("REDIS_DB", "0"))
+REDIS_SOCKET_CONNECT_TIMEOUT = int(os.environ.get("REDIS_SOCKET_CONNECT_TIMEOUT", "3"))
+REDIS_SOCKET_TIMEOUT = int(os.environ.get("REDIS_SOCKET_TIMEOUT", "20"))
 
 
 def _redis_is_available(host: str, port: int, timeout: float = 0.3) -> bool:
@@ -355,7 +359,7 @@ ADMINS = []
 AITEST_ENV_SECRET_KEY = os.environ.get("AITEST_ENV_SECRET_KEY", "")
 
 # ---------------------------------------------------------------------------
-# Celery（执行引擎异步任务）
+# Celery（执行引擎异步任务）— 2C2G：broker 优先 Redis；worker 低并发、短生命周期子进程
 # ---------------------------------------------------------------------------
 _db_default = DATABASES.get("default", {})
 _db_user = quote_plus(str(_db_default.get("USER", "") or ""))
@@ -366,29 +370,36 @@ _db_name = str(_db_default.get("NAME", "") or "")
 _auth_part = _db_user
 if _db_password:
     _auth_part = f"{_db_user}:{_db_password}"
-# 使用 SQLAlchemy 传输层，将 Celery Broker 切换到 MySQL。
-# 连接信息复用 Django DATABASES['default']，避免重复维护配置。
 _default_mysql_broker = (
     f"sqla+mysql+pymysql://{_auth_part}@{_db_host}:{_db_port}/{_db_name}"
 )
-# 优先使用 Redis（更常见、更轻量的 broker）；Redis 不可用则回退 MySQL broker。
 _default_redis_broker = f"redis://{_redis_host}:{_redis_port}/1"
 if _redis_is_available(_redis_host, _redis_port):
-    _default_broker = _default_redis_broker
+    CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", _default_redis_broker)
+    CELERY_RESULT_BACKEND = os.environ.get(
+        "CELERY_RESULT_BACKEND", CELERY_BROKER_URL
+    )
 else:
-    _default_broker = _default_mysql_broker
-CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", _default_broker)
-# 若安装了 django-celery-results，则可用 django-db 作为结果后端；否则回退到 rpc://，避免配置为不可用的 backend。
-CELERY_RESULT_BACKEND = os.environ.get(
-    "CELERY_RESULT_BACKEND",
-    "django-db" if _app_installed("django_celery_results") else "rpc://",
-)
+    CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", _default_mysql_broker)
+    CELERY_RESULT_BACKEND = os.environ.get(
+        "CELERY_RESULT_BACKEND",
+        "django-db" if _app_installed("django_celery_results") else "rpc://",
+    )
+
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+# 部署机约 2G 内存：单 worker 并发 1、子进程累计任务数上限小，降低泄漏与峰值内存
+CELERY_WORKER_MAX_TASKS_PER_CHILD = int(
+    os.environ.get("CELERY_WORKER_MAX_TASKS_PER_CHILD", "10")
+)
+CELERY_WORKER_CONCURRENCY = int(os.environ.get("CELERY_WORKER_CONCURRENCY", "1"))
+
+# 自动化：登录接口可选验证码；OCR 接口需密钥（见 user.views.CaptchaRecognizeAPIView）
+CAPTCHA_OCR_SECRET = os.environ.get("CAPTCHA_OCR_SECRET", "").strip()
 
 # 知识库上传解析：单文件大小限制（字节）
 KNOWLEDGE_UPLOAD_MAX_SIZE = int(

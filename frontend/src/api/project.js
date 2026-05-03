@@ -40,6 +40,14 @@ export const createTaskApi = (data) => request.post("/project/tasks/", data);
 export const updateTaskApi = (id, data) => request.patch(`/project/tasks/${id}/`, data);
 export const deleteTaskApi = (id) => request.delete(`/project/tasks/${id}/`);
 
+/** 流水线列表 / 详情 / 创建 / 运行（CI/CD，对齐 Jenkins 项目类型） */
+export const getPipelinesApi = (params) => request.get("/project/pipelines/", { params });
+export const getPipelineApi = (id) => request.get(`/project/pipelines/${id}/`);
+export const createPipelineApi = (data) => request.post("/project/pipelines/", data);
+export const updatePipelineApi = (id, data) => request.patch(`/project/pipelines/${id}/`, data);
+export const runPipelineApi = (id, data) => request.post(`/project/pipelines/${id}/run/`, data);
+export const deletePipelineApi = (id) => request.delete(`/project/pipelines/${id}/`);
+
 export const getReleasesApi = (params) => request.get("/project/releases/", { params });
 export const createReleaseApi = (data) => request.post("/project/releases/", data);
 export const updateReleaseApi = (id, data) => request.patch(`/project/releases/${id}/`, data);

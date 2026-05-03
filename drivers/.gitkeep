@@ -1,0 +1,2 @@
+# 将浏览器驱动可执行文件放在本目录，平台会在执行 UI 脚本时自动注入 SE_* 并启用 SE_OFFLINE，减少冷启动联网延迟。
+# 文件名示例：chromedriver.exe / msedgedriver.exe / geckodriver.exe（Linux 无 .exe 后缀亦可）

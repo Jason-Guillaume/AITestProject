@@ -143,3 +143,30 @@ class ReleasePlanSerializer(BaseModelSerializers):
         model = ReleasePlan
         fields = "__all__"
         read_only_fields = ("creator", "updater", "create_time", "update_time")
+
+
+# ---------------------------------------------------------------------------
+# Pipeline serializers for CI/CD integration
+# ---------------------------------------------------------------------------
+
+
+class PipelineSerializer(BaseModelSerializers):
+    """Serializer for the :class:`project.models.Pipeline` model."""
+
+    class Meta:
+        model = Pipeline
+        fields = "__all__"
+        read_only_fields = ("status",)
+
+    def validate_repo_url(self, value):
+        if value in ("", None):
+            return None
+        return value
+
+
+class PipelineLogSerializer(BaseModelSerializers):
+    """Serializer for the :class:`project.models.PipelineLog` model."""
+
+    class Meta:
+        model = PipelineLog
+        fields = ("id", "log_text", "timestamp")

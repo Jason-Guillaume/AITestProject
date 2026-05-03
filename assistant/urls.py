@@ -22,12 +22,14 @@ from assistant.views import (
     LlmTestConnectionAPIView,
     UIScriptUploadViewSet,
     UIScriptExecutionViewSet,
+    UIPomTestReportViewSet,
 )
 
 router = DefaultRouter()
 router.register(r"knowledge-articles", KnowledgeArticleViewSet)
 router.register(r"ui-scripts", UIScriptUploadViewSet, basename='ui-script')
 router.register(r"ui-script-executions", UIScriptExecutionViewSet, basename='ui-script-execution')
+router.register(r"ui-pom-reports", UIPomTestReportViewSet, basename='ui-pom-report')
 
 urlpatterns = [
     path("llm/test-connection/", LlmTestConnectionAPIView.as_view()),

@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from common.models import AuditEvent
 from common.views import BaseModelViewSet
 from common.services.audit import record_execute_audit, record_audit_event
 from server_logs.access import (

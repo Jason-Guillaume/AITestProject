@@ -1,6 +1,6 @@
 # project/urls.py
 from rest_framework.routers import DefaultRouter
-from project.views import TestProjectViewSet, TestTaskViewSet, ReleasePlanViewSet
+from project.views import TestProjectViewSet, TestTaskViewSet, ReleasePlanViewSet, PipelineViewSet
 
 # 1. 实例化路由器
 router = DefaultRouter()
@@ -11,6 +11,7 @@ router = DefaultRouter()
 router.register(r"projects", TestProjectViewSet)
 router.register(r"tasks", TestTaskViewSet)
 router.register(r"releases", ReleasePlanViewSet)
+router.register(r"pipelines", PipelineViewSet)
 
 # 3. 暴露路由
 urlpatterns = router.urls

@@ -10,6 +10,8 @@ import threading
 import time
 import json
 import logging
+import platform
+import signal
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pathlib import Path
@@ -23,9 +25,123 @@ from assistant.models import UIScriptUpload
 logger = logging.getLogger(__name__)
 
 
+def _inject_local_webdriver_for_fast_start(
+    env: Dict[str, Any],
+    browser: str,
+    base_dir: Path,
+) -> str:
+    """
+    优先使用项目内 drivers/ 下的本地驱动，注入 Selenium Manager 识别的 SE_*，并设 SE_OFFLINE=true，
+    避免冷启动时联网解析/下载驱动，便于尽快进入浏览器与脚本输出。
+
+    若进程环境或 env 中已存在对应 SE_*，则不覆盖。
+    """
+    b = (browser or "chrome").strip().lower()
+    mapping = {
+        "chrome": ("SE_CHROMEDRIVER", ("chromedriver.exe", "chromedriver")),
+        "edge": ("SE_EDGEDRIVER", ("msedgedriver.exe", "msedgedriver")),
+        "firefox": ("SE_GECKODRIVER", ("geckodriver.exe", "geckodriver")),
+    }
+    if b not in mapping:
+        b = "chrome"
+    se_key, names = mapping[b]
+    existing = (env.get(se_key) or os.environ.get(se_key) or "").strip()
+    if existing:
+        return f"驱动策略: 沿用已有 {se_key}={existing}（不覆盖）。"
+
+    drivers_dir = base_dir / "drivers"
+    for name in names:
+        candidate = drivers_dir / name
+        if candidate.is_file():
+            env[se_key] = str(candidate.resolve())
+            env["SE_OFFLINE"] = "true"
+            return (
+                f"驱动策略: 已自动使用本地 {candidate}，并设置 SE_OFFLINE=true（不联网拉取驱动）；"
+                f"请保证该驱动与已安装浏览器主版本匹配。"
+            )
+
+    return (
+        "驱动策略: 未在 {drivers_dir} 下发现 {names}，且未设置 {se_key}；"
+        "将交由 Selenium Manager（可能联网、首次较慢）。可将驱动放入 drivers/ 目录以加速。"
+    ).format(drivers_dir=drivers_dir, names="/".join(names), se_key=se_key)
+
+
 class ScriptExecutionError(Exception):
     """脚本执行异常"""
     pass
+
+
+def _try_parse_pytest_junit_stats(workspace_path: str) -> Optional[Dict[str, int]]:
+    """若存在 pytest 生成的 junit.xml，解析用例统计供前端展示。"""
+    from xml.etree import ElementTree as ET
+
+    path = os.path.join(workspace_path, "test-results", "junit.xml")
+    if not os.path.isfile(path):
+        return None
+    try:
+        root = ET.parse(path).getroot()
+        suites = root.findall("testsuite")
+        if not suites and root.tag == "testsuite":
+            suites = [root]
+        if not suites:
+            return None
+        tests = failures = errors = skipped = 0
+        for ts in suites:
+            tests += int(ts.attrib.get("tests", 0) or 0)
+            failures += int(ts.attrib.get("failures", 0) or 0)
+            errors += int(ts.attrib.get("errors", 0) or 0)
+            skipped += int(ts.attrib.get("skipped", 0) or 0)
+        passed = tests - failures - errors - skipped
+        return {
+            "total": tests,
+            "passed": max(0, passed),
+            "failed": failures + errors,
+            "skipped": skipped,
+        }
+    except Exception:
+        return None
+
+
+def _linear_fallback_stats(success: bool) -> Dict[str, int]:
+    """线性脚本等无 junit 时：按单次进程退化为 1 条用例统计。"""
+    return {
+        "total": 1,
+        "passed": 1 if success else 0,
+        "failed": 0 if success else 1,
+        "skipped": 0,
+    }
+
+
+def _cancelled_stats() -> Dict[str, int]:
+    """用户停止：记为 1 条跳过，便于前端与 junit 语义区分。"""
+    return {"total": 1, "passed": 0, "failed": 0, "skipped": 1}
+
+
+def _kill_process_tree(pid: int) -> None:
+    """终止子进程及其子进程（如 chromedriver / 浏览器）。"""
+    if pid <= 0:
+        return
+    try:
+        if platform.system() == "Windows":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                capture_output=True,
+                text=True,
+                timeout=45,
+            )
+        else:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                return
+            time.sleep(0.4)
+            try:
+                os.kill(pid, 0)
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    except Exception:
+        logger.warning("终止 UI 脚本子进程失败 pid=%s", pid, exc_info=True)
 
 
 class ScriptRunner:
@@ -39,14 +155,32 @@ class ScriptRunner:
             redis_client: Redis客户端实例，如果为None则创建新实例
         """
         if redis_client is None:
+            _conn = int(getattr(settings, "REDIS_SOCKET_CONNECT_TIMEOUT", 3))
+            _sock = int(getattr(settings, "REDIS_SOCKET_TIMEOUT", 20))
             self.redis_client = redis.Redis(
                 host=getattr(settings, 'REDIS_HOST', 'localhost'),
                 port=getattr(settings, 'REDIS_PORT', 6379),
                 db=getattr(settings, 'REDIS_DB', 0),
-                decode_responses=True
+                decode_responses=True,
+                socket_connect_timeout=_conn,
+                socket_timeout=_sock,
             )
         else:
             self.redis_client = redis_client
+
+    def _ensure_redis(self) -> None:
+        """执行前必须能连上 Redis，否则日志全丢且界面长期空白。"""
+        try:
+            self.redis_client.ping()
+        except Exception as e:
+            host = getattr(settings, "REDIS_HOST", "localhost")
+            port = getattr(settings, "REDIS_PORT", 6379)
+            db = getattr(settings, "REDIS_DB", 0)
+            raise ScriptExecutionError(
+                f"无法连接 Redis（{host}:{port} db={db}）：{e}。"
+                f"引擎日志依赖 Redis；请启动与 Django 配置一致的 Redis（见 REDIS_HOST/REDIS_PORT），"
+                f"否则界面不会出现任何引擎输出。"
+            ) from e
 
     def _get_log_key(self, execution_id: str) -> str:
         """
@@ -72,6 +206,54 @@ class ScriptRunner:
         """
         return f"ui_script_execution:{execution_id}:status"
 
+    def _get_pid_key(self, execution_id: str) -> str:
+        return f"ui_script_execution:{execution_id}:pid"
+
+    def _get_cancel_key(self, execution_id: str) -> str:
+        return f"ui_script_execution:{execution_id}:cancel"
+
+    def _register_subprocess_pid(self, execution_id: str, pid: int) -> None:
+        try:
+            self.redis_client.set(self._get_pid_key(execution_id), str(pid), ex=86400)
+        except Exception as e:
+            logger.warning("写入子进程 PID 到 Redis 失败: %s", e)
+
+    def _unregister_subprocess_pid(self, execution_id: str) -> None:
+        try:
+            self.redis_client.delete(self._get_pid_key(execution_id))
+        except Exception as e:
+            logger.debug("清理 PID 键失败: %s", e)
+
+    def _is_user_cancel_requested(self, execution_id: str) -> bool:
+        try:
+            v = self.redis_client.get(self._get_cancel_key(execution_id))
+            return bool(v and str(v).strip() in ("1", "true", "yes", "on"))
+        except Exception:
+            return False
+
+    def request_stop(self, execution_id: str) -> Dict[str, Any]:
+        """
+        用户停止：写入 Redis 标记并尽量终止子进程树（与 execute 是否同进程无关）。
+        """
+        self._ensure_redis()
+        try:
+            self.redis_client.set(self._get_cancel_key(execution_id), "1", ex=86400)
+        except Exception as e:
+            logger.error("写入停止标记失败: %s", e, exc_info=True)
+            return {"cancel_requested": False, "killed": False, "error": str(e)}
+        killed = False
+        try:
+            raw = self.redis_client.get(self._get_pid_key(execution_id))
+            if raw:
+                pid = int(str(raw).strip())
+                _kill_process_tree(pid)
+                killed = True
+        except (TypeError, ValueError) as e:
+            logger.debug("解析 PID 失败: %s", e)
+        except Exception:
+            logger.warning("按 PID 终止子进程时异常", exc_info=True)
+        return {"cancel_requested": True, "killed": killed}
+
     def _write_log(self, execution_id: str, log_type: str, message: str):
         """
         写入日志到Redis
@@ -89,10 +271,15 @@ class ScriptRunner:
             }
 
             log_key = self._get_log_key(execution_id)
-            self.redis_client.rpush(log_key, json.dumps(log_entry))
-
-            # 设置过期时间（24小时）
-            self.redis_client.expire(log_key, 86400)
+            # 每条日志单独 EXPIRE 会产生大量 Redis 往返；同一 execution 只对 key 设置一次 TTL
+            if not hasattr(self, "_log_keys_expired"):
+                self._log_keys_expired = set()
+            pipe = self.redis_client.pipeline()
+            pipe.rpush(log_key, json.dumps(log_entry))
+            if log_key not in self._log_keys_expired:
+                pipe.expire(log_key, 86400)
+                self._log_keys_expired.add(log_key)
+            pipe.execute()
 
         except Exception as e:
             logger.error(f"写入日志到Redis失败: {str(e)}", exc_info=True)
@@ -246,6 +433,28 @@ class ScriptRunner:
         stdout_thread.start()
         stderr_thread.start()
 
+        def _heartbeat() -> None:
+            """长时间无 stdout/stderr 时写一条系统日志，避免前端误以为卡死。"""
+            try:
+                first = True
+                while process.poll() is None:
+                    delay = 35.0 if first else 45.0
+                    first = False
+                    time.sleep(delay)
+                    if process.poll() is not None:
+                        break
+                    self._write_log(
+                        execution_id,
+                        'system',
+                        '子进程仍在运行，尚未产生新的控制台输出：常见于 Chrome/Chromedriver 首次初始化、'
+                        'unittest 收集/导入用例、或脚本在 setUp/首次打开页面阶段未 print（无头模式同样可能长时间无输出）。'
+                        ' 可在运行 Django 的机器上查看 chromedriver.exe、chrome 及网络活动。',
+                    )
+            except Exception:
+                logger.debug('UI 执行 heartbeat 结束', exc_info=True)
+
+        threading.Thread(target=_heartbeat, daemon=True).start()
+
         # 等待进程完成
         try:
             return_code = process.wait(timeout=timeout)
@@ -265,7 +474,8 @@ class ScriptRunner:
         self,
         script_upload_instance_id: int,
         execution_id: Optional[str] = None,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        execution_config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         执行UI自动化脚本
@@ -274,6 +484,7 @@ class ScriptRunner:
             script_upload_instance_id: UIScriptUpload实例ID
             execution_id: 执行ID（可选，用于日志追踪）
             timeout: 超时时间（秒），默认使用配置值
+            execution_config: 执行配置（浏览器、无头模式等）
 
         Returns:
             执行结果字典，包含：
@@ -290,6 +501,10 @@ class ScriptRunner:
         if execution_id is None:
             execution_id = f"{script_upload_instance_id}_{int(time.time())}"
 
+        # 默认执行配置
+        if execution_config is None:
+            execution_config = {}
+
         start_time = time.time()
 
         # 初始化结果
@@ -302,6 +517,7 @@ class ScriptRunner:
         }
 
         try:
+            self._ensure_redis()
             # 1. 查询数据库获取脚本实例
             self._write_log(execution_id, 'system', f'开始执行脚本 (ID: {script_upload_instance_id})')
 
@@ -332,12 +548,66 @@ class ScriptRunner:
             self._write_log(execution_id, 'system', f'工作空间: {workspace_path}')
 
             # 3. 构建环境变量
-            env = self._build_environment(workspace_path)
-            self._write_log(execution_id, 'system', f'PYTHONPATH: {env["PYTHONPATH"]}')
+            from assistant.utils.multi_framework_runner import MultiFrameworkRunner
+            from django.conf import settings as dj_settings
 
-            # 4. 构建pytest命令
-            cmd = self._build_pytest_command(script_instance, workspace_path)
+            cfg = execution_config or {}
+            multi_runner = MultiFrameworkRunner(script_instance, workspace_path, execution_config=cfg)
+            cmd = multi_runner.build_command()
+            env = multi_runner.get_environment()
+
+            # 4. 注入浏览器配置到环境变量（须在 build_command 之后写入，供子进程与补丁读取）
+            # execution_config 已规范为 dict，勿用 if execution_config（空 {} 会跳过）
+            browser = execution_config.get('browser', 'chrome')
+            headless = execution_config.get('headless', False)
+            parallel = execution_config.get('parallel', 1)
+            env['BROWSER_TYPE'] = browser
+            env['HEADLESS_MODE'] = str(headless)
+            env['PARALLEL_COUNT'] = str(parallel)
+            self._write_log(execution_id, 'system', f'浏览器配置: {browser} (无头模式: {headless})')
+
+            driver_hint = _inject_local_webdriver_for_fast_start(
+                env, browser, Path(dj_settings.BASE_DIR)
+            )
+            self._write_log(execution_id, 'system', driver_hint)
+
+            # 保证子进程可 import assistant（线性启动器、pytest 插件）；
+            # 同时把「入口脚本所在目录」加入 PYTHONPATH，避免入口在 workspace 子目录时
+            # （如 …/12/5.2周考题练习/run.py）与同级包 TestCase/pages 无法被 from TestCase import … 解析。
+            _root = str(dj_settings.BASE_DIR)
+            _pp = (env.get('PYTHONPATH') or '').strip()
+            path_parts: List[str] = [_root]
+            ep = (getattr(script_instance, 'entry_point', None) or '').strip()
+            if ep:
+                entry_abs = os.path.normpath(
+                    os.path.join(workspace_path, ep.replace('\\', os.sep))
+                )
+                script_parent = os.path.dirname(entry_abs)
+                if script_parent and os.path.isdir(script_parent):
+                    path_parts.append(script_parent)
+            if _pp:
+                for seg in _pp.split(os.pathsep):
+                    seg = seg.strip()
+                    if seg and seg not in path_parts:
+                        path_parts.append(seg)
+            env['PYTHONPATH'] = os.pathsep.join(path_parts)
+
+            # pytest：无头时尽早加载补丁（POM 等）
+            if execution_config.get('headless'):
+                plug = 'assistant.runtime.pytest_headless_plugin'
+                existing = (env.get('PYTEST_PLUGINS') or '').strip()
+                if plug not in existing:
+                    env['PYTEST_PLUGINS'] = f'{plug},{existing}' if existing else plug
+
+            # 子进程尽早刷 stdout/stderr，避免脚本 print 长时间留在缓冲里导致前端「无日志」
+            env.setdefault('PYTHONUNBUFFERED', '1')
+            # Selenium Manager 会读取 SE_CHROMEDRIVER / SE_EDGEDRIVER / SE_GECKODRIVER / SE_OFFLINE（见 .env.example）。
+            # env 来自 os.environ.copy()，勿在此清空上述变量；驱动应放本机磁盘，勿存 Redis。
+
             self._write_log(execution_id, 'system', f'执行命令: {" ".join(cmd)}')
+            self._write_log(execution_id, 'system', f'测试框架: {script_instance.framework}')
+            self._write_log(execution_id, 'system', f'脚本语言: {script_instance.language}')
+            self._write_log(execution_id, 'system', f'PYTHONPATH: {env.get("PYTHONPATH", "N/A")}')
 
             # 5. 更新状态为运行中
             self._update_status(
@@ -347,6 +617,35 @@ class ScriptRunner:
                 script_name=script_instance.name,
                 started_at=datetime.now().isoformat()
             )
+
+            # 用户在引擎构建完命令后、拉起浏览器前点击停止
+            if self._is_user_cancel_requested(execution_id):
+                duration = time.time() - start_time
+                self._write_log(execution_id, 'system', '执行在启动子进程前已由用户停止。')
+                stats = _cancelled_stats()
+                self._update_status(
+                    execution_id,
+                    'cancelled',
+                    script_id=script_upload_instance_id,
+                    script_name=script_instance.name,
+                    return_code=None,
+                    duration=duration,
+                    completed_at=datetime.now().isoformat(),
+                    result_stats=stats,
+                )
+                try:
+                    self.redis_client.delete(self._get_cancel_key(execution_id))
+                except Exception:
+                    pass
+                result.update(
+                    {
+                        'cancelled': True,
+                        'success': False,
+                        'duration': duration,
+                        'return_code': None,
+                    }
+                )
+                return result
 
             # 6. 执行脚本
             self._write_log(execution_id, 'system', '=' * 60)
@@ -363,28 +662,73 @@ class ScriptRunner:
                 bufsize=1,
                 universal_newlines=True
             )
+            self._register_subprocess_pid(execution_id, process.pid)
+            self._write_log(
+                execution_id,
+                "system",
+                f"子进程已启动 (PID={process.pid})。Selenium 首次拉起 Chrome/Chromedriver、unittest 收集用例、"
+                "或脚本在 setUp/打开首屏前未 print 时，常出现数十秒至数分钟几乎无标准输出，无头与有头均可能发生，属正常现象。"
+                " 若超过数分钟仍无下文，请在 Django 所在机器查看 CPU、chromedriver、chrome 与网络。",
+            )
 
-            # 7. 流式读取输出
             if timeout is None:
                 timeout = getattr(settings, 'UI_SCRIPT_TIMEOUT', 3600)
 
-            return_code, stdout_lines, stderr_lines = self._stream_output(
-                process,
-                execution_id,
-                timeout
-            )
+            try:
+                return_code, stdout_lines, stderr_lines = self._stream_output(
+                    process,
+                    execution_id,
+                    timeout
+                )
+            finally:
+                self._unregister_subprocess_pid(execution_id)
 
-            # 8. 计算执行时长
             duration = time.time() - start_time
 
-            # 9. 记录执行结果
+            if self._is_user_cancel_requested(execution_id):
+                self._write_log(execution_id, 'system', '=' * 60)
+                self._write_log(
+                    execution_id,
+                    'system',
+                    f'执行已由用户停止（返回码: {return_code}）',
+                )
+                self._write_log(execution_id, 'system', f'执行时长: {duration:.2f}秒')
+                self._write_log(execution_id, 'system', '=' * 60)
+                stats = _cancelled_stats()
+                self._update_status(
+                    execution_id,
+                    'cancelled',
+                    script_id=script_upload_instance_id,
+                    script_name=script_instance.name,
+                    return_code=return_code,
+                    duration=duration,
+                    completed_at=datetime.now().isoformat(),
+                    result_stats=stats,
+                )
+                try:
+                    self.redis_client.delete(self._get_cancel_key(execution_id))
+                except Exception:
+                    pass
+                result.update(
+                    {
+                        'cancelled': True,
+                        'success': False,
+                        'return_code': return_code,
+                        'duration': duration,
+                    }
+                )
+                return result
+
+            # 7. 记录执行结果（正常结束）
             self._write_log(execution_id, 'system', '=' * 60)
             self._write_log(execution_id, 'system', f'执行完成 (返回码: {return_code})')
             self._write_log(execution_id, 'system', f'执行时长: {duration:.2f}秒')
             self._write_log(execution_id, 'system', '=' * 60)
 
-            # 10. 更新最终状态
             success = return_code == 0
+            stats = _try_parse_pytest_junit_stats(workspace_path)
+            if stats is None:
+                stats = _linear_fallback_stats(success)
 
             self._update_status(
                 execution_id,
@@ -393,10 +737,10 @@ class ScriptRunner:
                 script_name=script_instance.name,
                 return_code=return_code,
                 duration=duration,
-                completed_at=datetime.now().isoformat()
+                completed_at=datetime.now().isoformat(),
+                result_stats=stats,
             )
 
-            # 11. 返回结果
             result.update({
                 'success': success,
                 'return_code': return_code,
@@ -413,13 +757,16 @@ class ScriptRunner:
             error_msg = str(e)
             logger.error(f"脚本执行失败: {error_msg}", exc_info=True)
 
-            self._write_log(execution_id, 'system', f'错误: {error_msg}')
-            self._update_status(
-                execution_id,
-                'failed',
-                error=error_msg,
-                duration=time.time() - start_time
-            )
+            try:
+                self._write_log(execution_id, 'system', f'错误: {error_msg}')
+                self._update_status(
+                    execution_id,
+                    'failed',
+                    error=error_msg,
+                    duration=time.time() - start_time,
+                )
+            except Exception:
+                logger.error("Redis 不可用，无法在 Redis 中记录失败原因", exc_info=True)
 
             result['error'] = error_msg
             result['duration'] = time.time() - start_time
@@ -431,13 +778,16 @@ class ScriptRunner:
             error_msg = f"执行过程中发生异常: {str(e)}"
             logger.error(error_msg, exc_info=True)
 
-            self._write_log(execution_id, 'system', f'系统错误: {error_msg}')
-            self._update_status(
-                execution_id,
-                'failed',
-                error=error_msg,
-                duration=time.time() - start_time
-            )
+            try:
+                self._write_log(execution_id, 'system', f'系统错误: {error_msg}')
+                self._update_status(
+                    execution_id,
+                    'failed',
+                    error=error_msg,
+                    duration=time.time() - start_time,
+                )
+            except Exception:
+                logger.error("Redis 不可用，无法在 Redis 中记录系统错误", exc_info=True)
 
             result['error'] = error_msg
             result['duration'] = time.time() - start_time
@@ -505,7 +855,12 @@ class ScriptRunner:
             log_key = self._get_log_key(execution_id)
             status_key = self._get_status_key(execution_id)
 
-            self.redis_client.delete(log_key, status_key)
+            self.redis_client.delete(
+                log_key,
+                status_key,
+                self._get_pid_key(execution_id),
+                self._get_cancel_key(execution_id),
+            )
 
             logger.info(f"已清理执行数据: {execution_id}")
 

@@ -3,6 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     CaptchaAPIView,
+    CaptchaRecognizeAPIView,
     UserRegisterAPIView,
     UserLoginAPIView,
     CurrentUserAPIView,
@@ -31,6 +32,7 @@ router.register(r"roles", RoleViewSet)
 # 2. 将普通 APIView 的路由与 Router 的路由合并
 urlpatterns = [
     path("captcha/", CaptchaAPIView.as_view(), name="captcha"),
+    path("captcha/recognize/", CaptchaRecognizeAPIView.as_view(), name="captcha-recognize"),
     path("register/", UserRegisterAPIView.as_view(), name="register"),
     path("login/", UserLoginAPIView.as_view(), name="login"),
     path("me/", CurrentUserAPIView.as_view(), name="current-user"),

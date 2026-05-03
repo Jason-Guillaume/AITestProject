@@ -1,42 +1,65 @@
 <template>
   <div class="script-hub-container">
-    <!-- 顶部 Header -->
+    <!-- Header -->
     <div class="hub-header">
       <h1 class="hub-title">脚本执行中心</h1>
-      <p class="hub-subtitle">统一管理与执行各类自动化测试工程</p>
+       <p class="hub-subtitle">统一管理与执行各类自动化测试工程</p>
     </div>
 
-    <!-- 主体 Content -->
+    <!-- Main content -->
     <div class="hub-content">
-      <el-row :gutter="24">
-        <el-col
-          v-for="module in modules"
-          :key="module.id"
-          :xs="24"
-          :sm="12"
-          :md="12"
-          :lg="6"
-        >
-          <el-card class="module-card" :body-style="{ padding: '24px' }">
-            <div class="card-icon">
-              <component :is="module.icon" :size="48" />
-            </div>
-            <h3 class="card-title">{{ module.title }}</h3>
-            <p class="card-description">{{ module.description }}</p>
-            <div class="card-action">
-              <el-button
-                :type="module.available ? 'primary' : 'info'"
-                :disabled="!module.available"
-                class="action-button"
-                @click="handleNavigate(module.route)"
-              >
-                {{ module.buttonText }}
-              </el-button>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
+      <!-- Primary modules (excluding H5) -->
+      <div class="modules-grid">
+        <div v-for="module in modules.filter(m => m.id !== 'h5')" :key="module.id" class="module-card">
+          <!-- Status indicator: small amber dot when module is online/available -->
+          <div class="status-indicator" v-if="module.available"></div>
+          <div class="card-icon">
+            <component :is="module.icon" :size="48" />
+          </div>
+          <h3 class="card-title">{{ module.title }}</h3>
+          <p class="card-description">{{ module.description }}</p>
+          <div class="card-action">
+            <el-button
+              :type="module.available ? 'primary' : 'info'"
+              :disabled="!module.available"
+              class="action-button"
+              @click="handleNavigate(module.route)"
+            >
+              {{ module.buttonText }}
+            </el-button>
+          </div>
+          <!-- Explanation text for each functional template -->
+          <p v-if="module.explanation" class="module-explanation">
+            {{ module.explanation }}
+          </p>
+        </div>
+      </div>
+      <!-- H5 专属入口，单独展示 -->
+      <div class="modules-grid" style="margin-top: 48px;">
+        <div v-for="module in modules.filter(m => m.id === 'h5')" :key="module.id" class="module-card">
+          <div class="status-indicator" v-if="module.available"></div>
+          <div class="card-icon">
+            <component :is="module.icon" :size="48" />
+          </div>
+          <h3 class="card-title">{{ module.title }}</h3>
+          <p class="card-description">{{ module.description }}</p>
+          <div class="card-action">
+            <el-button
+              :type="module.available ? 'primary' : 'info'"
+              :disabled="!module.available"
+              class="action-button"
+              @click="handleNavigate(module.route)"
+            >
+              {{ module.buttonText }}
+            </el-button>
+          </div>
+          <p v-if="module.explanation" class="module-explanation">
+            {{ module.explanation }}
+          </p>
+        </div>
+      </div>
     </div>
+    <!-- No terminal/log panel needed -->
   </div>
 </template>
 
@@ -46,7 +69,8 @@ import {
   Monitor,
   Connection,
   Iphone,
-  TrendCharts
+  TrendCharts,
+  Document,
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -55,6 +79,11 @@ interface ModuleItem {
   id: string
   title: string
   description: string
+  /**
+   * Detailed explanation for this functional template.
+   * This will be displayed as a centered caption below the action button.
+   */
+  explanation?: string
   icon: any
   available: boolean
   buttonText: string
@@ -66,35 +95,71 @@ const modules: ModuleItem[] = [
     id: 'webui',
     title: 'Web UI 自动化',
     description: '支持 Selenium/Playwright 框架，兼容线性脚本与 POM 工程的导入与沙箱执行。',
+    explanation: 'Web UI 自动化模块提供浏览器层面的脚本编写与执行，适用于前端功能回归。',
     icon: Monitor,
     available: true,
     buttonText: '进入工作台 ->',
     route: '/script-hub/webui'
   },
   {
-    id: 'api',
-    title: '接口自动化 (API)',
-    description: '支持 HttpRunner/Pytest 接口工程的编排与高并发执行。',
-    icon: Connection,
-    available: false,
-    buttonText: '敬请期待'
+    id: 'pom-reports',
+    title: 'UI / POM 测试报告',
+    description: '执行完成后自动从工作空间提取 HTML 报告并归档，支持列表、预览与下载。',
+    explanation: '与 Web UI 工作台执行联动；BeautifulReport、pytest-html 等生成的 .html 可被识别归档。',
+    icon: Document,
+    available: true,
+    buttonText: '进入报告管理',
+    route: '/script-hub/pom-reports'
   },
-  {
-    id: 'app',
-    title: 'App 自动化',
-    description: '支持 Appium 移动端 UI 脚本执行与设备集群调度。',
-    icon: Iphone,
-    available: false,
-    buttonText: '敬请期待'
-  },
-  {
-    id: 'performance',
-    title: '性能压测脚本',
-    description: '支持 JMeter/K6 等压测脚本的分布式压测引擎调用。',
-    icon: TrendCharts,
-    available: false,
-    buttonText: '敬请期待'
-  }
+    {
+      id: 'api',
+      title: '接口自动化 (API)',
+      description: '支持 HttpRunner/Pytest 接口工程的编排与高并发执行。',
+      explanation: 'API 自动化模块用于发送 HTTP 请求，验证后端接口的正确性与性能。',
+      icon: Connection,
+      available: false,
+      buttonText: '敬请期待'
+    },
+    {
+      id: "app",
+      title: "App 自动化",
+      description: "支持 Appium 移动端 UI 脚本执行与设备集群调度。",
+      explanation: "App 自动化模块利用 Appium 在真实设备或模拟器上执行移动端 UI 测试。",
+      icon: Iphone,
+      available: false,
+      buttonText: "敬请期待"
+    },
+    {
+      id: "performance",
+      title: "性能压测脚本",
+      description: "支持 JMeter/K6 等压测脚本的分布式压测引擎调用。",
+      explanation: "性能压测模块提供对系统在高并发下的响应时间、吞吐量等指标进行评估。",
+      icon: TrendCharts,
+      available: false,
+      buttonText: "敬请期待"
+    },
+    // 新增 H5 自动化入口（暂未上线）
+    {
+      id: "h5",
+      title: "H5 自动化",
+      description: "针对移动端 H5 页面提供基于浏览器的脚本编写与执行。",
+      explanation: "H5 自动化模块帮助在移动端浏览器环境中验证页面交互与布局。",
+      icon: Monitor,
+      available: false,
+      buttonText: "敬请期待",
+      // route 保留以便后续开启后直接跳转
+      route: "/script-hub/h5"
+    },
+    // 新增 小程序 自动化入口
+    {
+      id: "miniapp",
+      title: "小程序 自动化",
+      description: "支持微信/支付宝等小程序脚本的录制、编辑与执行。",
+      explanation: "小程序自动化模块提供对原生小程序 UI 与 API 的自动化测试能力。",
+      icon: Connection,
+      available: false,
+      buttonText: "敬请期待"
+    }
 ]
 
 const handleNavigate = (route?: string) => {
@@ -105,141 +170,181 @@ const handleNavigate = (route?: string) => {
 </script>
 
 <style scoped>
+/* Design System Variables scoped to the container */
 .script-hub-container {
+  --c-cyan: #00d8ff;        /* Primary accent – cyber‑cyan */
+  --bg-from: #0a0e1a;      /* Background gradient – deep sci‑fi blue‑gray */
+  --bg-to: #1a1f2e;
+  --run-accent: #ffbf00;   /* Running/active state accent – neon‑amber */
+
+  /* Layout and background */
   min-height: 100vh;
-  background-color: #141414;
-  padding: 40px 24px;
+  background: linear-gradient(180deg, var(--bg-from) 0%, var(--bg-to) 100%);
+  color: #e2e8f0; /* light text for contrast */
 }
 
-/* 顶部 Header 样式 */
-.hub-header {
-  text-align: center;
-  margin-bottom: 48px;
-}
-
+/* Header – similar vibe to AgentHub */
+/* Header and subtitle */
 .hub-title {
   font-size: 36px;
   font-weight: 600;
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--c-cyan) 0%, #0ea5e9 70%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0 0 12px 0;
   letter-spacing: 2px;
-  text-shadow: 0 0 20px rgba(64, 158, 255, 0.5);
+  text-shadow: 0 0 20px rgba(0, 216, 255, 0.5);
 }
 
 .hub-subtitle {
   font-size: 16px;
-  color: #8c8c8c;
+  color: rgba(148, 163, 184, 0.8);
   margin: 0;
   letter-spacing: 1px;
 }
 
-/* 主体内容区域 */
-.hub-content {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-/* 模块卡片样式 */
-.module-card {
-  background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
-  border: 1px solid rgba(64, 158, 255, 0.15);
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+/* Center header texts */
+.hub-header {
+  text-align: center;
   margin-bottom: 24px;
 }
 
-.module-card:hover {
-  transform: translateY(-8px);
-  border-color: rgba(64, 158, 255, 0.6);
-  box-shadow:
-    0 8px 24px rgba(64, 158, 255, 0.25),
-    0 0 40px rgba(64, 158, 255, 0.15),
-    inset 0 0 20px rgba(64, 158, 255, 0.05);
+/* Main modules grid – irregular spans */
+.hub-content {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: 1fr;
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
-/* 卡片图标区域 */
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 32px; /* push modules down a bit */
+  justify-items: center; /* center each card within its grid cell */
+}
+
+/* Card redesign – command‑panel style */
+.module-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 216, 255, 0.12);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  backdrop-filter: blur(8px);
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.35s;
+}
+
+.module-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--c-cyan);
+  box-shadow: 0 8px 32px rgba(0, 216, 255, 0.2),
+    inset 0 0 0 1px rgba(0, 216, 255, 0.1);
+}
+
+/* Status indicator – breathing light */
+.status-indicator {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--run-accent);
+  box-shadow: 0 0 6px var(--run-accent);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 0.6; transform: scale(0.9); }
+}
+
+/* Icon container – sci‑fi glow */
 .card-icon {
   display: flex;
   justify-content: center;
   align-items: center;
   width: 80px;
   height: 80px;
-  margin: 0 auto 20px;
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.1) 0%, rgba(64, 158, 255, 0.05) 100%);
+  margin: 0 auto 16px;
   border-radius: 16px;
-  border: 1px solid rgba(64, 158, 255, 0.2);
-  color: #409eff;
-  transition: all 0.3s ease;
+  background: linear-gradient(135deg, rgba(0, 216, 255, 0.1) 0%, rgba(0, 216, 255, 0.05) 100%);
+  border: 1px solid rgba(0, 216, 255, 0.2);
+  color: var(--c-cyan);
+  transition: transform 0.3s ease, background 0.3s ease;
 }
 
 .module-card:hover .card-icon {
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.2) 0%, rgba(64, 158, 255, 0.1) 100%);
-  box-shadow: 0 0 20px rgba(64, 158, 255, 0.3);
+  background: linear-gradient(135deg, rgba(0, 216, 255, 0.2) 0%, rgba(0, 216, 255, 0.1) 100%);
+  box-shadow: 0 0 20px rgba(0, 216, 255, 0.3);
   transform: scale(1.05);
 }
 
-/* 卡片标题 */
-.card-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #ffffff;
-  text-align: center;
-  margin: 0 0 16px 0;
-  letter-spacing: 1px;
-}
+/* Title & description use light colors */
+  .card-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #f1f5f9;
+    text-align: center;
+    margin: 0 0 12px;
+  }
 
-/* 卡片描述文案 */
-.card-description {
-  font-size: 14px;
-  color: #a0a0a0;
-  line-height: 1.8;
-  text-align: center;
-  margin: 0 0 24px 0;
-  min-height: 84px;
-}
+  .card-description {
+    font-size: 14px;
+    color: rgba(148, 163, 184, 0.9);
+    line-height: 1.6;
+    text-align: center;
+    margin: 0 0 20px;
+    min-height: 60px;
+  }
 
-/* 卡片操作区域 */
-.card-action {
-  text-align: center;
-  margin-top: auto;
-}
+  /* New explanation text style – slightly smaller and lighter */
+  .module-explanation {
+    font-size: 13px;
+    color: rgba(148, 163, 184, 0.7);
+    text-align: center;
+    margin-top: 8px;
+  }
 
+/* Action button – mechanical feel */
 .action-button {
   width: 100%;
-  height: 40px;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 1px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-.action-button.el-button--primary {
-  background: linear-gradient(135deg, #409eff 0%, #3a8ee6 100%);
+  padding: 10px 0;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   border: none;
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.2s ease;
 }
 
-.action-button.el-button--primary:hover {
-  background: linear-gradient(135deg, #66b1ff 0%, #409eff 100%);
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.5);
+.action-button:hover {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 216, 255, 0.3);
 }
 
-.action-button.el-button--info {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #666666;
-}
+/* Log panel removed as per user request (no longer needed) */
 
-/* 响应式适配 */
+/* Responsive tweaks */
 @media (max-width: 1200px) {
-  .hub-title {
-    font-size: 32px;
+  .hub-content {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -247,17 +352,7 @@ const handleNavigate = (route?: string) => {
   .script-hub-container {
     padding: 24px 16px;
   }
-
-  .hub-title {
-    font-size: 28px;
-  }
-
-  .hub-subtitle {
-    font-size: 14px;
-  }
-
-  .card-description {
-    min-height: auto;
-  }
+  .hub-title { font-size: 28px; }
+  .hub-subtitle { font-size: 14px; }
 }
 </style>

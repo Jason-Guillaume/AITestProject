@@ -7,6 +7,7 @@ const routes = [
 
   { path: "/login", name: "Login", component: () => import("@/views/Login.vue"), meta: { public: true } },
   { path: "/register", name: "Register", component: () => import("@/views/Register.vue"), meta: { public: true } },
+  // Note: Pipeline routes are now defined as children of the main layout to inherit the common UI.
 
   // 性能任务页：保持单独布局（不进入 MainLayout）
   {
@@ -161,6 +162,15 @@ const routes = [
       { path: "defect/release/:id", component: () => import("@/views/defect/ReleasePlanDetail.vue") },
 
       { path: "ai-assistant", component: () => import("@/views/AiAssistant.vue") },
+      // CI/CD pipeline pages – display within the main layout for a consistent UI.
+      {
+        path: "pipelines/new",
+        name: "PipelineCreate",
+        component: () => import("@/views/PipelineCreate.vue"),
+        meta: { public: true },
+      },
+      { path: "pipelines", name: "PipelineList", component: () => import("@/views/PipelineList.vue"), meta: { public: true } },
+      { path: "pipelines/:id", name: "PipelineDetail", component: () => import("@/views/PipelineDetail.vue"), meta: { public: true } },
       {
         path: "server-logs",
         name: "ServerLogs",
@@ -180,6 +190,12 @@ const routes = [
         component: () => import("@/views/script/WebUIWorkbench.vue"),
         meta: { hiddenInSidebar: true },
       },
+      {
+        path: "script-hub/pom-reports",
+        name: "UiPomReportManagement",
+        component: () => import("@/views/script/UiPomReportManagement.vue"),
+        meta: { hiddenInSidebar: true },
+      },
 
       // system / knowledge / help 占位
       { path: "system/message", component: () => import("@/views/system/MessageSetting.vue") },
@@ -193,13 +209,13 @@ const routes = [
       { path: "user/audit", component: () => import("@/views/system/AuditEvents.vue") },
       { path: "knowledge", component: () => import("@/views/system/KnowledgeCenter.vue") },
       { path: "knowledge/ask", component: () => import("@/views/system/KnowledgeAsk.vue") },
-      { path: "help", component: () => import("@/views/system/HelpCenter.vue") },
-    ],
-  },
+        { path: "help", component: () => import("@/views/system/HelpCenter.vue") },
+      ],
+    },
 
-  // 兜底：未知路径跳回首页（避免空白页/刷新 404）
-  { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
-];
+    // 兜底：未知路径跳回首页（避免空白页/刷新 404）
+    { path: "/:catchAll(.*)", redirect: "/" },
+  ];
 
 const router = createRouter({
   history: createWebHistory(),
@@ -223,6 +239,12 @@ const SYSTEM_ADMIN_ONLY_PREFIXES = [
 ];
 
 router.beforeEach((to, _from, next) => {
+  // Allow pipeline routes without authentication (useful for CI/CD dashboard preview)
+  if (to.path.startsWith('/pipelines')) {
+    next();
+    return;
+  }
+
   const token = localStorage.getItem("token");
   const isPublic = to.meta.public === true;
 

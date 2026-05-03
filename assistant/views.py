@@ -12,7 +12,7 @@ import time
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, OuterRef, Q, Subquery
-from django.http import JsonResponse, StreamingHttpResponse
+from django.http import FileResponse, JsonResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -20,7 +20,7 @@ from django.views.decorators.csrf import csrf_exempt
 from common.views import BaseModelViewSet
 
 from rest_framework import exceptions as drf_exceptions
-from rest_framework import status
+from rest_framework import mixins, status, viewsets
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -79,7 +79,12 @@ from assistant.ai_prompts import (
     _PHASE1_REPAIR_SYSTEM_PROMPT,
     _PHASE2_MULTI_CASE_MANDATE,
 )
-from assistant.models import GeneratedTestArtifact, KnowledgeArticle, KnowledgeDocument
+from assistant.models import (
+    GeneratedTestArtifact,
+    KnowledgeArticle,
+    KnowledgeDocument,
+    UIPomTestReport,
+)
 from assistant.permissions import (
     IsAdminOrKnowledgeResourceAccessible,
     user_is_knowledge_document_privileged,
@@ -5853,6 +5858,9 @@ class AiKnowledgeAskAPIView(APIView):
 class UIScriptUploadViewSet(BaseModelViewSet):
     """UI自动化脚本上传视图集"""
 
+    # UIScriptUpload 无 creator / 项目关联，不可套用 BaseModelViewSet 的成员隔离（会错误地使用 creator 过滤并 FieldError）
+    enable_data_scope = False
+
     from assistant.models import UIScriptUpload
     from assistant.serialize import UIScriptUploadSerializer, UIScriptUploadListSerializer
     from assistant.utils.script_handler import handle_script_upload
@@ -5860,7 +5868,8 @@ class UIScriptUploadViewSet(BaseModelViewSet):
     from rest_framework.decorators import action
 
     queryset = UIScriptUpload.objects.all()
-    parser_classes = [MultiPartParser, FormParser]
+    # JSON：PATCH/PUT 更新字段（如 is_active、folder）；multipart：POST 上传文件
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_serializer_class(self):
         """根据action选择序列化器"""
@@ -5868,6 +5877,26 @@ class UIScriptUploadViewSet(BaseModelViewSet):
         if self.action == 'list':
             return UIScriptUploadListSerializer
         return UIScriptUploadSerializer
+
+    def perform_update(self, serializer):
+        """UIScriptUpload 无 creator/updater 字段，禁止向 save() 传入 updater。"""
+        from common.models import AuditEvent
+        from common.services.audit import record_audit_event
+
+        user = getattr(self.request, "user", None)
+        before = serializer.instance
+        instance = serializer.save()
+        try:
+            record_audit_event(
+                action=AuditEvent.ACTION_UPDATE,
+                actor=user,
+                instance=instance,
+                request=self.request,
+                before=before,
+                after=None,
+            )
+        except Exception:
+            pass
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -5962,6 +5991,290 @@ class UIScriptUploadViewSet(BaseModelViewSet):
             'file_count': len(files)
         })
 
+    @action(detail=True, methods=['get', 'put'])
+    def online_content(self, request, pk=None):
+        """
+        获取或更新在线脚本内容
+
+        GET: 获取脚本内容
+        PUT: 更新脚本内容
+        """
+        from assistant.serialize import UIScriptUploadSerializer
+
+        instance = self.get_object()
+
+        if request.method == 'GET':
+            # 获取脚本内容
+            if instance.script_type == 'ONLINE':
+                content = instance.online_content or ''
+            else:
+                # 如果不是在线脚本，尝试读取文件内容
+                if instance.workspace_path and instance.entry_point:
+                    file_path = os.path.join(instance.workspace_path, instance.entry_point)
+                    if os.path.exists(file_path):
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                        except Exception as e:
+                            return Response(
+                                {'error': f'读取文件失败: {str(e)}'},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                            )
+                    else:
+                        content = ''
+                else:
+                    content = ''
+
+            return Response({
+                'id': instance.id,
+                'name': instance.name,
+                'content': content,
+                'language': instance.language,
+                'framework': instance.framework,
+                'entry_point': instance.entry_point
+            })
+
+        elif request.method == 'PUT':
+            # 更新脚本内容
+            new_content = request.data.get('content', '')
+
+            if not new_content:
+                return Response(
+                    {'error': '脚本内容不能为空'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # 更新在线内容
+            instance.online_content = new_content
+            instance.save(update_fields=['online_content'])
+
+            # 如果有工作空间，同步更新文件
+            if instance.workspace_path and instance.entry_point:
+                file_path = os.path.join(instance.workspace_path, instance.entry_point)
+                try:
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(new_content)
+                    logger.info(f"脚本文件已更新: {file_path}")
+                except Exception as e:
+                    logger.error(f"更新脚本文件失败: {str(e)}", exc_info=True)
+                    return Response(
+                        {'error': f'更新文件失败: {str(e)}'},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+
+            return Response({
+                'id': instance.id,
+                'message': '脚本内容已更新',
+                'content': new_content
+            })
+
+    @action(detail=False, methods=['get'])
+    def folders(self, request):
+        """获取所有文件夹树形结构"""
+        from assistant.models import UIScriptUpload
+
+        folders = UIScriptUpload.objects.filter(
+            is_deleted=False
+        ).values_list('folder', flat=True).distinct()
+
+        folder_set = set(f for f in folders if f)
+
+        # 构建树形结构
+        def build_tree(paths):
+            tree = {}
+            for path in paths:
+                parts = [p for p in path.split('/') if p]
+                current = tree
+                current_path = ''
+                for part in parts:
+                    current_path += '/' + part
+                    if part not in current:
+                        current[part] = {
+                            '_path': current_path,
+                            '_children': {}
+                        }
+                    current = current[part]['_children']
+            return tree
+
+        def tree_to_list(tree, parent_path=''):
+            result = []
+            for name, data in sorted(tree.items()):
+                path = data['_path']
+                children = tree_to_list(data['_children'], path)
+                result.append({
+                    'name': name,
+                    'path': path,
+                    'children': children
+                })
+            return result
+
+        tree = build_tree(folder_set)
+        folder_tree = tree_to_list(tree)
+
+        return Response({
+            'folders': list(folder_set),
+            'tree': folder_tree
+        })
+
+    @action(detail=False, methods=['post'])
+    def create_folder(self, request):
+        """创建新文件夹"""
+        from assistant.models import UIScriptUpload
+
+        folder_path = request.data.get('folder_path', '').strip()
+
+        if not folder_path:
+            return Response(
+                {'error': '文件夹路径不能为空'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not folder_path.startswith('/'):
+            folder_path = '/' + folder_path
+
+        # 检查文件夹是否已存在
+        exists = UIScriptUpload.objects.filter(
+            folder=folder_path,
+            is_deleted=False
+        ).exists()
+
+        return Response({
+            'message': '文件夹创建成功' if not exists else '文件夹已存在',
+            'folder_path': folder_path,
+            'exists': exists
+        })
+
+    @action(detail=True, methods=['post'])
+    def move_to_folder(self, request, pk=None):
+        """移动脚本到指定文件夹"""
+        instance = self.get_object()
+        folder_path = request.data.get('folder_path', '/').strip()
+
+        if not folder_path.startswith('/'):
+            folder_path = '/' + folder_path
+
+        instance.folder = folder_path
+        instance.save(update_fields=['folder'])
+
+        return Response({
+            'id': instance.id,
+            'folder': instance.folder,
+            'message': '移动成功'
+        })
+
+    @action(detail=True, methods=['post'])
+    def soft_delete(self, request, pk=None):
+        """软删除脚本（移到回收站）"""
+        from django.utils import timezone
+
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=['is_deleted', 'deleted_at'])
+
+        return Response({
+            'id': instance.id,
+            'message': '已移至回收站'
+        })
+
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        """从回收站恢复脚本（不走 get_queryset：默认列表排除了 is_deleted，否则无法取到实例）"""
+        from assistant.models import UIScriptUpload
+
+        instance = UIScriptUpload.objects.filter(pk=pk).first()
+        if not instance:
+            return Response({'error': '脚本不存在'}, status=status.HTTP_404_NOT_FOUND)
+        if not instance.is_deleted:
+            return Response({'error': '脚本不在回收站中'}, status=status.HTTP_400_BAD_REQUEST)
+
+        instance.is_deleted = False
+        instance.deleted_at = None
+        instance.save(update_fields=['is_deleted', 'deleted_at'])
+
+        return Response({
+            'id': instance.id,
+            'message': '恢复成功'
+        })
+
+    @action(detail=True, methods=['post'])
+    def permanent_delete(self, request, pk=None):
+        """永久删除回收站中的单个脚本（不可恢复）"""
+        from assistant.models import UIScriptUpload
+        from assistant.utils.script_handler import cleanup_workspace
+
+        instance = UIScriptUpload.objects.filter(pk=pk).first()
+        if not instance:
+            return Response({'error': '脚本不存在'}, status=status.HTTP_404_NOT_FOUND)
+        if not instance.is_deleted:
+            return Response(
+                {'error': '仅允许永久删除已在回收站中的脚本，请先从列表移入回收站'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            cleanup_workspace(instance)
+        except Exception as e:
+            logger.error(f"清理工作空间失败: {str(e)}", exc_info=True)
+
+        instance.delete()
+        return Response({'message': '已永久删除', 'id': pk})
+
+    @action(detail=False, methods=['get'])
+    def trash(self, request):
+        """获取回收站中的脚本"""
+        from assistant.models import UIScriptUpload
+        from assistant.serialize import UIScriptUploadListSerializer
+
+        trash_scripts = UIScriptUpload.objects.filter(is_deleted=True)
+        serializer = UIScriptUploadListSerializer(trash_scripts, many=True)
+
+        return Response({
+            'count': trash_scripts.count(),
+            'results': serializer.data
+        })
+
+    @action(detail=False, methods=['post'])
+    def empty_trash(self, request):
+        """清空回收站（永久删除）"""
+        from assistant.models import UIScriptUpload
+        from assistant.utils.script_handler import cleanup_workspace
+
+        # 获取所有待删除的脚本
+        trash_scripts = UIScriptUpload.objects.filter(is_deleted=True)
+
+        # 清理工作空间
+        for script in trash_scripts:
+            try:
+                cleanup_workspace(script)
+            except Exception as e:
+                logger.error(f"清理工作空间失败: {str(e)}", exc_info=True)
+
+        # 永久删除
+        deleted_count = trash_scripts.delete()[0]
+
+        return Response({
+            'message': f'已永久删除 {deleted_count} 个脚本',
+            'deleted_count': deleted_count
+        })
+
+    def get_queryset(self):
+        """过滤查询集，默认不显示已删除的脚本"""
+        queryset = super().get_queryset()
+
+        # 默认不显示已删除的脚本
+        show_deleted = self.request.query_params.get('show_deleted', 'false').lower() == 'true'
+        if not show_deleted:
+            queryset = queryset.filter(is_deleted=False)
+
+        # 按文件夹过滤
+        folder = self.request.query_params.get('folder')
+        if folder is not None:
+            queryset = queryset.filter(folder=folder)
+
+        return queryset
+
 
 class UIScriptExecutionViewSet(BaseModelViewSet):
     """UI脚本执行记录视图集"""
@@ -5970,6 +6283,8 @@ class UIScriptExecutionViewSet(BaseModelViewSet):
     from assistant.serialize import UIScriptExecutionSerializer, UIScriptExecutionListSerializer
 
     queryset = UIScriptExecution.objects.all()
+    # 与 UIScriptUploadViewSet 一致，明确允许 JSON（execute 等为 POST application/json）
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_serializer_class(self):
         """根据action选择序列化器"""
@@ -5980,7 +6295,8 @@ class UIScriptExecutionViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         """过滤查询集"""
-        queryset = super().get_queryset()
+        # UIScriptExecution没有is_deleted字段，直接使用queryset而不调用super()
+        queryset = self.queryset
 
         # 按脚本ID过滤
         script_id = self.request.query_params.get('script_id')
@@ -6015,13 +6331,56 @@ class UIScriptExecutionViewSet(BaseModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            script = UIScriptUpload.objects.get(id=script_id, is_active=True)
-        except UIScriptUpload.DoesNotExist:
+        script = UIScriptUpload.objects.filter(pk=script_id).first()
+        if script is None:
             return Response(
-                {'error': '脚本不存在或已禁用'},
-                status=status.HTTP_404_NOT_FOUND
+                {
+                    'error': '脚本不存在，请确认「执行」所选条目与左侧列表中的脚本一致（勿使用过期 ID）',
+                    'script_id': script_id,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
+        if script.is_deleted:
+            return Response(
+                {
+                    'error': '脚本在回收站中，请恢复后再执行',
+                    'script_id': script_id,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not script.is_active:
+            return Response(
+                {
+                    'error': '脚本已禁用，请先启用后再执行',
+                    'script_id': script_id,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        def _coerce_bool(val, default=False):
+            if val is None:
+                return default
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, (int, float)) and val in (0, 1):
+                return bool(val)
+            if isinstance(val, str):
+                return val.strip().lower() in ("1", "true", "yes", "on")
+            return bool(val)
+
+        parallel_raw = request.data.get("parallel", 1)
+        try:
+            parallel_val = int(parallel_raw)
+        except (TypeError, ValueError):
+            parallel_val = 1
+        parallel_val = max(1, min(parallel_val, 50))
+
+        # 获取执行配置
+        execution_config = {
+            "browser": request.data.get("browser", "chrome"),
+            "headless": _coerce_bool(request.data.get("headless"), False),
+            "parallel": parallel_val,
+        }
 
         # 生成执行ID
         import time
@@ -6036,7 +6395,10 @@ class UIScriptExecutionViewSet(BaseModelViewSet):
         )
 
         # 异步执行脚本
+        from django.db import close_old_connections
+
         def run_script():
+            close_old_connections()
             try:
                 # 更新状态为运行中
                 execution.status = UIScriptExecution.STATUS_RUNNING
@@ -6047,23 +6409,49 @@ class UIScriptExecutionViewSet(BaseModelViewSet):
                 runner = ScriptRunner()
                 result = runner.execute_ui_script(
                     script_upload_instance_id=script_id,
-                    execution_id=execution_id
+                    execution_id=execution_id,
+                    execution_config=execution_config
                 )
 
-                # 更新执行记录
-                execution.status = UIScriptExecution.STATUS_SUCCESS if result['success'] else UIScriptExecution.STATUS_FAILED
+                # 更新执行记录（MySQL 等对 TextField 不接受 NULL，必须用空串）
+                if result.get("cancelled"):
+                    execution.status = UIScriptExecution.STATUS_CANCELLED
+                elif result["success"]:
+                    execution.status = UIScriptExecution.STATUS_SUCCESS
+                else:
+                    execution.status = UIScriptExecution.STATUS_FAILED
                 execution.return_code = result.get('return_code')
                 execution.duration = result.get('duration')
-                execution.error_message = result.get('error', '')
+                if result.get('cancelled'):
+                    execution.error_message = ''
+                elif result.get('success'):
+                    execution.error_message = ''
+                else:
+                    execution.error_message = str(result.get('error') or '')[:8000]
                 execution.completed_at = timezone.now()
                 execution.save()
+
+                try:
+                    from assistant.utils.ui_report_harvest import harvest_ui_pom_reports
+
+                    harvest_ui_pom_reports(execution)
+                except Exception:
+                    logger.warning("UI 报告归档失败（不影响执行结果）", exc_info=True)
 
             except Exception as e:
                 logger.error(f"脚本执行异常: {str(e)}", exc_info=True)
                 execution.status = UIScriptExecution.STATUS_FAILED
-                execution.error_message = str(e)
+                execution.error_message = str(e)[:8000] if e is not None else ''
                 execution.completed_at = timezone.now()
                 execution.save()
+                try:
+                    from assistant.utils.ui_report_harvest import harvest_ui_pom_reports
+
+                    harvest_ui_pom_reports(execution)
+                except Exception:
+                    logger.warning("UI 报告归档失败（不影响执行结果）", exc_info=True)
+            finally:
+                close_old_connections()
 
         # 启动执行线程
         thread = threading.Thread(target=run_script, daemon=True)
@@ -6073,6 +6461,34 @@ class UIScriptExecutionViewSet(BaseModelViewSet):
         from assistant.serialize import UIScriptExecutionSerializer
         serializer = UIScriptExecutionSerializer(execution)
         return Response(serializer.data, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """停止当前执行（线性与 POM 共用）：终止子进程并写入 Redis 停止标记。"""
+        from assistant.models import UIScriptExecution
+        from assistant.utils.script_runner import ScriptRunner
+
+        execution = self.get_object()
+        if execution.status not in (
+            UIScriptExecution.STATUS_PENDING,
+            UIScriptExecution.STATUS_RUNNING,
+        ):
+            return Response(
+                {'error': '当前状态不可停止（仅等待执行或执行中可停止）', 'status': execution.status},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        runner = ScriptRunner()
+        info = runner.request_stop(execution.execution_id)
+        return Response(
+            {
+                'message': '已发送停止请求',
+                'cancel_requested': info.get('cancel_requested', False),
+                'killed': info.get('killed', False),
+                'execution_id': execution.execution_id,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=['get'])
     def logs(self, request, pk=None):
@@ -6116,3 +6532,65 @@ class UIScriptExecutionViewSet(BaseModelViewSet):
             'execution': serializer.data,
             'redis_status': redis_status
         })
+
+
+class UIPomTestReportViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """
+    POM / UI 执行 HTML 报告归档：列表、详情、下载、删除。
+    不使用 BaseModelViewSet，避免 is_deleted / 软删与 FileField 模型不兼容。
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+    queryset = UIPomTestReport.objects.select_related("execution", "script").all()
+
+    def get_serializer_class(self):
+        from assistant.serialize import UIPomTestReportListSerializer, UIPomTestReportSerializer
+
+        if self.action == "retrieve":
+            return UIPomTestReportSerializer
+        return UIPomTestReportListSerializer
+
+    def get_queryset(self):
+        qs = self.queryset
+        script_id = self.request.query_params.get("script_id")
+        if script_id:
+            qs = qs.filter(script_id=script_id)
+        execution_db_id = self.request.query_params.get("execution")
+        if execution_db_id:
+            qs = qs.filter(execution_id=execution_db_id)
+        execution_uid = self.request.query_params.get("execution_id")
+        if execution_uid:
+            qs = qs.filter(execution__execution_id=execution_uid)
+        q = (self.request.query_params.get("search") or "").strip()
+        if q:
+            from django.db.models import Q
+
+            qs = qs.filter(Q(title__icontains=q) | Q(source_relative_path__icontains=q))
+        return qs
+
+    @action(detail=True, methods=["get"], url_path="download")
+    def download(self, request, pk=None):
+        obj = self.get_object()
+        if not obj.report_file or not obj.report_file.name:
+            return Response({"error": "报告文件不存在"}, status=status.HTTP_404_NOT_FOUND)
+        fh = obj.report_file.open("rb")
+        fname = "".join(c if c.isalnum() or c in "._-" else "_" for c in (obj.title or "report"))[:80] + ".html"
+        resp = FileResponse(fh, content_type="text/html; charset=utf-8")
+        resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+        return resp
+
+    @action(detail=True, methods=["get"], url_path="preview")
+    def preview(self, request, pk=None):
+        obj = self.get_object()
+        if not obj.report_file or not obj.report_file.name:
+            return Response({"error": "报告文件不存在"}, status=status.HTTP_404_NOT_FOUND)
+        fh = obj.report_file.open("rb")
+        resp = FileResponse(fh, content_type="text/html; charset=utf-8")
+        resp["Content-Disposition"] = "inline"
+        return resp

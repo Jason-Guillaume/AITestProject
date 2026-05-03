@@ -237,9 +237,10 @@ class AiQuotaPolicyListCreateAPIView(APIView):
         ser.is_valid(raise_exception=True)
         obj = ser.save(creator=request.user, updater=request.user)
         record_audit_event(
-            request=request,
             action=AuditEvent.ACTION_CREATE,
-            obj=obj,
+            actor=request.user,
+            instance=obj,
+            request=request,
             before=None,
             after=AiQuotaPolicySerializer(obj).data,
         )
@@ -284,9 +285,10 @@ class AiQuotaPolicyDetailAPIView(APIView):
         obj = ser.save(updater=request.user)
         after = AiQuotaPolicySerializer(obj).data
         record_audit_event(
-            request=request,
             action=AuditEvent.ACTION_UPDATE,
-            obj=obj,
+            actor=request.user,
+            instance=obj,
+            request=request,
             before=before,
             after=after,
         )
@@ -303,9 +305,10 @@ class AiQuotaPolicyDetailAPIView(APIView):
         obj.updater = request.user
         obj.save(update_fields=["is_deleted", "updater", "update_time"])
         record_audit_event(
-            request=request,
             action=AuditEvent.ACTION_DELETE,
-            obj=obj,
+            actor=request.user,
+            instance=obj,
+            request=request,
             before=before,
             after=None,
         )

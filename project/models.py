@@ -167,3 +167,75 @@ class ReleasePlanTestCase(models.Model):
                 name="uniq_releaseplan_testcase_deletedflag",
             ),
         ]
+
+# ---------------------------------------------------------------------------
+# CI/CD Pipeline models
+# ---------------------------------------------------------------------------
+
+
+class Pipeline(BaseModel):
+    """CI/CD 构建项目（对齐 Jenkins 概念：自由风格 vs 流水线脚本）。"""
+
+    STATUS_PENDING = 0
+    STATUS_RUNNING = 1
+    STATUS_SUCCESS = 2
+    STATUS_FAIL = 3
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_SUCCESS, "Success"),
+        (STATUS_FAIL, "Fail"),
+    ]
+
+    # 项目类型：自由风格 = 单段 Shell；流水线脚本 = 可用 # stage: 分段依次执行
+    KIND_FREESTYLE = 0
+    KIND_PIPELINE = 1
+    KIND_CHOICES = [
+        (KIND_FREESTYLE, "自由风格"),
+        (KIND_PIPELINE, "流水线脚本"),
+    ]
+
+    name = models.CharField(max_length=255, verbose_name="名称")
+    kind = models.IntegerField(
+        choices=KIND_CHOICES,
+        default=KIND_FREESTYLE,
+        verbose_name="项目类型",
+    )
+    repo_url = models.URLField(
+        max_length=512,
+        blank=True,
+        null=True,
+        verbose_name="代码仓库地址",
+    )
+    build_definition = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="构建定义",
+        help_text="Shell 脚本。流水线类型可用行首「# stage: 阶段名」分段执行。",
+    )
+    status = models.IntegerField(
+        choices=STATUS_CHOICES, default=STATUS_PENDING, verbose_name="执行状态"
+    )
+
+    class Meta:
+        db_table = "pipeline"
+        verbose_name = "流水线"
+
+
+class PipelineLog(models.Model):
+    """Log entry for a Pipeline execution step."""
+
+    pipeline = models.ForeignKey(
+        Pipeline,
+        on_delete=models.CASCADE,
+        related_name="logs",
+        verbose_name="关联流水线",
+    )
+    log_text = models.TextField(verbose_name="日志内容")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="记录时间")
+
+    class Meta:
+        db_table = "pipeline_log"
+        verbose_name = "流水线日志"
+        ordering = ["-timestamp"]

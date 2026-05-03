@@ -37,7 +37,18 @@
       "Bash(python manage.py migrate assistant)",
       "Bash(grep -E \"\\\\.md$|\\\\.py$\")",
       "Bash(python manage.py showmigrations assistant)",
-      "Bash(curl -X GET http://127.0.0.1:8000/api/assistant/ui-scripts/ -H \"Authorization: Bearer test\")"
+      "Bash(curl -X GET http://127.0.0.1:8000/api/assistant/ui-scripts/ -H \"Authorization: Bearer test\")",
+      "Bash(python manage.py makemigrations assistant --dry-run)",
+      "Bash(python manage.py shell -c \"from assistant.models import UIScriptUpload; scripts = UIScriptUpload.objects.all\\(\\); print\\('Total scripts:', scripts.count\\(\\)\\); [print\\(f'ID: {s.id}, Name: {s.name}, Enabled: {s.is_enabled}'\\) for s in scripts]\")",
+      "Bash(python manage.py shell -c \"from assistant.models import UIScriptUpload; scripts = UIScriptUpload.objects.all\\(\\); print\\('Total scripts:', scripts.count\\(\\)\\); [print\\(f'ID: {s.id}, Name: {s.name}'\\) for s in scripts]\")",
+      "Bash(python manage.py shell -c \"from assistant.models import UIScriptUpload; scripts = UIScriptUpload.objects.all\\(\\); [print\\(f'ID: {s.id}, Name: {s.name}, is_active: {s.is_active}'\\) for s in scripts]\")",
+      "Bash(python manage.py shell -c \"from assistant.models import UIScriptUpload; UIScriptUpload.objects.all\\(\\).update\\(is_active=True\\); print\\('Updated all scripts to is_active=True'\\)\")",
+      "Bash(python manage.py makemigrations)",
+      "Bash(python manage.py migrate)",
+      "Bash(python manage.py shell -c \"from assistant.models import UIScriptUpload; print\\('Total scripts:', UIScriptUpload.objects.count\\(\\)\\); print\\('Active scripts:', UIScriptUpload.objects.filter\\(is_active=True\\).count\\(\\)\\)\")",
+      "Bash(python manage.py shell -c \"from assistant.models import UIScriptUpload; scripts = UIScriptUpload.objects.all\\(\\); [print\\(f'ID: {s.id}, Name: {s.name}, Active: {s.is_active}, Deleted: {s.is_deleted}'\\) for s in scripts]\")",
+      "Bash(python manage.py shell -c \"from assistant.models import UIScriptUpload; script = UIScriptUpload.objects.filter\\(is_active=True\\).first\\(\\); print\\(f'Script ID: {script.id}, Type: {type\\(script.id\\)}, Name: {script.name}'\\)\")",
+      "Bash(python manage.py shell -c ' *)"
     ]
   }
 }

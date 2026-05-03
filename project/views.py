@@ -8,11 +8,13 @@ from common.views import BaseModelViewSet
 from common.services.audit import record_export_audit
 from common.models import AuditEvent
 from common.services.audit import record_audit_event
-from project.models import TestProject, TestTask, ReleasePlan
+from project.models import TestProject, TestTask, ReleasePlan, Pipeline, PipelineLog
 from project.serialize import (
     TestProjectSerializer,
     TestTaskSerializer,
     ReleasePlanSerializer,
+    PipelineSerializer,
+    PipelineLogSerializer,
 )
 from project.services.release_risk_brief import build_release_risk_brief
 
@@ -350,7 +352,7 @@ class ReleasePlanViewSet(BaseModelViewSet):
     @action(detail=True, methods=["get"], url_path="never-executed-cases")
     def never_executed_cases(self, request, pk=None):
         """
-        发布计划“窗口内从未执行用例”清单（只读）。
+        发布计划「窗口内从未执行用例」清单（只读）。
         GET /api/project/releases/<id>/never-executed-cases/?days=7&limit=500
         """
         release = self.get_object()
@@ -466,3 +468,78 @@ class ReleasePlanViewSet(BaseModelViewSet):
             extra={"release_id": int(release.id), "days": int(days), "rows": int(len(ids))},
         )
         return resp
+
+
+class PipelineViewSet(BaseModelViewSet):
+    """CI/CD pipeline API.
+
+    Provides endpoints to list pipelines, trigger execution and fetch logs.
+    """
+
+    queryset = Pipeline.objects.all()
+    serializer_class = PipelineSerializer
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    @action(detail=True, methods=["post"], url_path="run")
+    def run(self, request, pk=None):
+        """触发构建。
+
+        JSON body（可选）:
+
+        - ``command``: 仅本次构建使用的 Shell；不传或空则使用项目已保存的 ``build_definition``。
+        - ``clear_logs``: 为 ``true`` 时先清空该流水线历史日志再执行（类似 Jenkins 新构建控制台）。
+        """
+        pipeline = self.get_object()
+        body = request.data if isinstance(request.data, dict) else {}
+        command = body.get("command")
+        if isinstance(command, str) and not command.strip():
+            command = None
+
+        if body.get("clear_logs") is True:
+            PipelineLog.objects.filter(pipeline=pipeline).delete()
+
+        from .tasks import run_pipeline_task
+
+        task = run_pipeline_task.delay(pipeline.id, command)
+        return Response({"task_id": task.id, "status": "queued"})
+
+    @action(detail=True, methods=["get"], url_path="logs")
+    def logs(self, request, pk=None):
+        """流水线日志：支持按 ``after_id`` 增量轮询（时间正序）。
+
+        GET .../logs/?after_id=0&limit=500
+
+        返回 ``items``（新日志行）、``pipeline_status``、``last_log_id``。
+        """
+        pipeline = self.get_object()
+        pipeline.refresh_from_db(fields=["status"])
+
+        after_id = request.query_params.get("after_id", "").strip()
+        try:
+            after_pk = int(after_id) if after_id != "" else 0
+        except (TypeError, ValueError):
+            after_pk = 0
+
+        try:
+            limit = int(request.query_params.get("limit", "500"))
+        except (TypeError, ValueError):
+            limit = 500
+        limit = max(1, min(limit, 2000))
+
+        qs = (
+            PipelineLog.objects.filter(pipeline=pipeline, id__gt=after_pk)
+            .order_by("id", "timestamp")[:limit]
+        )
+        serializer = PipelineLogSerializer(qs, many=True)
+        last_log_id = after_pk
+        rows = serializer.data
+        if rows:
+            last_log_id = rows[-1]["id"]
+
+        return Response(
+            {
+                "pipeline_status": pipeline.status,
+                "items": rows,
+                "last_log_id": last_log_id,
+            }
+        )

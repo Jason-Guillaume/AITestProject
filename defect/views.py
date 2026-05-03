@@ -283,6 +283,26 @@ class TestDefectViewSet(BaseModelViewSet):
         else:
             serializer.save(**kwargs)
 
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import ValidationError
+
+        instance = serializer.instance
+        old_status = instance.status
+        new_status = serializer.validated_data.get("status", old_status)
+
+        # 状态流转验证：只有处理人可以关闭；且仅允许“处理中” -> “已关闭”
+        if new_status == 4:
+            if old_status != 2:
+                raise ValidationError({"status": "已关闭只能从“处理中”状态流转"})
+            if getattr(self.request.user, "pk", None) != instance.handler_id:
+                raise ValidationError({"status": "只有处理人可以将缺陷标记为已关闭"})
+
+        user = self.request.user
+        if user and user.is_authenticated:
+            serializer.save(updater=user)
+        else:
+            serializer.save()
+
 
 class DefectFromExecutionAPIView(APIView):
     """
@@ -552,23 +572,3 @@ class DefectFromSecurityFindingAPIView(APIView):
             extra={"source": "security_finding", "rule_id": rule_id, "finding": finding},
         )
         return Response({"success": True, "id": defect.id, "defect_no": defect.defect_no, "defect_name": defect.defect_name})
-
-    def perform_update(self, serializer):
-        from rest_framework.exceptions import ValidationError
-
-        instance = serializer.instance
-        old_status = instance.status
-        new_status = serializer.validated_data.get("status", old_status)
-
-        # 状态流转验证：只有处理人可以关闭；且仅允许“处理中” -> “已关闭”
-        if new_status == 4:
-            if old_status != 2:
-                raise ValidationError({"status": "已关闭只能从“处理中”状态流转"})
-            if getattr(self.request.user, "pk", None) != instance.handler_id:
-                raise ValidationError({"status": "只有处理人可以将缺陷标记为已关闭"})
-
-        user = self.request.user
-        if user and user.is_authenticated:
-            serializer.save(updater=user)
-        else:
-            serializer.save()

@@ -521,6 +521,26 @@ class UIScriptUpload(models.Model):
     class ScriptType(models.TextChoices):
         LINEAR = 'LINEAR', _('线性脚本')
         POM = 'POM', _('Page Object Model')
+        ONLINE = 'ONLINE', _('在线脚本')
+
+    class ScriptLanguage(models.TextChoices):
+        PYTHON = 'PYTHON', _('Python')
+        JAVA = 'JAVA', _('Java')
+
+    class TestFramework(models.TextChoices):
+        # Python框架
+        PYTEST = 'PYTEST', _('Pytest')
+        UNITTEST = 'UNITTEST', _('Unittest')
+        NOSE = 'NOSE', _('Nose')
+        ROBOT = 'ROBOT', _('Robot Framework')
+        BEHAVE = 'BEHAVE', _('Behave')
+        # Java框架
+        JUNIT4 = 'JUNIT4', _('JUnit 4')
+        JUNIT5 = 'JUNIT5', _('JUnit 5')
+        TESTNG = 'TESTNG', _('TestNG')
+        CUCUMBER = 'CUCUMBER', _('Cucumber')
+        SPOCK = 'SPOCK', _('Spock')
+        AUTO = 'AUTO', _('自动检测')
 
     id = models.AutoField(primary_key=True, verbose_name='脚本ID')
     name = models.CharField(
@@ -535,13 +555,35 @@ class UIScriptUpload(models.Model):
         verbose_name='脚本类型'
     )
 
+    language = models.CharField(
+        max_length=10,
+        choices=ScriptLanguage.choices,
+        default=ScriptLanguage.PYTHON,
+        verbose_name='脚本语言'
+    )
+
+    framework = models.CharField(
+        max_length=20,
+        choices=TestFramework.choices,
+        default=TestFramework.AUTO,
+        verbose_name='测试框架',
+        help_text='测试框架类型，AUTO表示自动检测'
+    )
+
     file_path = models.FileField(
         upload_to='ui_scripts/%Y/%m/%d/',
-        validators=[FileExtensionValidator(allowed_extensions=['py', 'zip'])],
+        validators=[FileExtensionValidator(allowed_extensions=['py', 'zip', 'jar'])],
         blank=True,
         null=True,
         verbose_name='脚本文件',
-        help_text='单文件(.py)或ZIP包'
+        help_text='单文件(.py/.jar)或ZIP包'
+    )
+
+    online_content = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='在线脚本内容',
+        help_text='在线编辑的脚本代码'
     )
 
     git_repo_url = models.URLField(
@@ -568,6 +610,20 @@ class UIScriptUpload(models.Model):
         help_text='ZIP解压后的目录路径'
     )
 
+    dependencies = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='依赖配置',
+        help_text='存储requirements.txt或pom.xml等依赖信息'
+    )
+
+    build_config = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='构建配置',
+        help_text='Maven/Gradle等构建工具配置'
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name='创建时间'
@@ -582,6 +638,27 @@ class UIScriptUpload(models.Model):
         verbose_name='是否启用'
     )
 
+    folder = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        default='/',
+        verbose_name='所属文件夹',
+        help_text='文件夹路径，如: /项目A/子文件夹'
+    )
+
+    is_deleted = models.BooleanField(
+        default=False,
+        verbose_name='是否已删除',
+        help_text='软删除标记，删除的文件进入回收站'
+    )
+
+    deleted_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name='删除时间'
+    )
+
     class Meta:
         db_table = 'ui_script_upload'
         verbose_name = 'UI自动化脚本'
@@ -590,6 +667,7 @@ class UIScriptUpload(models.Model):
         indexes = [
             models.Index(fields=['script_type']),
             models.Index(fields=['created_at']),
+            models.Index(fields=['folder', 'is_deleted']),
         ]
 
     def __str__(self):
@@ -735,3 +813,53 @@ class UIScriptExecution(models.Model):
     def is_success(self):
         """是否执行成功"""
         return self.status == self.STATUS_SUCCESS
+
+
+def _ui_pom_report_upload_to(instance, filename: str) -> str:
+    eid = getattr(getattr(instance, "execution", None), "execution_id", None) or "unknown"
+    safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in str(eid))[:100]
+    return f"ui_pom_reports/{safe}/{filename}"
+
+
+class UIPomTestReport(models.Model):
+    """POM / UI 自动化执行产生的 HTML 等报告归档（从工作空间提取后入库）。"""
+
+    execution = models.ForeignKey(
+        UIScriptExecution,
+        on_delete=models.CASCADE,
+        related_name="pom_reports",
+        verbose_name="关联执行记录",
+    )
+    script = models.ForeignKey(
+        UIScriptUpload,
+        on_delete=models.CASCADE,
+        related_name="pom_reports",
+        verbose_name="关联脚本",
+    )
+    title = models.CharField(max_length=255, verbose_name="报告标题")
+    source_relative_path = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        verbose_name="工作空间内原始相对路径",
+    )
+    report_file = models.FileField(
+        upload_to=_ui_pom_report_upload_to,
+        max_length=500,
+        verbose_name="归档报告文件",
+    )
+    file_size = models.PositiveIntegerField(default=0, verbose_name="文件大小(字节)")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="归档时间")
+
+    class Meta:
+        db_table = "ui_pom_test_report"
+        verbose_name = "UI POM 测试报告"
+        verbose_name_plural = "UI POM 测试报告"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["script", "-created_at"]),
+            models.Index(fields=["execution"]),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.execution.execution_id})"

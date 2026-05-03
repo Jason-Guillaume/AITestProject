@@ -121,6 +121,12 @@ class UserLoginSerializer(serializers.Serializer):
 
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(max_length=128)
+    captcha_code = serializers.CharField(
+        max_length=4, required=False, allow_blank=True, write_only=True
+    )
+    captcha_uuid = serializers.CharField(
+        required=False, allow_blank=True, write_only=True
+    )
 
     def validate(self, attrs):
         username = (attrs.get("username") or "").strip()
@@ -129,6 +135,26 @@ class UserLoginSerializer(serializers.Serializer):
 
         if not username:
             raise serializers.ValidationError({"detail": "请输入用户名"})
+
+        cc = (attrs.get("captcha_code") or "").strip()
+        cu = (attrs.get("captcha_uuid") or "").strip()
+        if cc or cu:
+            if not cc or not cu:
+                raise serializers.ValidationError(
+                    {"captcha_code": "请同时提交 captcha_code 与 captcha_uuid"}
+                )
+            cache_key = f"captcha_{cu}"
+            real_code = cache.get(cache_key)
+            if not real_code:
+                raise serializers.ValidationError(
+                    {"captcha_code": "验证码已过期或无效，请重新获取"}
+                )
+            if str(real_code).lower() != cc.lower():
+                raise serializers.ValidationError({"captcha_code": "验证码错误"})
+            cache.delete(cache_key)
+
+        attrs.pop("captcha_code", None)
+        attrs.pop("captcha_uuid", None)
 
         user = authenticate(username=username, password=password)
         if user:

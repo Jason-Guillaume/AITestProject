@@ -311,6 +311,11 @@
             <el-menu-item index="/test-case/security">安全测试</el-menu-item>
             <el-menu-item index="/test-case/ui-automation">UI 自动化</el-menu-item>
           </el-sub-menu>
+          <!-- CI/CD pipeline list -->
+          <el-menu-item index="/pipelines">
+            <el-icon><Document /></el-icon>
+            <span>流水线列表</span>
+          </el-menu-item>
           <el-menu-item index="/agent-hub">
             <el-icon><MagicStick /></el-icon>
             <span>🤖 智能体中心</span>
@@ -338,6 +343,10 @@
           <el-menu-item index="/script-hub">
             <el-icon><VideoPlay /></el-icon>
             <span>脚本执行中心</span>
+          </el-menu-item>
+          <el-menu-item index="/script-hub/pom-reports">
+            <el-icon><Document /></el-icon>
+            <span>UI 测试报告</span>
           </el-menu-item>
           <el-sub-menu index="defect">
             <template #title>

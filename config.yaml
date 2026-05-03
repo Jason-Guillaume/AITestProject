@@ -1,0 +1,10 @@
+model_list:
+  # 这里伪装成 Claude Code 认识的名字
+  - model_name: claude-3-7-sonnet-20250219 
+    litellm_params:
+      # 这里填你实际要调用的模型
+      model: openai/gpt-5.4 
+      # 填入你图1里的基础链接
+      api_base: https://api.iamhc.cn/v1 
+      # 填入你真实的 API Key
+      api_key: 你的真实API_KEY_填这里

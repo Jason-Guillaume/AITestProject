@@ -272,6 +272,9 @@ const handleUploadLinear = async () => {
   const formData = new FormData();
   formData.append('name', linearConfig.value.name);
   formData.append('script_type', 'LINEAR');
+  formData.append('language', 'PYTHON');
+  formData.append('framework', 'AUTO');
+  formData.append('entry_point', linearConfig.value.file.name);
   formData.append('file_path', linearConfig.value.file);
 
   try {
@@ -304,6 +307,8 @@ const handleUploadPom = async () => {
   const formData = new FormData();
   formData.append('name', pomConfig.value.name);
   formData.append('script_type', 'POM');
+  formData.append('language', 'PYTHON');
+  formData.append('framework', 'AUTO');
   formData.append('entry_point', pomConfig.value.entryPoint);
 
   if (pomConfig.value.importType === 'zip') {
