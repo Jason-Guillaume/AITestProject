@@ -564,6 +564,23 @@ class ScriptRunner:
             env['BROWSER_TYPE'] = browser
             env['HEADLESS_MODE'] = str(headless)
             env['PARALLEL_COUNT'] = str(parallel)
+
+            _wpid = (execution_config or {}).get("workspace_project_id")
+            _tenv = (execution_config or {}).get("test_environment_id")
+            if _wpid is not None and str(_wpid).strip():
+                env["AITESTA_WORKSPACE_PROJECT_ID"] = str(_wpid).strip()
+            if _tenv is not None and str(_tenv).strip():
+                env["AITESTA_TEST_ENVIRONMENT_ID"] = str(_tenv).strip()
+            if (_wpid and str(_wpid).strip()) or (_tenv and str(_tenv).strip()):
+                self._write_log(
+                    execution_id,
+                    "system",
+                    "工作台上下文: AITESTA_WORKSPACE_PROJECT_ID="
+                    f"{str(_wpid).strip() if _wpid is not None and str(_wpid).strip() else '—'} "
+                    "AITESTA_TEST_ENVIRONMENT_ID="
+                    f"{str(_tenv).strip() if _tenv is not None and str(_tenv).strip() else '—'}",
+                )
+
             self._write_log(execution_id, 'system', f'浏览器配置: {browser} (无头模式: {headless})')
 
             driver_hint = _inject_local_webdriver_for_fast_start(
@@ -819,6 +836,27 @@ class ScriptRunner:
 
         except Exception as e:
             logger.error(f"获取执行日志失败: {str(e)}", exc_info=True)
+            return []
+
+    def get_execution_logs_tail(
+        self,
+        execution_id: str,
+        tail: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """
+        仅取 Redis 中最近 tail 条日志，避免数万行一次性载入内存。
+        """
+        try:
+            log_key = self._get_log_key(execution_id)
+            n = int(self.redis_client.llen(log_key) or 0)
+            if n <= 0:
+                return []
+            tail = max(1, min(int(tail), 5000))
+            start = max(0, n - tail)
+            logs = self.redis_client.lrange(log_key, start, -1)
+            return [json.loads(log) for log in logs]
+        except Exception as e:
+            logger.error(f"获取执行日志尾部失败: {str(e)}", exc_info=True)
             return []
 
     def get_execution_status(self, execution_id: str) -> Optional[Dict[str, Any]]:

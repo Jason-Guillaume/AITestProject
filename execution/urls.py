@@ -44,4 +44,9 @@ urlpatterns = router.urls + [
         QualityDashboardView.as_view(),
         name="dashboard-quality",
     ),
+    path(
+        "dashboard/host-metrics/",
+        DashboardHostMetricsAPIView.as_view(),
+        name="dashboard-host-metrics",
+    ),
 ]

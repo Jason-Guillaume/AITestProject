@@ -2,9 +2,9 @@
   <div class="webui-workbench">
     <header class="wb-page-head">
       <el-breadcrumb separator="/" class="wb-crumb">
-        <el-breadcrumb-item :to="{ path: '/script-hub' }">
+        <el-breadcrumb-item :to="{ path: '/automation-center' }">
           <el-icon><HomeFilled /></el-icon>
-          脚本执行中心
+          自动化指挥中心
         </el-breadcrumb-item>
         <el-breadcrumb-item>Web UI 工作台</el-breadcrumb-item>
       </el-breadcrumb>
@@ -63,76 +63,132 @@
           </template>
         </div>
 
-        <div v-if="projects.length > 0" class="wb-list-head">
-          <el-checkbox v-model="selectAll" :indeterminate="isIndeterminate" @change="handleSelectAll">
-            全选
-          </el-checkbox>
-          <span v-if="selectedProjects.length" class="wb-select-hint">已选 {{ selectedProjects.length }} 项</span>
-        </div>
-
-        <div class="wb-list">
-          <el-empty
-            v-if="projects.length === 0"
-            :description="listMode === 'active' ? '暂无脚本，点击「导入脚本」上传' : '回收站为空'"
-            :image-size="88"
-            class="wb-empty"
-          />
-          <div
-            v-for="project in projects"
-            :key="project.id"
-            class="wb-item"
-            :class="{
-              'wb-item--active': selectedProject?.id === project.id,
-              'wb-item--checked': selectedProjects.includes(project.id),
-            }"
-          >
-            <el-checkbox
-              :model-value="selectedProjects.includes(project.id)"
-              class="wb-item-check"
-              @change="(val: boolean) => handleProjectSelect(project.id, val)"
-              @click.stop
+        <!-- 我的脚本：目录树 + 批量勾选 -->
+        <template v-if="listMode === 'active'">
+          <div v-if="projects.length > 0" class="wb-list-head">
+            <el-checkbox v-model="selectAll" :indeterminate="isIndeterminate" @change="handleSelectAll">
+              全选
+            </el-checkbox>
+            <span v-if="selectedProjects.length" class="wb-select-hint">已选 {{ selectedProjects.length }} 项</span>
+          </div>
+          <div class="wb-tree-wrap">
+            <el-empty
+              v-if="projects.length === 0"
+              description="暂无脚本，点击「导入脚本」上传"
+              :image-size="88"
+              class="wb-empty"
             />
-            <div class="wb-item-body" @click="selectProject(project)">
-              <div class="wb-item-icon">
-                <el-icon><Document /></el-icon>
-              </div>
-              <div class="wb-item-text">
-                <div class="wb-item-title">
-                  <span class="wb-item-name">{{ project.name }}</span>
-                  <el-tag v-if="listMode === 'active' && !project.is_active" size="small" effect="plain" type="info" round>
-                    已禁用
-                  </el-tag>
+            <el-tree
+              v-else
+              :key="treeRenderKey"
+              class="wb-script-tree"
+              lazy
+              :load="loadTreeNode"
+              :props="{ label: 'label', children: 'children', isLeaf: 'isLeaf' }"
+              highlight-current
+              @node-click="onTreeNodeClick"
+            >
+              <template #default="{ data }">
+                <span class="wb-tree-row">
+                  <el-checkbox
+                    v-if="data.isScriptRoot"
+                    :model-value="selectedProjects.includes(String(data.projectId))"
+                    class="wb-tree-check"
+                    @click.stop
+                    @change="(val: boolean) => handleProjectSelect(String(data.projectId), val)"
+                  />
+                  <span class="wb-tree-label">{{ data.label }}</span>
+                  <el-dropdown
+                    v-if="data.isScriptRoot && data.project"
+                    trigger="click"
+                    class="wb-tree-more"
+                    @command="handleProjectAction"
+                    @click.stop
+                  >
+                    <button type="button" class="wb-item-more" aria-label="更多" @click.stop>
+                      <el-icon><MoreFilled /></el-icon>
+                    </button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item
+                          v-if="!data.project.is_active"
+                          :command="{ action: 'toggle_active', project: data.project }"
+                        >
+                          启用脚本
+                        </el-dropdown-item>
+                        <el-dropdown-item v-else :command="{ action: 'toggle_active', project: data.project }">
+                          停用脚本
+                        </el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'edit', project: data.project }" divided>
+                          <el-icon><Edit /></el-icon>
+                          重命名
+                        </el-dropdown-item>
+                        <el-dropdown-item :command="{ action: 'delete', project: data.project }" divided>
+                          <el-icon><Delete /></el-icon>
+                          移入回收站
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </span>
+              </template>
+            </el-tree>
+          </div>
+        </template>
+
+        <!-- 回收站：沿用列表 -->
+        <template v-else>
+          <div v-if="projects.length > 0" class="wb-list-head">
+            <el-checkbox v-model="selectAll" :indeterminate="isIndeterminate" @change="handleSelectAll">
+              全选
+            </el-checkbox>
+            <span v-if="selectedProjects.length" class="wb-select-hint">已选 {{ selectedProjects.length }} 项</span>
+          </div>
+          <div class="wb-list">
+            <el-empty
+              v-if="projects.length === 0"
+              description="回收站为空"
+              :image-size="88"
+              class="wb-empty"
+            />
+            <div
+              v-for="project in projects"
+              :key="project.id"
+              class="wb-item"
+              :class="{
+                'wb-item--active': selectedProject?.id === project.id,
+                'wb-item--checked': selectedProjects.includes(project.id),
+              }"
+            >
+              <el-checkbox
+                :model-value="selectedProjects.includes(project.id)"
+                class="wb-item-check"
+                @change="(val: boolean) => handleProjectSelect(project.id, val)"
+                @click.stop
+              />
+              <div class="wb-item-body" @click="selectProject(project)">
+                <div class="wb-item-icon">
+                  <el-icon><Document /></el-icon>
                 </div>
-                <div class="wb-item-meta">
-                  <span class="wb-chip">{{ project.framework }}</span>
-                  <span class="wb-type">{{ project.type }}</span>
-                  <span v-if="listMode === 'trash' && project.deleted_at" class="wb-deleted-at">
-                    删除于 {{ formatDeletedAt(project.deleted_at) }}
-                  </span>
+                <div class="wb-item-text">
+                  <div class="wb-item-title">
+                    <span class="wb-item-name">{{ project.name }}</span>
+                  </div>
+                  <div class="wb-item-meta">
+                    <span class="wb-chip">{{ project.framework }}</span>
+                    <span class="wb-type">{{ project.type }}</span>
+                    <span v-if="project.deleted_at" class="wb-deleted-at">
+                      删除于 {{ formatDeletedAt(project.deleted_at) }}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <el-dropdown trigger="click" @command="handleProjectAction" @click.stop>
-              <button type="button" class="wb-item-more" aria-label="更多">
-                <el-icon><MoreFilled /></el-icon>
-              </button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <template v-if="listMode === 'active'">
-                    <el-dropdown-item v-if="!project.is_active" :command="{ action: 'toggle_active', project }">
-                      启用脚本
-                    </el-dropdown-item>
-                    <el-dropdown-item v-else :command="{ action: 'toggle_active', project }">停用脚本</el-dropdown-item>
-                    <el-dropdown-item :command="{ action: 'edit', project }" divided>
-                      <el-icon><Edit /></el-icon>
-                      重命名
-                    </el-dropdown-item>
-                    <el-dropdown-item :command="{ action: 'delete', project }" divided>
-                      <el-icon><Delete /></el-icon>
-                      移入回收站
-                    </el-dropdown-item>
-                  </template>
-                  <template v-else>
+              <el-dropdown trigger="click" @command="handleProjectAction" @click.stop>
+                <button type="button" class="wb-item-more" aria-label="更多">
+                  <el-icon><MoreFilled /></el-icon>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
                     <el-dropdown-item :command="{ action: 'restore', project }">
                       <el-icon><RefreshLeft /></el-icon>
                       恢复到列表
@@ -141,12 +197,12 @@
                       <el-icon><Delete /></el-icon>
                       彻底删除
                     </el-dropdown-item>
-                  </template>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </div>
-        </div>
+        </template>
       </aside>
 
       <!-- 右侧 -->
@@ -203,7 +259,40 @@
           <el-empty description="请选择一个脚本以配置执行并查看日志" :image-size="140" />
         </div>
 
-        <div v-else class="execution-panel">
+        <div v-else class="wb-ide-layout">
+          <div class="wb-editor-column">
+            <div class="wb-editor-bar">
+              <span class="wb-editor-bar__title">{{ editorTitle || '未打开文件' }}</span>
+              <div class="wb-editor-bar__actions">
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  :loading="saveLoading"
+                  :disabled="!canSaveEditor"
+                  @click="handleSaveEditor"
+                >
+                  保存
+                </el-button>
+              </div>
+            </div>
+            <div v-loading="editorLoading" class="wb-monaco-host">
+              <MonacoEditor
+                v-if="editorPath"
+                v-model="editorContent"
+                :language="editorLanguage"
+                :read-only="editorReadOnly"
+              />
+              <el-empty
+                v-else
+                class="wb-monaco-placeholder"
+                description="在左侧展开脚本节点，点击文件即可编辑"
+                :image-size="100"
+              />
+            </div>
+          </div>
+
+          <div class="execution-panel wb-exec-column">
             <!-- 执行配置 -->
             <div class="config-section">
               <h4 class="section-title">执行配置</h4>
@@ -325,6 +414,7 @@
                 </el-col>
               </el-row>
             </div>
+          </div>
         </div>
       </main>
     </div>
@@ -444,7 +534,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   HomeFilled,
@@ -461,6 +552,71 @@ import {
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import { useUiExecutionStore } from '@/store/modules/uiExecution'
+
+const route = useRoute()
+const router = useRouter()
+
+const MonacoEditor = defineAsyncComponent(() => import('@/components/MonacoEditor/index.vue'))
+
+interface TreeNodeData {
+  id: string
+  label: string
+  projectId?: string
+  path?: string
+  isScriptRoot?: boolean
+  isLeaf?: boolean
+  children?: TreeNodeData[]
+  /** 脚本根节点携带，供「更多」菜单使用 */
+  project?: Project
+}
+
+type TrieNode = { file: boolean; sub: Record<string, TrieNode> }
+
+function buildFileTreeFromPaths(files: string[], projectId: string): TreeNodeData[] {
+  const root: Record<string, TrieNode> = {}
+  for (const raw of files) {
+    const parts = raw.replace(/\\/g, '/').split('/').filter(Boolean)
+    let cur = root
+    for (let i = 0; i < parts.length; i++) {
+      const name = parts[i]
+      if (!cur[name]) cur[name] = { file: false, sub: {} }
+      if (i === parts.length - 1) {
+        cur[name].file = true
+      }
+      cur = cur[name].sub
+    }
+  }
+
+  function walk(obj: Record<string, TrieNode>, basePath: string): TreeNodeData[] {
+    return Object.keys(obj)
+      .sort()
+      .map((name) => {
+        const node = obj[name]
+        const full = basePath ? `${basePath}/${name}` : name
+        const subKeys = Object.keys(node.sub)
+        if (node.file && subKeys.length === 0) {
+          return {
+            id: `f-${projectId}-${full}`,
+            label: name,
+            path: full,
+            projectId,
+            isLeaf: true,
+          }
+        }
+        const children = walk(node.sub, full)
+        return {
+          id: `d-${projectId}-${full}`,
+          label: name,
+          path: full,
+          projectId,
+          isLeaf: children.length === 0,
+          children,
+        }
+      })
+  }
+
+  return walk(root, '')
+}
 
 interface Project {
   id: string
@@ -536,6 +692,7 @@ async function loadTrashList() {
     const scripts = Array.isArray(data.results) ? data.results : []
     trashCount.value = typeof data.count === 'number' ? data.count : scripts.length
     projects.value = scripts.map((s: any) => mapScriptRow(s, true))
+    treeRenderKey.value += 1
   } catch (e: any) {
     ElMessage.error('加载回收站失败：' + (e?.message || '未知错误'))
   }
@@ -553,6 +710,11 @@ async function onModeTabChange() {
   isIndeterminate.value = false
   selectedProject.value = null
   uiStore.reset()
+  editorPath.value = null
+  editorContent.value = ''
+  editorTitle.value = ''
+  editorProjectId.value = null
+  treeRenderKey.value += 1
   await loadCurrentList()
 }
 
@@ -709,6 +871,186 @@ const uiStore = useUiExecutionStore()
 const stopExecutionLoading = ref(false)
 const logScrollRef = ref<HTMLElement | null>(null)
 
+const treeRenderKey = ref(0)
+const editorContent = ref('')
+const editorLanguage = ref('python')
+const editorReadOnly = ref(false)
+const editorPath = ref<string | null>(null)
+const editorTitle = ref('')
+const editorProjectId = ref<string | null>(null)
+const editorLoading = ref(false)
+const saveLoading = ref(false)
+
+const canSaveEditor = computed(() => {
+  if (!editorPath.value || !editorProjectId.value || editorReadOnly.value) return false
+  return true
+})
+
+function languageFromPath(p: string) {
+  const lower = p.toLowerCase()
+  if (lower.endsWith('.py')) return 'python'
+  if (lower.endsWith('.json')) return 'json'
+  if (lower.endsWith('.js')) return 'javascript'
+  if (lower.endsWith('.ts')) return 'typescript'
+  if (lower.endsWith('.yaml') || lower.endsWith('.yml')) return 'yaml'
+  if (lower.endsWith('.xml')) return 'xml'
+  if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'html'
+  if (lower.endsWith('.css')) return 'css'
+  if (lower.endsWith('.md')) return 'markdown'
+  if (lower.endsWith('.sh')) return 'shell'
+  return 'python'
+}
+
+function guessLangFromApi(entry?: string, lang?: string) {
+  if (lang) {
+    const m = String(lang).toLowerCase()
+    if (m.includes('python')) return 'python'
+    if (m.includes('json')) return 'json'
+    if (m.includes('java')) return 'java'
+  }
+  return languageFromPath(String(entry || ''))
+}
+
+async function loadWorkspaceFile(projectId: string, relPath: string) {
+  editorLoading.value = true
+  try {
+    const { data } = await request.get(`/assistant/ui-scripts/${projectId}/workspace_file/`, {
+      params: { path: relPath },
+    })
+    editorContent.value = data.content ?? ''
+    editorLanguage.value = languageFromPath(String(data.path || relPath))
+    editorReadOnly.value = false
+    editorPath.value = String(data.path || relPath)
+    editorProjectId.value = projectId
+    editorTitle.value = String(data.path || relPath)
+    const p = projects.value.find((x) => x.id === String(projectId))
+    if (p) selectProject(p)
+  } catch (e: any) {
+    const msg = e?.response?.data?.error || e?.message || '加载失败'
+    ElMessage.error(String(msg))
+    editorPath.value = null
+  } finally {
+    editorLoading.value = false
+  }
+}
+
+async function loadOnlineScript(projectId: string) {
+  editorLoading.value = true
+  try {
+    const { data } = await request.get(`/assistant/ui-scripts/${projectId}/online_content/`)
+    editorContent.value = data.content ?? ''
+    editorLanguage.value = guessLangFromApi(data.entry_point, data.language)
+    editorReadOnly.value = false
+    editorPath.value = '__online__'
+    editorProjectId.value = projectId
+    editorTitle.value = '在线脚本（入口）'
+    const p = projects.value.find((x) => x.id === String(projectId))
+    if (p) selectProject(p)
+  } catch (e: any) {
+    const msg = e?.response?.data?.error || e?.response?.data?.detail || e?.message || '加载失败'
+    ElMessage.error(String(msg))
+    editorPath.value = null
+  } finally {
+    editorLoading.value = false
+  }
+}
+
+async function handleSaveEditor() {
+  if (!canSaveEditor.value || !editorProjectId.value || !editorPath.value) return
+  saveLoading.value = true
+  try {
+    if (editorPath.value === '__online__') {
+      if (!editorContent.value.trim()) {
+        ElMessage.warning('在线脚本内容不能为空')
+        return
+      }
+      await request.put(`/assistant/ui-scripts/${editorProjectId.value}/online_content/`, {
+        content: editorContent.value,
+      })
+    } else {
+      await request.put(`/assistant/ui-scripts/${editorProjectId.value}/workspace_file/`, {
+        path: editorPath.value,
+        content: editorContent.value,
+      })
+    }
+    ElMessage.success('已保存')
+  } catch (e: any) {
+    const d = e?.response?.data
+    const msg =
+      (typeof d?.error === 'string' && d.error) ||
+      (typeof d?.detail === 'string' && d.detail) ||
+      e?.message ||
+      '保存失败'
+    ElMessage.error(String(msg))
+  } finally {
+    saveLoading.value = false
+  }
+}
+
+async function loadTreeNode(node: any, resolve: (data: TreeNodeData[]) => void) {
+  if (node.level === 0) {
+    resolve(
+      projects.value.map((p) => ({
+        id: `proj-${p.id}`,
+        label: p.name,
+        projectId: p.id,
+        project: p,
+        isScriptRoot: true,
+        isLeaf: false,
+      })),
+    )
+    return
+  }
+  const d = node.data as TreeNodeData
+  if (d.isScriptRoot && d.projectId) {
+    try {
+      const { data: wi } = await request.get(`/assistant/ui-scripts/${d.projectId}/workspace_info/`)
+      const files: string[] = wi.files || []
+      if (!files.length) {
+        resolve([
+          {
+            id: `online-${d.projectId}`,
+            label: '脚本内容（入口 / 在线）',
+            path: '__online__',
+            projectId: d.projectId,
+            isLeaf: true,
+          },
+        ])
+        return
+      }
+      resolve(buildFileTreeFromPaths(files, d.projectId))
+    } catch {
+      resolve([
+        {
+          id: `online-${d.projectId}`,
+          label: '脚本内容（入口 / 在线）',
+          path: '__online__',
+          projectId: d.projectId,
+          isLeaf: true,
+        },
+      ])
+    }
+    return
+  }
+  resolve([])
+}
+
+function onTreeNodeClick(data: TreeNodeData) {
+  if (data.isScriptRoot && data.projectId) {
+    const p = projects.value.find((x) => x.id === String(data.projectId))
+    if (p) selectProject(p)
+    return
+  }
+  if (!data.projectId) return
+  if (data.path === '__online__') {
+    void loadOnlineScript(data.projectId)
+    return
+  }
+  if (data.path && data.isLeaf) {
+    void loadWorkspaceFile(data.projectId, data.path)
+  }
+}
+
 watch(
   () => uiStore.logs.length,
   async () => {
@@ -723,7 +1065,16 @@ const selectProject = (project: Project) => {
   const nextId = String(project.id)
   const storeScriptId =
     uiStore.currentProjectId != null ? String(uiStore.currentProjectId) : ''
+  const prevSelectedId = selectedProject.value?.id != null ? String(selectedProject.value.id) : ''
   selectedProject.value = project
+  if (prevSelectedId && prevSelectedId !== nextId) {
+    if (editorProjectId.value && String(editorProjectId.value) !== nextId) {
+      editorPath.value = null
+      editorContent.value = ''
+      editorTitle.value = ''
+      editorProjectId.value = null
+    }
+  }
   if (storeScriptId !== nextId) {
     uiStore.reset()
   } else if (uiStore.currentExecutionId != null && uiStore.isRunning) {
@@ -993,7 +1344,7 @@ const handleProjectAction = ({ action, project }: { action: string; project: Pro
       type: 'warning'
     }).then(async () => {
       try {
-        await request.delete(`/assistant/ui-scripts/${project.id}/`)
+        await request.patch(`/assistant/ui-scripts/${project.id}/`, { is_deleted: true })
         if (selectedProject.value?.id === project.id) {
           selectedProject.value = null
         }
@@ -1001,7 +1352,7 @@ const handleProjectAction = ({ action, project }: { action: string; project: Pro
         updateSelectAllState()
         await loadCurrentList()
         await refreshTrashCount()
-        ElMessage.success('已移入回收站')
+        ElMessage.success('Node 已移入回收站')
       } catch (error: any) {
         const d = error?.response?.data
         const detail =
@@ -1137,6 +1488,7 @@ const loadProjects = async (opts?: { selectServerId?: number }) => {
     const scripts = Array.isArray(data) ? data : (data.results || [])
 
     projects.value = scripts.map((script: any) => mapScriptRow(script, false))
+    treeRenderKey.value += 1
 
     const sid = opts?.selectServerId
     if (sid != null && Number.isFinite(Number(sid))) {
@@ -1165,6 +1517,25 @@ onMounted(async () => {
   }
   if (uiStore.currentExecutionId != null) {
     await uiStore.resumeAfterRemount()
+  }
+
+  const q = route.query as Record<string, string | string[] | undefined>
+  const rawPath = typeof q.openPath === 'string' ? q.openPath : Array.isArray(q.openPath) ? q.openPath[0] : ''
+  const rawPid = typeof q.openProjectId === 'string' ? q.openProjectId : Array.isArray(q.openProjectId) ? q.openProjectId[0] : ''
+  if (rawPath) {
+    let pid = rawPid || ''
+    if (!pid && projects.value.length > 0) {
+      pid = String(projects.value[0].id)
+    }
+    if (pid) {
+      await loadWorkspaceFile(pid, rawPath.replace(/^\//, ''))
+    } else {
+      ElMessage.warning('暂无脚本工程，请先导入脚本后再从资产中心打开文件')
+    }
+    const cleanQuery = { ...route.query }
+    delete cleanQuery.openPath
+    delete cleanQuery.openProjectId
+    await router.replace({ query: cleanQuery })
   }
 })
 
@@ -1221,7 +1592,7 @@ onUnmounted(() => {
 }
 
 .wb-aside {
-  width: 360px;
+  width: 250px;
   flex-shrink: 0;
   background: var(--wb-surface);
   border: 1px solid var(--wb-border);
@@ -1495,6 +1866,116 @@ onUnmounted(() => {
 }
 .wb-empty-main :deep(.el-empty__description) {
   color: var(--wb-muted);
+}
+
+.wb-tree-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 6px 12px;
+}
+
+.wb-script-tree {
+  background: transparent;
+  --el-tree-node-hover-bg-color: rgba(99, 102, 241, 0.12);
+  --el-tree-text-color: var(--wb-text);
+}
+
+.wb-script-tree :deep(.el-tree-node__content) {
+  border-radius: 6px;
+  height: auto;
+  min-height: 28px;
+  padding: 4px 0;
+}
+
+.wb-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.wb-tree-check {
+  flex-shrink: 0;
+}
+
+.wb-tree-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-tree-more {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.wb-ide-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wb-editor-column {
+  flex: 0 0 44%;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--wb-border);
+  min-width: 0;
+}
+
+.wb-editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--wb-border);
+  background: var(--wb-surface2);
+  flex-shrink: 0;
+}
+
+.wb-editor-bar__title {
+  font-size: 12px;
+  color: var(--wb-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-editor-bar__actions {
+  flex-shrink: 0;
+}
+
+.wb-monaco-host {
+  flex: 1;
+  min-height: 200px;
+  min-width: 0;
+  padding: 10px 12px 12px;
+  box-sizing: border-box;
+}
+
+.wb-monaco-placeholder {
+  height: 100%;
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wb-monaco-placeholder :deep(.el-empty__description) {
+  color: var(--wb-muted);
+}
+
+.execution-panel.wb-exec-column {
+  flex: 1;
 }
 
 .execution-panel {

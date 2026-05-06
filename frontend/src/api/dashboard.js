@@ -24,3 +24,8 @@ export function getDashboardStreamUrl(params = {}) {
   return `/api/execution/dashboard/stream/${query ? `?${query}` : ""}`;
 }
 
+/** GET /api/execution/dashboard/host-metrics/ 可选：需后端安装 psutil */
+export function getDashboardHostMetricsApi() {
+  return request.get("/execution/dashboard/host-metrics/");
+}
+

@@ -3,6 +3,8 @@ import { onBeforeUnmount, onMounted } from "vue";
 interface UseRealtimePollingOptions {
   intervalMs?: number;
   runOnMount?: boolean;
+  /** 首次拉取延后（ms），再交给 requestIdleCallback，降低首屏与其它接口抢带宽 */
+  deferredInitialRunMs?: number;
   refreshEvents?: string[];
   shouldSkip?: () => boolean;
 }
@@ -13,6 +15,7 @@ export function useRealtimePolling(
 ) {
   const intervalMs = options.intervalMs ?? 5000;
   const runOnMount = options.runOnMount ?? true;
+  const deferredInitialRunMs = options.deferredInitialRunMs ?? 0;
   const refreshEvents = options.refreshEvents ?? [];
   let timer: ReturnType<typeof setInterval> | null = null;
   let loading = false;
@@ -60,9 +63,24 @@ export function useRealtimePolling(
     }
   }
 
+  function scheduleInitialRefresh() {
+    const kick = () => {
+      void executeRefresh();
+    };
+    const idleKick =
+      typeof requestIdleCallback !== "undefined"
+        ? () => requestIdleCallback(kick, { timeout: 2000 })
+        : () => setTimeout(kick, 0);
+    if (deferredInitialRunMs > 0) {
+      setTimeout(idleKick, deferredInitialRunMs);
+    } else {
+      idleKick();
+    }
+  }
+
   onMounted(() => {
     if (runOnMount) {
-      void executeRefresh();
+      scheduleInitialRefresh();
     }
     startPolling();
     bindRefreshEvents();

@@ -73,13 +73,12 @@ class UIScriptUploadSerializer(serializers.ModelSerializer):
             'is_zip',
             'file_size',
         ]
-        # is_deleted / deleted_at 仅允许通过 soft_delete、restore、empty_trash 等接口变更，禁止客户端在创建/ PATCH 时写入回收站
+        # deleted_at 由服务端在软删时写入；恢复请用 restore 接口，勿 PATCH is_deleted=false
         read_only_fields = [
             'id',
             'workspace_path',
             'created_at',
             'updated_at',
-            'is_deleted',
             'deleted_at',
         ]
 
@@ -150,13 +149,32 @@ class UIScriptUploadSerializer(serializers.ModelSerializer):
                     'file_path': 'POM 模式必须上传 ZIP 文件、提供 Git 仓库 URL 或在线内容'
                 })
 
+        if self.instance is None and attrs.get('is_deleted'):
+            raise serializers.ValidationError({'is_deleted': '创建时不可标记为已删除'})
+        if self.instance is not None and 'is_deleted' in attrs and attrs['is_deleted'] is False:
+            raise serializers.ValidationError(
+                {'is_deleted': '请使用 POST /assistant/ui-scripts/{id}/restore/ 恢复脚本'}
+            )
+
         return attrs
+
+    def update(self, instance, validated_data):
+        from django.utils import timezone
+
+        if 'is_deleted' in validated_data:
+            want_deleted = validated_data.get('is_deleted')
+            if want_deleted is True and not instance.is_deleted:
+                validated_data['deleted_at'] = timezone.now()
+            elif want_deleted is True and instance.is_deleted:
+                validated_data.pop('is_deleted', None)
+        return super().update(instance, validated_data)
 
 
 class UIScriptUploadListSerializer(serializers.ModelSerializer):
     """列表展示序列化器（精简版）"""
 
     file_size = serializers.SerializerMethodField()
+    original_path = serializers.SerializerMethodField()
 
     class Meta:
         model = UIScriptUpload
@@ -174,6 +192,7 @@ class UIScriptUploadListSerializer(serializers.ModelSerializer):
             'is_deleted',
             'deleted_at',
             'file_size',
+            'original_path',
         ]
 
     def get_file_size(self, obj):
@@ -188,6 +207,17 @@ class UIScriptUploadListSerializer(serializers.ModelSerializer):
                 return f"{size / 1024 / 1024:.2f}MB"
         except Exception:
             return "未知"
+
+    def get_original_path(self, obj):
+        """文件夹 + 入口，供回收站等展示"""
+        raw = (obj.folder or '/').replace('\\', '/').strip()
+        if not raw.startswith('/'):
+            raw = '/' + raw
+        base = raw.rstrip('/') or ''
+        ep = (obj.entry_point or '').replace('\\', '/').strip().strip('/')
+        if not base or base == '/':
+            return f"/{ep}" if ep else '/'
+        return f"{base}/{ep}" if ep else base
 
 
 class UIScriptExecutionSerializer(serializers.ModelSerializer):

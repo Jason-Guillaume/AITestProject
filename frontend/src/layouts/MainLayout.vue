@@ -43,6 +43,13 @@
           >
             帮助中心
           </router-link>
+          <router-link
+            class="top-nav__menu-item"
+            :class="{ active: topNavActive === 'analysis-lab' }"
+            to="/analysis-lab"
+          >
+            分析实验室 (Analysis Lab)
+          </router-link>
         </nav>
       </div>
       <div class="top-nav__center">
@@ -275,119 +282,76 @@
     </header>
 
     <div class="layout-body">
-      <!-- 左侧菜单 -->
-      <aside class="side-nav side-nav--tech">
-        <el-menu
-          ref="sideMenuRef"
-          :default-active="activeMenu"
-          class="side-menu side-menu--tech"
-          :collapse="false"
-          @select="onSideMenuSelect"
+      <!-- VS Code 风格：极窄 Activity Bar + 可折叠上下文侧栏 -->
+      <div class="nav-rail" :class="{ 'nav-rail--secondary-collapsed': secondarySidebarCollapsed }">
+        <aside class="activity-bar" aria-label="主导航">
+          <el-tooltip
+            v-for="act in activityBarItems"
+            :key="act.id"
+            :content="act.tooltip"
+            placement="right"
+            :show-after="200"
+            effect="dark"
+          >
+            <button
+              type="button"
+              class="activity-bar__btn"
+              :class="{ 'activity-bar__btn--active': activeActivityId === act.id }"
+              :aria-current="activeActivityId === act.id ? 'true' : undefined"
+              @click="onActivityBarClick(act)"
+            >
+              <el-icon :size="22"><component :is="act.icon" /></el-icon>
+            </button>
+          </el-tooltip>
+        </aside>
+
+        <aside
+          v-show="showSecondarySidebar"
+          class="secondary-sidebar"
+          :class="{ 'secondary-sidebar--collapsed': secondarySidebarCollapsed }"
+          aria-label="上下文导航"
         >
-          <el-menu-item index="/dashboard">
-            <el-icon><HomeFilled /></el-icon>
-            <span>工作台</span>
-          </el-menu-item>
-          <el-menu-item index="/test-approach">
-            <el-icon><Document /></el-icon>
-            <span>测试方案</span>
-          </el-menu-item>
-          <el-menu-item index="/test-design">
-            <el-icon><EditPen /></el-icon>
-            <span>测试设计</span>
-          </el-menu-item>
-          <el-menu-item index="/test-plan">
-            <el-icon><Calendar /></el-icon>
-            <span>测试计划</span>
-          </el-menu-item>
-          <el-sub-menu index="test-case">
-            <template #title>
-              <el-icon><List /></el-icon>
-              <span>测试用例</span>
-            </template>
-            <el-menu-item index="/test-case/functional">功能测试</el-menu-item>
-            <el-menu-item index="/test-case/api">接口测试</el-menu-item>
-            <el-menu-item index="/test-case/performance">性能测试</el-menu-item>
-            <el-menu-item index="/test-case/security">安全测试</el-menu-item>
-            <el-menu-item index="/test-case/ui-automation">UI 自动化</el-menu-item>
-          </el-sub-menu>
-          <!-- CI/CD pipeline list -->
-          <el-menu-item index="/pipelines">
-            <el-icon><Document /></el-icon>
-            <span>流水线列表</span>
-          </el-menu-item>
-          <el-menu-item index="/agent-hub">
-            <el-icon><MagicStick /></el-icon>
-            <span>🤖 智能体中心</span>
-          </el-menu-item>
-          <el-menu-item index="/test-report">
-            <el-icon><DataLine /></el-icon>
-            <span>测试报告</span>
-          </el-menu-item>
-          <el-menu-item index="/quality-dashboard">
-            <el-icon><DataLine /></el-icon>
-            <span>质量分析</span>
-          </el-menu-item>
-          <el-menu-item index="/performance/environments">
-            <el-icon><Tools /></el-icon>
-            <span>环境管理</span>
-          </el-menu-item>
-          <el-menu-item index="/performance/load-monitor">
-            <el-icon><DataLine /></el-icon>
-            <span>k6 压测看板</span>
-          </el-menu-item>
-          <el-menu-item index="/server-logs">
-            <el-icon><Monitor /></el-icon>
-            <span>服务器日志</span>
-          </el-menu-item>
-          <el-menu-item index="/script-hub">
-            <el-icon><VideoPlay /></el-icon>
-            <span>脚本执行中心</span>
-          </el-menu-item>
-          <el-menu-item index="/script-hub/pom-reports">
-            <el-icon><Document /></el-icon>
-            <span>UI 测试报告</span>
-          </el-menu-item>
-          <el-sub-menu index="defect">
-            <template #title>
-              <el-icon><Warning /></el-icon>
-              <span>缺陷管理</span>
-            </template>
-            <el-menu-item index="/defect/list">缺陷清单</el-menu-item>
-            <el-menu-item index="/defect/board">任务看板</el-menu-item>
-            <el-menu-item index="/defect/release">发布计划</el-menu-item>
-          </el-sub-menu>
-          <el-sub-menu v-if="isSystemAdmin" index="system">
-            <template #title>
-              <el-icon><Tools /></el-icon>
-              <span>系统管理</span>
-            </template>
-            <el-menu-item index="/system/message">消息设置</el-menu-item>
-            <el-menu-item index="/system/messages">消息管理</el-menu-item>
-            <el-menu-item index="/system/ai-usage">AI 用量与审计</el-menu-item>
-            <el-menu-item index="/system/ai-quota">AI 配额策略</el-menu-item>
-            <el-menu-item index="/system/audit">
-              <el-icon><Tickets /></el-icon>
-              <span>审计中心</span>
+          <div class="secondary-sidebar__head">
+            <span class="secondary-sidebar__title">{{ secondaryPanelTitle }}</span>
+            <el-tooltip content="收起侧栏（扩大编辑区）" placement="bottom">
+              <button
+                type="button"
+                class="secondary-sidebar__collapse"
+                aria-label="收起上下文导航"
+                @click="secondarySidebarCollapsed = true"
+              >
+                <el-icon><ArrowLeft /></el-icon>
+              </button>
+            </el-tooltip>
+          </div>
+          <el-menu
+            :key="`${activeActivityId}-${secondaryMenuActiveIndex}-${isSystemAdmin ? '1' : '0'}`"
+            class="secondary-menu"
+            :default-active="secondaryMenuActiveIndex"
+            @select="onSideMenuSelect"
+          >
+            <el-menu-item
+              v-for="item in secondaryMenuItems"
+              :key="item.index"
+              :index="item.index"
+            >
+              <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
+              <span>{{ item.label }}</span>
             </el-menu-item>
-            <el-menu-item index="/system/org">组织管理</el-menu-item>
-            <el-menu-item index="/system/role">角色管理</el-menu-item>
-            <el-menu-item index="/system/user">用户管理</el-menu-item>
-          </el-sub-menu>
-          <el-menu-item v-else index="/system/message">
-            <el-icon><Tools /></el-icon>
-            <span>消息设置</span>
-          </el-menu-item>
-          <el-menu-item v-if="!isSystemAdmin" index="/user/audit">
-            <el-icon><Tickets /></el-icon>
-            <span>我的审计</span>
-          </el-menu-item>
-          <el-menu-item index="/ai-assistant">
-            <el-icon><MagicStick /></el-icon>
-            <span>智能助手</span>
-          </el-menu-item>
-        </el-menu>
-      </aside>
+          </el-menu>
+        </aside>
+
+        <el-tooltip v-if="showSecondarySidebar && secondarySidebarCollapsed" content="展开上下文导航" placement="right">
+          <button
+            type="button"
+            class="activity-bar__expand-fab"
+            aria-label="展开上下文导航"
+            @click="secondarySidebarCollapsed = false"
+          >
+            <el-icon><ArrowRight /></el-icon>
+          </button>
+        </el-tooltip>
+      </div>
 
       <!-- 主内容区 -->
       <main class="main-content">
@@ -455,23 +419,31 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Refresh, ArrowDown,
+  Refresh, ArrowDown, ArrowLeft, ArrowRight,
   HomeFilled, Document, EditPen, Calendar, List,
-  DataLine, Warning, Tools, MagicStick, Back, Monitor, Tickets, VideoPlay
+  DataLine, DataAnalysis, Warning, Tools, MagicStick, Back, Monitor, Tickets, VideoPlay,
+  FolderOpened, Promotion, TrendCharts, Setting, Cpu, Connection, Link, Iphone, Cellphone, Postcard,
+  Delete,
+  Operation,
 } from '@element-plus/icons-vue'
 import { TEST_CASE_TYPE_LABEL_ZH } from '@/constants/testCaseTypeLabels'
 import { changePasswordApi, getCurrentUserApi, getUserProfileApi, getSystemMessagesApi } from '@/api/user'
-import { getProjectsApi } from '@/api/project'
-import { getEnvironments } from '@/api/environment'
-import { useAppContextStore } from '@/stores/appContextStore'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 
 const router = useRouter()
 const route = useRoute()
-const appContextStore = useAppContextStore()
+const workspaceStore = useWorkspaceStore()
+const {
+  projectOptions,
+  envOptions,
+  selectedProjectId: selectedProject,
+  selectedEnvironmentId: selectedEnv,
+} = storeToRefs(workspaceStore)
 
 /** 不用 el-menu 的 router 模式：其内部依赖 globalProperties.$router，在部分环境下会取不到导致点击无跳转 */
 function onSideMenuSelect(index) {
@@ -484,36 +456,6 @@ function onSideMenuSelect(index) {
 const searchKw = ref('')
 const backendHealthMessage = ref('')
 const unreadMessageCount = ref(0)
-const selectedProject = ref(null)
-const selectedEnv = ref(null)
-const projectOptions = ref([])
-const envOptions = ref([])
-
-function normalizeList(payload) {
-  if (Array.isArray(payload)) return payload
-  if (Array.isArray(payload?.results)) return payload.results
-  if (Array.isArray(payload?.data)) return payload.data
-  return []
-}
-
-function syncProjectContextById(projectId) {
-  const p = projectOptions.value.find(item => String(item.id) === String(projectId))
-  if (!p) {
-    appContextStore.setActiveProject({ id: null, name: '' })
-    return
-  }
-  appContextStore.setActiveProject({ id: p.id, name: p.project_name || '' })
-}
-
-function syncEnvironmentContextById(environmentId) {
-  const e = envOptions.value.find(item => String(item.id) === String(environmentId))
-  if (!e) {
-    appContextStore.setActiveEnvironment({ id: null, name: '' })
-    return
-  }
-  appContextStore.setActiveEnvironment({ id: e.id, name: e.name || '' })
-}
-
 const currentProjectLabel = computed(() => {
   const p = projectOptions.value.find(item => String(item.id) === String(selectedProject.value))
   return p ? `${p.project_name} (Current)` : 'No Project'
@@ -598,6 +540,24 @@ async function syncUnreadMessageCount() {
   }
 }
 
+/** 次要接口：错开首屏 burst，优先 requestIdleCallback */
+function scheduleSecondaryInit(fn, delayMs) {
+  const run = () => {
+    try {
+      fn()
+    } catch {
+      /* 忽略 */
+    }
+  }
+  setTimeout(() => {
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(run, { timeout: 2500 })
+    } else {
+      run()
+    }
+  }, delayMs)
+}
+
 watch(
   () => route.fullPath,
   (fullPath) => {
@@ -606,21 +566,223 @@ watch(
   },
 )
 
-const sideMenuRef = ref(null)
+/** ---------- Activity Bar + 次级上下文导航（扁平菜单，无 el-sub-menu） ---------- */
 
-const activeMenu = computed(() => route.path)
+const secondarySidebarCollapsed = ref(false)
 
-/** 直达子路由时展开「测试用例」分组（Element Plus 仅在挂载时对 defaultOpeneds/initMenu 生效） */
+function pathToActivityId(path) {
+  if (path === '/dashboard') return 'home'
+  if (path.startsWith('/automation-center') || path.startsWith('/script-hub')) {
+    return 'scripts'
+  }
+  if (
+    path.startsWith('/test-approach') ||
+    path.startsWith('/test-design') ||
+    path.startsWith('/test-case') ||
+    path.startsWith('/execution/api-scenario-generator')
+  ) {
+    return 'assets'
+  }
+  if (
+    path.startsWith('/test-plan') ||
+    path.startsWith('/pipelines') ||
+    path.startsWith('/cicd') ||
+    path.startsWith('/performance/environments') ||
+    path.startsWith('/performance/load-monitor')
+  ) {
+    return 'execution'
+  }
+  if (
+    path.startsWith('/defect') ||
+    path.startsWith('/test-report') ||
+    path.startsWith('/quality-dashboard') ||
+    path.startsWith('/server-logs') ||
+    path.startsWith('/analysis-lab')
+  ) {
+    return 'analytics'
+  }
+  if (
+    path.startsWith('/agent-hub') ||
+    path.startsWith('/element-library') ||
+    path.startsWith('/ui-automation') ||
+    path.startsWith('/ai-requirement-review') ||
+    path.startsWith('/ai-testcase-generator') ||
+    path.startsWith('/ai-api-doc-analysis') ||
+    path.startsWith('/ai-api-testcase-design') ||
+    path.startsWith('/ai-api-script-generator') ||
+    path.startsWith('/ai-test-data-generator') ||
+    path.startsWith('/ai-performance-analysis')
+  ) {
+    return 'agents'
+  }
+  if (path.startsWith('/ai-assistant') || path.startsWith('/knowledge')) {
+    return 'ai'
+  }
+  if (path.startsWith('/system/') || path.startsWith('/user/audit')) {
+    return 'system'
+  }
+  return null
+}
+
+const activeActivityId = computed(() => pathToActivityId(route.path))
+
+const activityBarItems = [
+  { id: 'home', icon: HomeFilled, tooltip: '工作台' },
+  { id: 'assets', icon: FolderOpened, tooltip: '资产 · 用例与脚本' },
+  { id: 'scripts', icon: VideoPlay, tooltip: '自动化指挥中心' },
+  { id: 'execution', icon: Promotion, tooltip: '执行 · 流水线与环境' },
+  { id: 'analytics', icon: DataAnalysis, tooltip: '分析 · 报告与缺陷' },
+  { id: 'agents', icon: Connection, tooltip: '智能体中心' },
+  { id: 'ai', icon: Cpu, tooltip: 'AI 智能中心' },
+  { id: 'system', icon: Setting, tooltip: '系统设置' },
+]
+
+const secondaryPanelTitles = {
+  assets: '资产与工作项',
+  scripts: '自动化指挥中心',
+  execution: '执行与编排',
+  analytics: '分析与度量',
+  agents: '智能体中心',
+  ai: 'AI 智能中心',
+  system: '系统设置',
+}
+
+const showSecondarySidebar = computed(() => activeActivityId.value != null && activeActivityId.value !== 'home')
+
+const secondaryPanelTitle = computed(() => {
+  const id = activeActivityId.value
+  if (!id || id === 'home') return ''
+  return secondaryPanelTitles[id] || ''
+})
+
+function buildSecondaryMenuItems(activityId) {
+  if (activityId === 'assets') {
+    return [
+      { index: '/test-approach', label: '测试方案', icon: Document },
+      { index: '/test-design', label: '测试设计', icon: EditPen },
+      { index: '/test-case/functional', label: '用例 · 功能测试', icon: List },
+      { index: '/test-case/api', label: '用例 · 接口测试', icon: List },
+      { index: '/test-case/performance', label: '用例 · 性能测试', icon: List },
+      { index: '/test-case/security', label: '用例 · 安全测试', icon: List },
+      { index: '/test-case/ui-automation', label: '用例 · UI 自动化', icon: List },
+      { index: '/execution/api-scenario-generator', label: '接口场景生成', icon: Document },
+    ]
+  }
+  if (activityId === 'scripts') {
+    return [
+      { index: '/automation-center/web', label: 'Web', icon: Monitor },
+      { index: '/automation-center/mobile', label: 'Mobile', icon: Iphone },
+      { index: '/automation-center/api', label: 'API', icon: Link },
+      { index: '/automation-center/miniprogram', label: '小程序', icon: Cellphone },
+      { index: '/automation-center/h5', label: 'H5', icon: Postcard },
+      { index: '/automation-center/assets', label: '资产中心 · Asset Hub', icon: FolderOpened },
+      { index: '/automation-center/recycle-bin', label: '回收站 · Recycle Bin', icon: Delete },
+    ]
+  }
+  if (activityId === 'execution') {
+    return [
+      { index: '/test-plan', label: '测试计划', icon: Calendar },
+      { index: '/pipelines', label: '流水线列表', icon: Document },
+      { index: '/cicd', label: 'CI/CD 编排（远端）', icon: Operation },
+      { index: '/performance/environments', label: '环境管理', icon: Tools },
+      { index: '/performance/load-monitor', label: 'k6 压测看板', icon: DataLine },
+    ]
+  }
+  if (activityId === 'analytics') {
+    return [
+      { index: '/defect/list', label: '缺陷 · 清单', icon: Warning },
+      { index: '/defect/board', label: '缺陷 · 任务看板', icon: Warning },
+      { index: '/defect/release', label: '缺陷 · 发布计划', icon: Warning },
+      { index: '/test-report', label: '测试报告', icon: DataLine },
+      { index: '/quality-dashboard', label: '质量分析', icon: TrendCharts },
+      { index: '/server-logs', label: '服务器日志', icon: Monitor },
+    ]
+  }
+  if (activityId === 'agents') {
+    return [
+      { index: '/agent-hub', label: '智能体总览', icon: MagicStick },
+      { index: '/element-library', label: '元素库', icon: Document },
+      { index: '/ui-automation/generate', label: 'AI Web UI 脚本生成', icon: MagicStick },
+      { index: '/ui-automation/workbench', label: 'AI Web UI 工作台', icon: Monitor },
+    ]
+  }
+  if (activityId === 'ai') {
+    return [{ index: '/ai-assistant', label: '智能助手', icon: MagicStick }]
+  }
+  if (activityId === 'system') {
+    if (isSystemAdmin.value) {
+      return [
+        { index: '/system/message', label: '消息设置', icon: null },
+        { index: '/system/messages', label: '消息管理', icon: null },
+        { index: '/system/ai-usage', label: 'AI 用量与审计', icon: null },
+        { index: '/system/ai-quota', label: 'AI 配额策略', icon: null },
+        { index: '/system/audit', label: '审计中心', icon: Tickets },
+        { index: '/system/org', label: '组织管理', icon: null },
+        { index: '/system/role', label: '角色管理', icon: null },
+        { index: '/system/user', label: '用户管理', icon: null },
+      ]
+    }
+    return [
+      { index: '/system/message', label: '消息设置', icon: null },
+      { index: '/user/audit', label: '我的审计', icon: Tickets },
+    ]
+  }
+  return []
+}
+
+const secondaryMenuItems = computed(() => {
+  const id = activeActivityId.value
+  if (!id || id === 'home') return []
+  return buildSecondaryMenuItems(id)
+})
+
+function resolveSecondaryMenuActiveIndex(path, items) {
+  const list = items || []
+  if (list.length === 0) return path
+  const exact = list.find((x) => x.index === path)
+  if (exact) return exact.index
+  const sorted = [...list].sort((a, b) => b.index.length - a.index.length)
+  for (const it of sorted) {
+    if (it.index !== '/' && (path === it.index || path.startsWith(`${it.index}/`))) {
+      return it.index
+    }
+  }
+  return path
+}
+
+const secondaryMenuActiveIndex = computed(() =>
+  resolveSecondaryMenuActiveIndex(route.path, secondaryMenuItems.value),
+)
+
+function pathBelongsToActivity(path, activityId) {
+  return pathToActivityId(path) === activityId
+}
+
+function defaultPathForActivity(activityId) {
+  const items = buildSecondaryMenuItems(activityId)
+  return items[0]?.index || '/dashboard'
+}
+
+function onActivityBarClick(act) {
+  if (act.id === 'home') {
+    secondarySidebarCollapsed.value = false
+    router.push('/dashboard').catch(() => {})
+    return
+  }
+  secondarySidebarCollapsed.value = false
+  if (!pathBelongsToActivity(route.path, act.id)) {
+    const target = defaultPathForActivity(act.id)
+    router.push(target).catch(() => {})
+  }
+}
+
 watch(
   () => route.path,
-  (path) => {
-    if (path.startsWith('/test-case')) {
-      nextTick(() => {
-        sideMenuRef.value?.open?.('test-case')
-      })
+  () => {
+    if (activeActivityId.value === 'home') {
+      secondarySidebarCollapsed.value = false
     }
   },
-  { immediate: true },
 )
 
 /** 顶栏「项目管理 / 知识中心 / 帮助中心」与当前路由对齐 */
@@ -629,6 +791,7 @@ const topNavActive = computed(() => {
   if (p === '/projects' || p.startsWith('/projects/')) return 'project'
   if (p === '/knowledge' || p.startsWith('/knowledge/')) return 'knowledge'
   if (p === '/help' || p.startsWith('/help/')) return 'help'
+  if (p === '/analysis-lab' || p.startsWith('/analysis-lab/')) return 'analysis-lab'
   return ''
 })
 
@@ -652,6 +815,7 @@ const BREADCRUMB_MAP = {
   '/quality-dashboard': ['质量分析', '质量看板'],
   '/performance/environments': ['Workspace', 'Performance', 'Environments'],
   '/performance/load-monitor': ['性能压测', 'k6 实时监控'],
+  '/cicd': ['执行与编排', 'CI/CD 流水线（远端）'],
   '/defect/list': ['缺陷清单', '引导页'],
   '/defect/board': ['缺陷管理', '任务看板'],
   '/defect/release': ['缺陷管理', '发布计划'],
@@ -669,10 +833,31 @@ const BREADCRUMB_MAP = {
   '/knowledge': ['知识中心', ''],
   '/knowledge/ask': ['知识中心', '知识库问答'],
   '/help': ['帮助中心', ''],
+  '/automation-center': ['自动化指挥中心', ''],
+  '/automation-center/web': ['自动化指挥中心', 'Web'],
+  '/automation-center/mobile': ['自动化指挥中心', 'Mobile'],
+  '/automation-center/api': ['自动化指挥中心', 'API'],
+  '/automation-center/miniprogram': ['自动化指挥中心', '小程序'],
+  '/automation-center/h5': ['自动化指挥中心', 'H5'],
+  '/automation-center/recycle-bin': ['自动化指挥中心', '回收站 (Recycle Bin)'],
+  '/automation-center/assets': ['自动化指挥中心', '资产中心 (Asset Hub)'],
+  '/analysis-lab': ['分析实验室 (Analysis Lab)', ''],
 }
 
 const breadcrumb = computed(() => {
   const path = route.path
+  if (path.startsWith('/automation-center/webui')) {
+    return (BREADCRUMB_MAP[path] || ['自动化指挥中心', 'WebUI 工作台']).filter(Boolean)
+  }
+  if (path.startsWith('/automation-center/pom-reports')) {
+    return (BREADCRUMB_MAP[path] || ['自动化指挥中心', 'POM 报告']).filter(Boolean)
+  }
+  if (path.startsWith('/automation-center/recycle-bin')) {
+    return BREADCRUMB_MAP['/automation-center/recycle-bin'].filter(Boolean)
+  }
+  if (path.startsWith('/automation-center/assets')) {
+    return BREADCRUMB_MAP['/automation-center/assets'].filter(Boolean)
+  }
   if (BREADCRUMB_MAP[path]) return BREADCRUMB_MAP[path].filter(Boolean)
   if (path.startsWith('/test-case/')) {
     const sub = BREADCRUMB_MAP[path]
@@ -683,13 +868,19 @@ const breadcrumb = computed(() => {
   if (path.startsWith('/test-design/')) return ['测试设计', '编辑']
   if (path.startsWith('/test-plan/')) return ['测试计划', '测试计划详情']
   if (path.startsWith('/test-report/')) return ['测试报告', '测试报告详情']
+  if (path.startsWith('/analysis-lab/reports/') || path.startsWith('/analysis-lab/report/')) {
+    return ['分析实验室 (Analysis Lab)', 'Depth Report']
+  }
+  if (path.startsWith('/cicd/pipeline/')) {
+    return ['执行与编排', 'CI/CD 流水线', '日志 / 详情']
+  }
   if (path.startsWith('/defect/detail')) return ['缺陷清单', '详情页']
   if (path.startsWith('/defect/release/')) return ['缺陷管理', '发布计划详情']
   return [path].filter(Boolean)
 })
 
 const canGoBack = computed(() => {
-  const detailRoutes = ['/test-design/', '/test-plan/', '/test-report/', '/defect/detail', '/defect/release/']
+  const detailRoutes = ['/test-design/', '/test-plan/', '/test-report/', '/defect/detail', '/defect/release/', '/cicd/pipeline/']
   return detailRoutes.some(p => route.path.startsWith(p))
 })
 
@@ -732,59 +923,19 @@ function goUserCenter() {
 }
 
 function handleProjectCommand(value) {
-  selectedProject.value = String(value)
-  syncProjectContextById(selectedProject.value)
+  workspaceStore.setSelectedProjectId(value)
 }
 
 function handleEnvCommand(value) {
-  selectedEnv.value = String(value)
-  syncEnvironmentContextById(selectedEnv.value)
-}
-
-async function loadProjectOptions() {
-  try {
-    const { data } = await getProjectsApi()
-    const list = normalizeList(data)
-    projectOptions.value = list
-    const stored = localStorage.getItem('current_project_id')
-    const matched = list.find(item => String(item.id) === String(stored))
-    selectedProject.value = matched ? String(matched.id) : (list[0] ? String(list[0].id) : null)
-    if (selectedProject.value != null) {
-      syncProjectContextById(selectedProject.value)
-    } else {
-      appContextStore.setActiveProject({ id: null, name: '' })
-    }
-  } catch {
-    projectOptions.value = []
-    selectedProject.value = null
-  }
-}
-
-async function loadEnvironmentOptions() {
-  try {
-    const { data } = await getEnvironments({ page_size: 500 })
-    const list = normalizeList(data)
-    envOptions.value = list
-    const stored = localStorage.getItem('current_test_environment_id')
-    const matched = list.find(item => String(item.id) === String(stored))
-    selectedEnv.value = matched ? String(matched.id) : (list[0] ? String(list[0].id) : null)
-    if (selectedEnv.value != null) {
-      syncEnvironmentContextById(selectedEnv.value)
-    } else {
-      appContextStore.setActiveEnvironment({ id: null, name: '' })
-    }
-  } catch {
-    envOptions.value = []
-    selectedEnv.value = null
-  }
+  workspaceStore.setSelectedEnvironmentId(value)
 }
 
 function onProjectsUpdated() {
-  loadProjectOptions()
+  workspaceStore.fetchProjects({ force: true })
 }
 
 function onEnvironmentsUpdated() {
-  loadEnvironmentOptions()
+  workspaceStore.fetchEnvironments({ force: true })
 }
 
 function onBackendUnhealthy(ev) {
@@ -827,9 +978,13 @@ onMounted(async () => {
   window.addEventListener('app:environments-updated', onEnvironmentsUpdated)
   window.addEventListener('app:backend-unhealthy', onBackendUnhealthy)
   window.addEventListener('app:backend-healthy', onBackendHealthy)
-  await Promise.all([loadProjectOptions(), loadEnvironmentOptions()])
-  await syncProfileFromServer()
-  await syncUnreadMessageCount()
+  await workspaceStore.ensureWorkspaceContext()
+  scheduleSecondaryInit(() => {
+    void syncProfileFromServer()
+  }, 500)
+  scheduleSecondaryInit(() => {
+    void syncUnreadMessageCount()
+  }, 650)
 })
 
 onUnmounted(() => {
@@ -915,14 +1070,14 @@ onUnmounted(() => {
   height: 72px;
   min-height: 72px;
   overflow: visible;
-  background: rgba(10, 15, 30, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--layout-brand-border);
+  background: var(--panel-bg-strong, rgba(255, 255, 255, 0.055));
+  backdrop-filter: var(--panel-blur, blur(20px));
+  -webkit-backdrop-filter: var(--panel-blur, blur(20px));
+  border-bottom: var(--border-subtle, 1px solid rgba(255, 255, 255, 0.08));
   box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.4),
-    0 0 40px var(--layout-brand-surface),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 4px 28px rgba(0, 0, 0, 0.45),
+    0 0 36px var(--layout-brand-surface),
+    inset 0 1px 0 rgba(0, 240, 255, 0.06);
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -1851,121 +2006,229 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* ===== 左侧菜单：与主内容区同系渐变，无突兀色块 ===== */
-.side-nav--tech {
+/* ===== VS Code 风：极窄 Activity Bar + 次级上下文侧栏 ===== */
+.nav-rail {
   position: relative;
   z-index: 4;
-  width: 188px;
+  display: flex;
   flex-shrink: 0;
-  background: linear-gradient(
-    180deg,
-    #0a0f1e 0%,
-    color-mix(in srgb, var(--layout-bg-to) 72%, #111827) 100%
-  );
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-right: 1px solid var(--layout-brand-border);
-  box-shadow: inset -1px 0 0 rgba(0, 216, 255, 0.06);
-  overflow-y: auto;
-  overflow-x: hidden;
+  align-items: stretch;
+  min-height: 0;
+  height: 100%;
+  box-shadow: 6px 0 28px rgba(0, 0, 0, 0.45);
 }
 
-.side-menu--tech {
-  border-right: none;
+.activity-bar {
+  width: 60px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 0;
+  background: var(--panel-bg, rgba(255, 255, 255, 0.03));
+  backdrop-filter: var(--panel-blur, blur(20px));
+  -webkit-backdrop-filter: var(--panel-blur, blur(20px));
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 40px rgba(0, 240, 255, 0.02);
+}
+
+.activity-bar__btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+}
+
+.activity-bar__btn:hover {
+  color: #e5e7eb;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.activity-bar__btn--active {
+  color: var(--layout-brand-primary);
+  background: rgba(0, 216, 255, 0.08);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--layout-brand-primary) 35%, transparent),
+    0 0 20px color-mix(in srgb, var(--layout-brand-primary) 25%, transparent);
+}
+
+.activity-bar__btn--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 22px;
+  margin-top: -11px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--layout-brand-primary), color-mix(in srgb, var(--layout-brand-primary) 40%, #6366f1));
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--layout-brand-primary) 70%, transparent),
+    0 0 24px color-mix(in srgb, var(--layout-brand-primary) 35%, transparent);
+}
+
+.activity-bar__expand-fab {
+  position: absolute;
+  left: 48px;
+  top: 50%;
+  z-index: 6;
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: #252528;
+  color: var(--layout-brand-primary);
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--layout-brand-primary) 28%, transparent),
+    4px 0 16px rgba(0, 0, 0, 0.4);
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.activity-bar__expand-fab:hover {
+  background: #2e2e32;
+  transform: scale(1.05);
+}
+
+.secondary-sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  background: var(--panel-bg, rgba(255, 255, 255, 0.03));
+  backdrop-filter: var(--panel-blur, blur(20px));
+  -webkit-backdrop-filter: var(--panel-blur, blur(20px));
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 48px rgba(0, 240, 255, 0.02);
+  overflow: hidden;
+  transition: width 0.22s ease, min-width 0.22s ease, opacity 0.2s ease;
+}
+
+.secondary-sidebar--collapsed {
+  width: 0;
+  min-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.secondary-sidebar__head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px 0 14px;
+  border-bottom: var(--border-subtle, 1px solid rgba(255, 255, 255, 0.08));
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.secondary-sidebar__title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--layout-text-muted);
+}
+
+.secondary-sidebar__collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.secondary-sidebar__collapse:hover {
+  color: var(--layout-brand-primary);
+  background: rgba(0, 216, 255, 0.08);
+}
+
+.secondary-menu {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: none !important;
   font-size: 13px;
   background: transparent !important;
   --el-menu-bg-color: transparent;
-  --el-menu-hover-bg-color: transparent;
+  --el-menu-hover-bg-color: rgba(0, 216, 255, 0.06);
 }
 
-.side-menu--tech :deep(.el-menu-item),
-.side-menu--tech :deep(.el-sub-menu__title) {
-  height: 42px;
-  line-height: 42px;
-  font-size: 13px;
-  border-radius: 0 10px 10px 0;
-  margin-right: 8px;
+.secondary-menu :deep(.el-menu-item) {
+  height: 40px;
+  line-height: 40px;
+  padding-left: 12px !important;
+  margin: 0 8px 2px 10px;
+  border-radius: 8px;
   border-left: 3px solid transparent;
   color: var(--layout-text-muted) !important;
   background: transparent !important;
   transition:
-    color 0.28s ease,
-    background 0.28s ease,
-    border-color 0.28s ease,
-    box-shadow 0.28s ease,
-    text-shadow 0.28s ease;
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-/* 图标：默认浅灰，悬停霓虹青 + 过渡 */
-.side-menu--tech :deep(.el-menu-item .el-icon),
-.side-menu--tech :deep(.el-sub-menu__title .el-icon) {
+.secondary-menu :deep(.el-menu-item .el-icon) {
   color: #aeb9c9 !important;
-  transition: color 0.28s ease, filter 0.28s ease;
+  margin-right: 8px;
 }
 
-.side-menu--tech :deep(.el-menu-item:hover .el-icon),
-.side-menu--tech :deep(.el-sub-menu__title:hover .el-icon) {
+.secondary-menu :deep(.el-menu-item:hover) {
+  color: var(--layout-text) !important;
+}
+
+.secondary-menu :deep(.el-menu-item:hover .el-icon) {
   color: var(--layout-brand-primary) !important;
   filter: drop-shadow(0 0 6px var(--layout-brand-glow));
 }
 
-.side-menu--tech :deep(.el-menu-item:hover),
-.side-menu--tech :deep(.el-sub-menu__title:hover) {
-  background: rgba(0, 216, 255, 0.05) !important;
-  color: var(--layout-text) !important;
-}
-
-/* 激活项：无实心底，左侧霓虹条 + 文字微光（router 由 el-menu router 驱动，类名仍为 .is-active） */
-.side-menu--tech :deep(.el-menu-item.is-active) {
-  background: transparent !important;
+.secondary-menu :deep(.el-menu-item.is-active) {
   font-weight: 600;
   color: #f0f4f8 !important;
   border-left-color: var(--layout-brand-primary);
+  background: rgba(0, 216, 255, 0.06) !important;
   box-shadow:
-    inset 4px 0 18px -4px rgba(0, 216, 255, 0.45),
-    -2px 0 20px rgba(0, 216, 255, 0.12);
-  text-shadow: 0 0 14px rgba(0, 216, 255, 0.35);
+    inset 0 0 0 1px color-mix(in srgb, var(--layout-brand-primary) 18%, transparent),
+    -2px 0 16px color-mix(in srgb, var(--layout-brand-primary) 12%, transparent);
 }
 
-.side-menu--tech :deep(.el-menu-item.is-active .el-icon) {
+.secondary-menu :deep(.el-menu-item.is-active .el-icon) {
   color: var(--layout-brand-primary) !important;
   filter: drop-shadow(0 0 8px var(--layout-brand-glow));
 }
-
-.side-menu--tech :deep(.el-menu-item.is-active:hover) {
-  background: rgba(0, 216, 255, 0.04) !important;
-}
-
-.side-menu--tech :deep(.el-sub-menu .el-menu-item) {
-  height: 38px;
-  line-height: 38px;
-  padding-left: 48px !important;
-  font-size: 13px;
-  border-left: 3px solid transparent;
-}
-
-.side-menu--tech :deep(.el-sub-menu .el-menu-item.is-active) {
-  background: transparent !important;
-  font-weight: 600;
-  color: #f0f4f8 !important;
-  border-left-color: var(--layout-brand-primary);
-  box-shadow:
-    inset 4px 0 18px -4px rgba(0, 216, 255, 0.45),
-    -2px 0 20px rgba(0, 216, 255, 0.12);
-  text-shadow: 0 0 14px rgba(0, 216, 255, 0.35);
-}
-
-.side-menu--tech :deep(.el-sub-menu.is-opened > .el-sub-menu__title) {
-  color: var(--layout-text) !important;
-}
-
-/* 子路由匹配时父级「缺陷管理 / 系统管理」标题轻量高亮（仍无实心底） */
-.side-menu--tech :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
-  color: #e8eaef !important;
-  text-shadow: 0 0 12px rgba(0, 216, 255, 0.22);
-}
-
-/* 知识中心筛选：已迁移到页面内的 module-tree-dock 样式 */
 
 /* ===== 主内容 ===== */
 .main-content {
@@ -1985,10 +2248,11 @@ onUnmounted(() => {
   z-index: 1;
   height: 42px;
   padding: 0 20px;
-  background: color-mix(in srgb, var(--layout-bg-to) 58%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--layout-brand-border);
+  background: var(--panel-bg, rgba(255, 255, 255, 0.03));
+  backdrop-filter: var(--panel-blur, blur(20px));
+  -webkit-backdrop-filter: var(--panel-blur, blur(20px));
+  border-bottom: var(--border-subtle, 1px solid rgba(255, 255, 255, 0.08));
+  box-shadow: 0 1px 0 rgba(0, 240, 255, 0.04);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2021,12 +2285,16 @@ onUnmounted(() => {
 
 .content-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   padding: 16px 20px 20px;
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--layout-bg-from) 55%, transparent) 0%,
-    color-mix(in srgb, var(--layout-bg-to) 88%, #0a101d) 100%
+    rgba(255, 255, 255, 0.02) 0%,
+    transparent 28%,
+    color-mix(in srgb, var(--bg-main, #0a0a0c) 92%, transparent) 100%
   );
 }
 </style>

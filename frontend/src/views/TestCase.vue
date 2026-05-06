@@ -607,7 +607,14 @@
       destroy-on-close
       @opened="loadExecutionLogsForDialog"
     >
-      <el-table v-loading="executionLogsLoading" :data="executionLogsRows" size="small" border stripe>
+      <el-table
+        v-loading="executionLogsLoading"
+        :data="executionLogsRows"
+        size="small"
+        border
+        stripe
+        @row-click="onExecutionLogRowClick"
+      >
         <el-table-column prop="id" label="ID" width="72" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
@@ -987,6 +994,7 @@ import {
   isDrawerTailFieldPreformatted,
   type DrawerField,
 } from '@/composables/useTestCaseTypeColumns'
+import { useCopilotStore } from '@/stores/copilotStore'
 
 /** 与侧边栏 / 路由 param 一致，供列表页识别当前测试类型（后续可接入筛选参数） */
 const TEST_CASE_ROUTE_TYPES = ['functional', 'api', 'performance', 'security', 'ui-automation']
@@ -994,6 +1002,7 @@ const rollbackSnapshotActions = [{ key: 'detail', tooltip: '查看详情', icon:
 
 const route = useRoute()
 const router = useRouter()
+const copilotStore = useCopilotStore()
 
 /** ApiTest.vue 通过 provide 固定为 api，避免单独路由缺少 :type 参数 */
 const testCaseForcedType = inject<string | null>('testCaseForcedType', null)
@@ -1420,6 +1429,22 @@ function onDrawerReportHook() {
 function openExecutionLogsDialog() {
   if (!caseDetailRow.value?.id) return
   executionLogsDialogVisible.value = true
+}
+
+/** 供全局 Copilot：点击未通过行绑定 execution_log_id */
+function onExecutionLogRowClick(row: Record<string, unknown>) {
+  if (row?.is_passed) {
+    copilotStore.patchWorkflowContext({ executionLogId: null, executionLogLabel: '', scenario: '' })
+    return
+  }
+  const lid = Number(row?.id)
+  if (!Number.isFinite(lid)) return
+  const cid = caseDetailRow.value?.id
+  copilotStore.patchWorkflowContext({
+    executionLogId: lid,
+    executionLogLabel: cid != null ? `用例 #${cid} · 未通过` : '未通过',
+    scenario: 'testcase-execution-log',
+  })
 }
 
 async function loadExecutionLogsForDialog() {

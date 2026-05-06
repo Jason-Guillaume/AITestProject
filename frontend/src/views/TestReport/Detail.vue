@@ -117,15 +117,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { View, Download, Delete, Edit } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
-import { getReportDetailApi, updateReportApi } from '@/api/execution'
+import { getReportDetailApi, updateReportApi, deleteReportApi } from '@/api/execution'
+import { useCopilotStore } from '@/stores/copilotStore'
 
 const route = useRoute()
 const router = useRouter()
+const copilotStore = useCopilotStore()
 const detail = ref({})
 const editingConclusion = ref(false)
 const conclusion = ref({ result: '', summary: '' })
@@ -187,10 +189,24 @@ onMounted(async () => {
     try {
       const { data } = await getReportDetailApi(id)
       detail.value = data?.data || data || {}
+      const d = detail.value
+      const name = String(d?.report_name || '').trim() || `报告 #${id}`
+      const rate = d?.pass_rate != null ? `${d.pass_rate}%` : '—'
+      copilotStore.patchWorkflowContext({
+        scenario: 'test-report-detail',
+        reportId: Number(id) || id,
+        reportHint: `「${name}」通过率 ${rate}；可让 AI 结合结论与统计解读失败风险与后续动作。`,
+      })
     } catch { /* silent */ }
   }
   await nextTick()
   initCharts()
+})
+
+onUnmounted(() => {
+  if (copilotStore.workflowContext.scenario === 'test-report-detail') {
+    copilotStore.patchWorkflowContext({ scenario: '', reportId: null, reportHint: '' })
+  }
 })
 </script>
 

@@ -2,6 +2,8 @@ import json
 import logging
 import importlib.util
 import hashlib
+import mimetypes
+import os
 import re
 from difflib import SequenceMatcher
 from datetime import timedelta
@@ -5898,6 +5900,29 @@ class UIScriptUploadViewSet(BaseModelViewSet):
         except Exception:
             pass
 
+    def perform_destroy(self, instance):
+        """DELETE 与 PATCH is_deleted 一致：软删并记录删除时间（不物理删、不触发 pre_delete 清理）"""
+        from django.utils import timezone
+        from common.models import AuditEvent
+        from common.services.audit import record_audit_event
+
+        user = getattr(self.request, "user", None)
+        before = instance
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=['is_deleted', 'deleted_at'])
+        try:
+            record_audit_event(
+                action=AuditEvent.ACTION_DELETE,
+                actor=user,
+                instance=instance,
+                request=self.request,
+                before=before,
+                after=None,
+            )
+        except Exception:
+            pass
+
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         """
@@ -5953,6 +5978,22 @@ class UIScriptUploadViewSet(BaseModelViewSet):
             'message': f"脚本已{'启用' if instance.is_active else '禁用'}"
         })
 
+    @action(detail=False, methods=['get'])
+    def asset_hub_overview(self, request):
+        """资产中心全量概览：DB + 工作区物理扫描（与执行中心同源 UIScriptUpload 列表）。"""
+        from assistant.services.asset_hub_provider import build_asset_hub_overview
+
+        platform = request.query_params.get('platform', 'web')
+        return Response(build_asset_hub_overview(platform))
+
+    @action(detail=False, methods=['post'])
+    def asset_hub_sync(self, request):
+        """一键同步：重扫物理目录并刷新合并结果（Shadow Sync 刷新）。"""
+        from assistant.services.asset_hub_provider import sync_asset_hub_shadow
+
+        platform = request.data.get('platform') or request.query_params.get('platform') or 'web'
+        return Response(sync_asset_hub_shadow(platform))
+
     @action(detail=True, methods=['get'])
     def workspace_info(self, request, pk=None):
         """获取工作空间信息"""
@@ -5990,6 +6031,74 @@ class UIScriptUploadViewSet(BaseModelViewSet):
             'files': files,
             'file_count': len(files)
         })
+
+    @action(detail=True, methods=['get', 'put'])
+    def workspace_file(self, request, pk=None):
+        """按相对路径读写工作空间内的文本文件（防路径穿越）。"""
+        from pathlib import Path
+
+        from rest_framework import status
+
+        instance = self.get_object()
+        if not instance.workspace_path:
+            return Response(
+                {'error': '该脚本没有工作空间'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        base_path = Path(instance.workspace_path).resolve()
+
+        if request.method == 'GET':
+            rel = request.query_params.get('path')
+        else:
+            rel = request.data.get('path')
+
+        if not rel or not isinstance(rel, str):
+            return Response({'error': '缺少 path 参数'}, status=status.HTTP_400_BAD_REQUEST)
+
+        rel_norm = rel.replace('\\', '/').strip('/')
+        if '..' in Path(rel_norm).parts:
+            return Response({'error': '非法路径'}, status=status.HTTP_400_BAD_REQUEST)
+
+        target = (base_path / rel_norm).resolve()
+        try:
+            target.relative_to(base_path)
+        except ValueError:
+            return Response({'error': '非法路径'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if request.method == 'GET':
+            if not target.is_file():
+                return Response({'error': '文件不存在'}, status=status.HTTP_404_NOT_FOUND)
+            max_bytes = 2 * 1024 * 1024
+            try:
+                size = target.stat().st_size
+            except OSError:
+                return Response({'error': '无法读取文件'}, status=status.HTTP_400_BAD_REQUEST)
+            if size > max_bytes:
+                return Response({'error': '文件过大，请在本地编辑'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                content = target.read_text(encoding='utf-8')
+            except UnicodeDecodeError:
+                return Response({'error': '非文本文件或编码不支持'}, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({
+                'path': rel_norm,
+                'content': content,
+            })
+
+        new_content = request.data.get('content')
+        if new_content is None:
+            new_content = ''
+        if not isinstance(new_content, str):
+            return Response({'error': 'content 须为字符串'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(new_content, encoding='utf-8')
+        except OSError as e:
+            return Response({'error': f'写入失败: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'path': rel_norm, 'message': '已保存'})
 
     @action(detail=True, methods=['get', 'put'])
     def online_content(self, request, pk=None):
@@ -6375,12 +6484,18 @@ class UIScriptExecutionViewSet(BaseModelViewSet):
             parallel_val = 1
         parallel_val = max(1, min(parallel_val, 50))
 
-        # 获取执行配置
+        # 获取执行配置（含工作台选中的项目 / 测试环境，注入子进程环境变量供脚本读取）
         execution_config = {
             "browser": request.data.get("browser", "chrome"),
             "headless": _coerce_bool(request.data.get("headless"), False),
             "parallel": parallel_val,
         }
+        _wp = request.data.get("workspace_project_id")
+        if _wp is not None and str(_wp).strip() != "":
+            execution_config["workspace_project_id"] = str(_wp).strip()
+        _env_id = request.data.get("test_environment_id")
+        if _env_id is not None and str(_env_id).strip() != "":
+            execution_config["test_environment_id"] = str(_env_id).strip()
 
         # 生成执行ID
         import time
@@ -6532,6 +6647,35 @@ class UIScriptExecutionViewSet(BaseModelViewSet):
             'execution': serializer.data,
             'redis_status': redis_status
         })
+
+    @action(detail=True, methods=['get'], url_path='evidence-image')
+    def evidence_image(self, request, pk=None):
+        """工作区内截图证据（仅图片、路径不得越权）。"""
+        from urllib.parse import unquote
+
+        from assistant.services.analysis_lab_ui_report import resolve_safe_workspace_file
+
+        execution = self.get_object()
+        script = execution.script
+        wp = (getattr(script, "workspace_path", None) or "").strip()
+        if not wp:
+            return Response({'error': '脚本未绑定工作区'}, status=status.HTTP_404_NOT_FOUND)
+
+        relpath = unquote((request.query_params.get('relpath') or '').strip())
+        if not relpath:
+            return Response({'error': '缺少 relpath'}, status=status.HTTP_400_BAD_REQUEST)
+
+        workspace_abs = os.path.abspath(wp)
+        abs_file = resolve_safe_workspace_file(workspace_abs, relpath)
+        if not abs_file:
+            return Response({'error': '文件不存在或不允许访问'}, status=status.HTTP_404_NOT_FOUND)
+
+        mime, _enc = mimetypes.guess_type(abs_file)
+        content_type = mime or 'application/octet-stream'
+        try:
+            return FileResponse(open(abs_file, 'rb'), content_type=content_type)
+        except OSError:
+            return Response({'error': '无法读取文件'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UIPomTestReportViewSet(

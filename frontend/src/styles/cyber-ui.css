@@ -8,10 +8,10 @@
 }
 
 .cyber-glass {
-  background: rgba(20, 28, 47, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(0, 255, 255, 0.15);
+  background: var(--panel-bg-strong, rgba(255, 255, 255, 0.055));
+  backdrop-filter: var(--panel-blur, blur(20px));
+  -webkit-backdrop-filter: var(--panel-blur, blur(20px));
+  border: var(--border-accent, 1px solid rgba(0, 240, 255, 0.14));
   border-radius: 10px;
   padding: 16px;
   transition:
@@ -20,8 +20,8 @@
 }
 
 .cyber-glass--interactive:hover {
-  border-color: rgba(0, 255, 255, 0.28);
-  box-shadow: 0 0 22px rgba(0, 216, 255, 0.12);
+  border-color: rgba(0, 240, 255, 0.35);
+  box-shadow: 0 0 22px var(--accent-glow, rgba(0, 240, 255, 0.22));
 }
 
 /* ---------- Tables (any .el-table under .cyber-page) ---------- */
@@ -166,10 +166,12 @@
 }
 
 .cyber-page .admin-list-card.el-card {
-  border: 1px solid rgba(0, 255, 255, 0.14);
+  border: var(--border-accent, 1px solid rgba(0, 240, 255, 0.14));
   border-radius: 12px;
-  background: rgba(18, 26, 44, 0.92) !important;
-  --el-card-bg-color: rgba(18, 26, 44, 0.92);
+  background: var(--panel-bg-strong, rgba(255, 255, 255, 0.055)) !important;
+  backdrop-filter: var(--panel-blur, blur(20px));
+  -webkit-backdrop-filter: var(--panel-blur, blur(20px));
+  --el-card-bg-color: transparent;
 }
 
 .cyber-page.admin-list-page > .admin-list-card.el-card {

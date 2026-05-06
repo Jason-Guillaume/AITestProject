@@ -437,6 +437,7 @@ async function loadDashboardData(showError = false) {
 useRealtimePolling(() => loadDashboardData(false), {
   intervalMs: 5000,
   runOnMount: true,
+  deferredInitialRunMs: 500,
   refreshEvents: ["app:current-project-changed", "app:current-environment-changed"],
   shouldSkip: () => streamConnected.value,
 });
@@ -444,6 +445,7 @@ useRealtimePolling(() => loadDashboardData(false), {
 useSseRefreshTrigger(() => loadDashboardData(false), {
   buildUrl: () => getDashboardStreamUrl(),
   reconnectMs: 3000,
+  connectDelayMs: 900,
   refreshEvents: ["app:current-project-changed", "app:current-environment-changed"],
   onConnectionChange: (connected) => {
     streamConnected.value = connected;

@@ -1,0 +1,27 @@
+/* 分版面板共用：赛博边框（由 ScriptHub 引入一次即可） */
+.sw-cyber {
+  --sw-cyan: rgba(0, 240, 255, 0.1);
+  --sw-cyan-hi: rgba(0, 240, 255, 0.8);
+  --sw-glow: rgba(0, 240, 255, 0.2);
+}
+
+.sw-cyber-panel {
+  border: 1px solid var(--sw-cyan);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.sw-cyber-panel:hover {
+  border-color: var(--sw-cyan-hi);
+  box-shadow: 0 0 15px var(--sw-glow);
+}
+
+.sw-cyber-panel.is-active {
+  border-color: var(--sw-cyan-hi);
+  box-shadow: 0 0 15px var(--sw-glow);
+}
+
+.sw-glow-text {
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}

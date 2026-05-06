@@ -1,5 +1,5 @@
 import { ref, computed, watch } from 'vue'
-import { getEnvironments } from '@/api/environment'
+import { useWorkspaceStore } from '@/stores/workspaceStore'
 
 const LS_KEY = 'current_test_environment_id'
 
@@ -51,13 +51,9 @@ export function useCurrentEnvironment() {
 
   async function loadEnvironments() {
     try {
-      const { data } = await getEnvironments({ page_size: 500 })
-      const list = Array.isArray(data?.results)
-        ? data.results
-        : Array.isArray(data)
-          ? data
-          : []
-      environments.value = list
+      const ws = useWorkspaceStore()
+      await ws.fetchEnvironments()
+      environments.value = (ws.envOptions || [])
         .map((item) => {
           const id = normalizeId((item as { id?: unknown })?.id)
           if (id == null) return null

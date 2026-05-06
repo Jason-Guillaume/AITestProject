@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
+from assistant.analysis_lab_views import AiUiExecutionDiagnoseAPIView
 from assistant.views import (
     AiGenerateCasesAPIView,
     AiGenerateCasesStreamView,
@@ -40,6 +41,7 @@ urlpatterns = [
     path("generate-cases/", AiGenerateCasesAPIView.as_view()),
     path("generate-cases-stream/", AiGenerateCasesStreamView.as_view()),
     path("suggest-case-fix/", AiSuggestCaseFixAPIView.as_view()),
+    path("ui-execution-diagnose/", AiUiExecutionDiagnoseAPIView.as_view()),
     path("patches/", AiPatchListAPIView.as_view()),
     path("patches/from-execution/", AiPatchFromExecutionAPIView.as_view()),
     path("patches/<int:patch_id>/apply/", AiPatchApplyAPIView.as_view()),

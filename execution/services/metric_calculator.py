@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 from typing import Dict, Optional
 
+from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Q
 from django.utils import timezone
 
@@ -17,6 +19,9 @@ class MetricCalculator:
     def _dimension(self, project_id: Optional[int]) -> Dict[str, object]:
         return {"project_id": project_id if project_id is not None else "all"}
 
+    def _dimension_key(self, dimension: Dict[str, object]) -> str:
+        return json.dumps(dimension, sort_keys=True, default=str)
+
     def _upsert_metric(
         self,
         *,
@@ -25,13 +30,61 @@ class MetricCalculator:
         metric_value: Decimal,
         project_id: Optional[int],
     ):
+        """
+        写入或更新单日指标。历史上表上无唯一约束时可能产生重复行，
+        update_or_create 会触发 MultipleObjectsReturned；此处合并重复并在迁移后依赖 DB 唯一约束防竞态。
+        """
         dimension = self._dimension(project_id)
-        TestQualityMetric.objects.update_or_create(
-            metric_date=metric_date,
-            metric_type=metric_type,
-            dimension=dimension,
-            defaults={"metric_value": metric_value},
-        )
+        last_error: Optional[IntegrityError] = None
+        for _ in range(5):
+            try:
+                self._upsert_metric_atomic(
+                    metric_date=metric_date,
+                    metric_type=metric_type,
+                    metric_value=metric_value,
+                    dimension=dimension,
+                )
+                return
+            except IntegrityError as exc:
+                last_error = exc
+        if last_error:
+            raise last_error
+
+    def _upsert_metric_atomic(
+        self,
+        *,
+        metric_date,
+        metric_type: str,
+        metric_value: Decimal,
+        dimension: Dict[str, object],
+    ) -> None:
+        dimension_key = self._dimension_key(dimension)
+        with transaction.atomic():
+            qs = (
+                TestQualityMetric.objects.select_for_update()
+                .filter(
+                    metric_date=metric_date,
+                    metric_type=metric_type,
+                    dimension_key=dimension_key,
+                )
+                .order_by("id")
+            )
+            rows = list(qs)
+            if not rows:
+                TestQualityMetric.objects.create(
+                    metric_date=metric_date,
+                    metric_type=metric_type,
+                    dimension=dimension,
+                    metric_value=metric_value,
+                )
+                return
+            keeper = rows[0]
+            if len(rows) > 1:
+                TestQualityMetric.objects.filter(
+                    pk__in=[r.pk for r in rows[1:]]
+                ).delete()
+            keeper.metric_value = metric_value
+            keeper.save(update_fields=["metric_value", "update_time"])
 
     def calc_pass_rate(self, project_id: Optional[int], metric_date=None) -> Decimal:
         if metric_date is None:

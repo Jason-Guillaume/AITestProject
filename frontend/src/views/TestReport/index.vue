@@ -166,7 +166,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus, Reading, Search, View } from '@element-plus/icons-vue'
@@ -188,8 +188,10 @@ import {
   bulkRestoreReportsApi,
   bulkHardDeleteReportsApi,
 } from '@/api/execution'
+import { useCopilotStore } from '@/stores/copilotStore'
 
 const router = useRouter()
+const copilotStore = useCopilotStore()
 const list = ref([])
 const plans = ref([])
 const loading = ref(false)
@@ -544,8 +546,18 @@ watch(showDialog, async (open) => {
 })
 
 onMounted(async () => {
+  copilotStore.patchWorkflowContext({
+    scenario: 'test-report-index',
+    reportHint: '测试报告列表：进入详情页后 Copilot 会附带该报告的通过率等摘要。',
+  })
   loadList()
   await loadPlans()
+})
+
+onUnmounted(() => {
+  if (copilotStore.workflowContext.scenario === 'test-report-index') {
+    copilotStore.patchWorkflowContext({ scenario: '', reportHint: '' })
+  }
 })
 </script>
 

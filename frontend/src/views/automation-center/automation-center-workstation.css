@@ -1,0 +1,579 @@
+/* 自动化指挥中心工作台：挂载于 .automation-center-hub 根节点（子路由树面板共用） */
+.automation-center-hub.script-hub--cyber {
+  box-sizing: border-box;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.automation-center-hub .glass-panel {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 18, 32, 0.42);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow:
+    0 0 0 1px rgba(0, 240, 255, 0.06) inset,
+    0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.automation-center-hub .script-hub__workarea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.automation-center-hub .workstation-panel {
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 320px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 0 28px rgba(0, 240, 255, 0.12),
+    0 0 1px rgba(0, 240, 255, 0.35);
+}
+
+.automation-center-hub .workstation-panel--ide {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  min-height: 0;
+  position: relative;
+}
+
+.automation-center-hub .workstation-panel--ide.is-inspector-open {
+  grid-template-columns: 260px minmax(0, 1fr) 220px;
+}
+
+.automation-center-hub .ide-center {
+  min-width: 0;
+  position: relative;
+}
+
+.automation-center-hub .workstation-panel__col {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.automation-center-hub .workstation-panel__col--tree {
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.12);
+  min-height: 240px;
+}
+
+.automation-center-hub .tree-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.automation-center-hub .tree-panel-head {
+  flex-shrink: 0;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.75);
+  margin-bottom: 8px;
+}
+
+.automation-center-hub .tree-pane--cross__intro {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(148, 163, 184, 0.92);
+}
+
+.automation-center-hub .tree-pane--cross__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.automation-center-hub .tree-pane--cross__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.92);
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  background: rgba(0, 240, 255, 0.06);
+}
+
+.automation-center-hub .tree-pane--cross__chip-icon {
+  font-size: 14px;
+  color: rgba(0, 240, 255, 0.75);
+}
+
+.automation-center-hub .tree-pane--cross__empty {
+  flex: 1;
+  min-height: 120px;
+}
+
+.automation-center-hub .workspace-main-mount--cross-placeholder {
+  flex: 1;
+  min-height: 220px;
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.14);
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.automation-center-hub .ac-cross-main__hint {
+  margin: 8px 0 0;
+  max-width: 420px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.automation-center-hub .script-tree-scroll {
+  flex: 1;
+  min-height: 180px;
+  max-height: min(52vh, 440px);
+  overflow: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.automation-center-hub .workstation-panel__col--main {
+  gap: 10px;
+  min-height: 0;
+}
+
+.automation-center-hub .workspace-main-mount {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.automation-center-hub .workstation-panel__col--inspector {
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 240, 255, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  min-height: 200px;
+  max-height: min(70vh, 640px);
+  overflow: auto;
+}
+
+.automation-center-hub .inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.automation-center-hub .inspector-head__title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(0, 240, 255, 0.75);
+}
+
+.automation-center-hub .inspector-head__collapse {
+  font-size: 12px !important;
+  color: #00f0ff !important;
+}
+
+.automation-center-hub .inspector-block {
+  margin-bottom: 14px;
+}
+
+.automation-center-hub .inspector-block__h {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(203, 213, 225, 0.92);
+}
+
+.automation-center-hub .inspector-block__placeholder {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(148, 163, 184, 0.88);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.automation-center-hub .inspector-block__mono {
+  margin: 0;
+  font-size: 13px;
+  font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
+  color: rgba(52, 211, 153, 0.9);
+}
+
+.automation-center-hub .inspector-block__mono--status {
+  line-height: 1.5;
+  color: rgba(167, 243, 208, 0.88);
+}
+
+.automation-center-hub .inspector-reopen {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  z-index: 2;
+  width: 22px;
+  height: 64px;
+  padding: 0;
+  border-radius: 6px 0 0 6px;
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  background: rgba(12, 18, 32, 0.85);
+  color: #00f0ff;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  box-shadow: -2px 0 12px rgba(0, 240, 255, 0.12);
+}
+
+.automation-center-hub .inspector-reopen:hover {
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow: -2px 0 16px rgba(0, 240, 255, 0.22);
+}
+
+.automation-center-hub .action-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 4px 2px 2px;
+}
+
+.automation-center-hub .action-header__spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
+.automation-center-hub .action-header__btn {
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: rgba(0, 240, 255, 0.22) !important;
+  color: rgba(226, 232, 240, 0.92) !important;
+  background: rgba(0, 240, 255, 0.04) !important;
+  box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.04);
+}
+
+.automation-center-hub .action-header__btn:hover {
+  border-color: rgba(0, 240, 255, 0.55) !important;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.18);
+}
+
+.automation-center-hub .action-header__btn--stop {
+  border-color: rgba(248, 113, 113, 0.35) !important;
+}
+
+.automation-center-hub .action-header__btn--stop:not(:disabled):hover {
+  border-color: rgba(248, 113, 113, 0.6) !important;
+  box-shadow: 0 0 12px rgba(248, 113, 113, 0.2);
+}
+
+.automation-center-hub .action-header__btn--exec-running {
+  animation: ac-hub-neon-breathe 1.35s ease-in-out infinite;
+}
+
+.automation-center-hub .action-header__btn--exec-config {
+  border-color: rgba(167, 139, 250, 0.42) !important;
+  box-shadow:
+    0 0 0 1px rgba(167, 139, 250, 0.08),
+    0 0 10px rgba(129, 140, 248, 0.12);
+}
+
+.automation-center-hub .action-header__btn--exec-config:hover {
+  border-color: rgba(192, 132, 252, 0.75) !important;
+  box-shadow:
+    0 0 14px rgba(167, 139, 250, 0.28),
+    0 0 22px rgba(0, 240, 255, 0.1);
+}
+
+@keyframes ac-hub-neon-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 6px rgba(0, 240, 255, 0.25),
+      0 0 14px rgba(0, 240, 255, 0.12);
+    border-color: rgba(0, 240, 255, 0.45) !important;
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(0, 240, 255, 0.55),
+      0 0 28px rgba(0, 240, 255, 0.22);
+    border-color: rgba(0, 240, 255, 0.85) !important;
+  }
+}
+
+.automation-center-hub .editor-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.14);
+  padding: 8px 10px 10px;
+}
+
+.automation-center-hub .editor-path {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(0, 240, 255, 0.72);
+  font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.automation-center-hub .monaco-wrap {
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.automation-center-hub .monaco-wrap .monaco-editor-root {
+  flex: 1;
+  min-height: 200px;
+}
+
+.automation-center-hub .editor-defer-hint {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.75);
+  letter-spacing: 0.06em;
+}
+
+.automation-center-hub .bottom-tabs {
+  flex: 1;
+  min-height: 140px;
+  max-height: min(28vh, 260px);
+  display: flex;
+  flex-direction: column;
+}
+
+.automation-center-hub .bottom-tabs .el-tabs__header {
+  margin: 0;
+}
+
+.automation-center-hub .bottom-tabs .el-tabs__content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.automation-center-hub .bottom-pane {
+  padding: 8px 0;
+  min-height: 100px;
+}
+
+.automation-center-hub .bottom-pane--terminal {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 4px 0 0;
+}
+
+.automation-center-hub .bottom-pane--artifacts {
+  min-height: 120px;
+}
+
+.automation-center-hub .bottom-telemetry-zone {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 140px;
+  max-height: min(28vh, 260px);
+}
+
+.automation-center-hub .bottom-telemetry-zone__row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+}
+
+.automation-center-hub .bottom-telemetry-zone__tabs {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.automation-center-hub .bottom-telemetry-zone .bottom-tabs {
+  max-height: none;
+}
+
+.automation-center-hub .analysis-lab-glow-btn {
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-bottom: 6px;
+  cursor: pointer;
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace;
+  color: rgba(10, 22, 28, 0.95);
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.92), rgba(167, 139, 250, 0.88));
+  border: 1px solid rgba(0, 240, 255, 0.75);
+  border-radius: 10px;
+  box-shadow:
+    0 0 16px rgba(0, 240, 255, 0.55),
+    0 0 32px rgba(167, 139, 250, 0.35),
+    0 0 48px rgba(0, 240, 255, 0.15);
+  animation: ac-hub-analysis-lab-pulse 2.2s ease-in-out infinite;
+  transition:
+    transform 0.18s ease,
+    filter 0.18s ease;
+}
+
+.automation-center-hub .analysis-lab-glow-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  filter: brightness(1.08);
+  box-shadow:
+    0 0 22px rgba(0, 240, 255, 0.75),
+    0 0 40px rgba(167, 139, 250, 0.45);
+}
+
+@keyframes ac-hub-analysis-lab-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 12px rgba(0, 240, 255, 0.45),
+      0 0 28px rgba(167, 139, 250, 0.28);
+  }
+  50% {
+    box-shadow:
+      0 0 22px rgba(0, 240, 255, 0.72),
+      0 0 42px rgba(167, 139, 250, 0.42);
+  }
+}
+
+.automation-center-hub .script-resource-tree {
+  background: transparent !important;
+  --el-tree-node-hover-bg-color: rgba(0, 240, 255, 0.08);
+  --el-tree-text-color: rgba(226, 232, 240, 0.92);
+  --el-tree-expand-icon-color: rgba(0, 240, 255, 0.65);
+}
+
+.automation-center-hub .script-resource-tree .el-tree-node__content {
+  background: transparent !important;
+  border-radius: 6px;
+  border: none !important;
+}
+
+.automation-center-hub .script-resource-tree .el-tree-node:focus > .el-tree-node__content {
+  background: rgba(0, 240, 255, 0.06) !important;
+}
+
+.automation-center-hub .script-resource-tree .el-tree-node.is-current > .el-tree-node__content {
+  background: rgba(0, 240, 255, 0.1) !important;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.12);
+}
+
+.automation-center-hub .script-tree-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.automation-center-hub .script-tree-node__icon {
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.automation-center-hub .script-tree-node__icon--ui {
+  color: rgba(0, 240, 255, 0.75);
+  filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.35));
+}
+
+.automation-center-hub .script-tree-node__icon--api {
+  color: rgba(129, 140, 248, 0.9);
+  filter: drop-shadow(0 0 6px rgba(129, 140, 248, 0.35));
+}
+
+.automation-center-hub .script-tree-node__icon--mobile {
+  color: rgba(244, 114, 182, 0.9);
+  filter: drop-shadow(0 0 6px rgba(244, 114, 182, 0.35));
+}
+
+.automation-center-hub .script-tree-node__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .automation-center-hub .workstation-panel--ide.is-inspector-open {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .automation-center-hub .workstation-panel__col--inspector {
+    grid-column: 1 / -1;
+    max-height: 220px;
+  }
+
+  .automation-center-hub .inspector-reopen {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .automation-center-hub .workstation-panel--ide,
+  .automation-center-hub .workstation-panel--ide.is-inspector-open {
+    grid-template-columns: 1fr;
+  }
+
+  .automation-center-hub .workstation-panel__col--tree {
+    min-height: 220px;
+  }
+
+  .automation-center-hub .script-tree-scroll {
+    max-height: 280px;
+  }
+}

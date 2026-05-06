@@ -22,8 +22,16 @@ class ExecutionConfig(AppConfig):
         if os.environ.get("RUN_MAIN") != "true":
             return
         try:
+            from django.db.utils import OperationalError
+
             from execution.scheduler import TestScheduler
 
             TestScheduler.instance().start()
+        except OperationalError as e:
+            logger.error(
+                "启动测试调度器失败（数据库无法连接）。请检查 .env 中 DB_HOST / DB_USER / DB_PASSWORD "
+                "是否与本地 MySQL 一致（1045 多为密码未配置或错误）。原始错误: %s",
+                e,
+            )
         except Exception:
             logger.exception("启动测试调度器失败")

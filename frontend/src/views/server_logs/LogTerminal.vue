@@ -127,6 +127,7 @@ import { ref, computed, watch, onMounted, onUnmounted, onActivated, nextTick, sh
 import { ElMessage } from "element-plus";
 import MarkdownIt from "markdown-it";
 import LogAutoTicketDraft from "@/components/server_logs/LogAutoTicketDraft.vue";
+import { EMERGENCY_DISABLE_REALTIME_CONNECTIONS } from "@/config/emergencyDisableRealtime";
 import { analyzeServerLog, analyzeServerLogWithContext, searchServerLogs } from "@/api/serverLogs";
 
 const props = defineProps({
@@ -369,6 +370,16 @@ function connectWs() {
   if (mode.value !== "live") return;
   lines.value = [];
   measureViewport();
+  /* 紧急封印：禁止 new WebSocket，占位日志避免空白 */
+  if (EMERGENCY_DISABLE_REALTIME_CONNECTIONS) {
+    lines.value = [
+      "[演示] 全局已禁用 WebSocket 实时流。",
+      "[演示] 请改用「历史」模式通过 HTTP 拉取，或恢复 emergencyDisableRealtime.ts。",
+    ];
+    statusMsg.value = "演示模式（无 WebSocket）";
+    connected.value = false;
+    return;
+  }
   statusMsg.value = "正在连接…";
   try {
     ws = new WebSocket(wsUrl());

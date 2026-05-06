@@ -4,6 +4,8 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from assistant.analysis_lab_views import AnalysisLabReportDetailsAPIView
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     # 按照模块分发到各个子应用的 urls.py 中
@@ -18,6 +20,11 @@ urlpatterns = [
     path("api/defect/", include("defect.urls")),
     path("api/assistant/", include("assistant.urls")),
     path("api/ai/", include("assistant.ai_urls")),
+    path(
+        "api/reports/<int:pk>/details/",
+        AnalysisLabReportDetailsAPIView.as_view(),
+        name="analysis-lab-report-details",
+    ),
     path("api/server-logs/", include("server_logs.urls")),
 ]
 

@@ -1,3 +1,4 @@
+import json
 import uuid
 
 from django.db import models
@@ -407,6 +408,13 @@ class TestQualityMetric(BaseModel):
         max_digits=12, decimal_places=4, verbose_name="指标值"
     )
     dimension = models.JSONField(default=dict, blank=True, verbose_name="维度信息")
+    dimension_key = models.CharField(
+        max_length=320,
+        blank=True,
+        default="",
+        verbose_name="维度归一化键",
+        help_text="与 dimension 同步，供 MySQL 等对 JSON 无法建唯一索引时使用",
+    )
 
     class Meta:
         db_table = "test_quality_metric"
@@ -414,6 +422,21 @@ class TestQualityMetric(BaseModel):
         indexes = [
             models.Index(fields=["metric_date", "metric_type"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["metric_date", "metric_type", "dimension_key"],
+                name="execution_tqm_uniq_date_type_dimkey",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        dim = self.dimension
+        if dim is None:
+            dim = {}
+        elif not isinstance(dim, dict):
+            dim = dict(dim) if hasattr(dim, "items") else {}
+        self.dimension_key = json.dumps(dim, sort_keys=True, default=str)
+        super().save(*args, **kwargs)
 
 
 class ApiScenario(BaseModel):

@@ -57,6 +57,7 @@ import { onBeforeUnmount, onMounted, reactive, ref, shallowRef } from "vue";
 import * as echarts from "echarts";
 import { ElMessage } from "element-plus";
 import { createK6Session } from "@/api/perfK6";
+import { EMERGENCY_DISABLE_REALTIME_CONNECTIONS } from "@/config/emergencyDisableRealtime";
 import { useCurrentEnvironment } from "@/composables/useCurrentEnvironment";
 
 const { baseUrl, loadEnvironments } = useCurrentEnvironment();
@@ -280,19 +281,35 @@ async function onStart() {
     runId.value = data.run_id;
     sessionStatus.value = data.status || "pending";
 
-    const token = localStorage.getItem("token");
-    ws = new WebSocket(buildWsUrl(token, data.run_id));
-    ws.onopen = () => {
-      wsConnected.value = true;
-    };
-    ws.onmessage = handleWsMessage;
-    ws.onerror = () => {
-      ElMessage.error("WebSocket 连接异常");
+    /* 紧急封印：禁止 new WebSocket；静态曲线与占位 summary 供 UI 渲染 */
+    if (EMERGENCY_DISABLE_REALTIME_CONNECTIONS) {
+      sessionStatus.value = "演示（无 WebSocket 推送）";
       wsConnected.value = false;
-    };
-    ws.onclose = () => {
-      wsConnected.value = false;
-    };
+      lastFinal.value = { mock: true, message: "紧急封印：未建立压测 WS，此为占位数据" };
+      const xs = ["t0", "t1", "t2", "t3"];
+      chartQps?.setOption({
+        xAxis: { type: "category", data: xs },
+        series: [{ data: [10, 22, 18, 25] }],
+      });
+      chartP95?.setOption({
+        xAxis: { type: "category", data: xs },
+        series: [{ data: [120, 95, 110, 88] }, { data: [0.5, 0.3, 0.4, 0.2] }],
+      });
+    } else {
+      const token = localStorage.getItem("token");
+      ws = new WebSocket(buildWsUrl(token, data.run_id));
+      ws.onopen = () => {
+        wsConnected.value = true;
+      };
+      ws.onmessage = handleWsMessage;
+      ws.onerror = () => {
+        ElMessage.error("WebSocket 连接异常");
+        wsConnected.value = false;
+      };
+      ws.onclose = () => {
+        wsConnected.value = false;
+      };
+    }
   } catch (e) {
     ElMessage.error(e?.response?.data?.detail || e?.response?.data?.msg || "启动失败");
   } finally {

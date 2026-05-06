@@ -9,8 +9,10 @@ import threading
 import time
 from typing import List, Optional, Tuple
 
+from django.utils import timezone
+
 from AITestProduct.celery import app
-from .models import Pipeline, PipelineLog
+from .models import BuildRecord, Pipeline, PipelineLog
 
 
 def _pipe_to_queue(pipe, prefix: str, out_q: queue.Queue) -> None:
@@ -28,14 +30,14 @@ def _pipe_to_queue(pipe, prefix: str, out_q: queue.Queue) -> None:
             pass
 
 
-def _drain_queue_to_db(pipeline: Pipeline, out_q: queue.Queue) -> None:
+def _drain_queue_to_db(build_record: BuildRecord, out_q: queue.Queue) -> None:
     while True:
         try:
             prefix, line = out_q.get_nowait()
         except queue.Empty:
             break
         PipelineLog.objects.create(
-            pipeline=pipeline, log_text=f"[{prefix}] {line}"
+            build_record=build_record, log_text=f"[{prefix}] {line}"
         )
 
 
@@ -62,7 +64,7 @@ def _split_stage_chunks(script: str) -> List[Tuple[str, str]]:
     return chunks or [("build", script)]
 
 
-def _run_one_shell(pipeline: Pipeline, command: str) -> int:
+def _run_one_shell(build_record: BuildRecord, command: str) -> int:
     """执行单段 Shell，日志写入 ``PipelineLog``，返回进程退出码。"""
     proc: subprocess.Popen | None = None
     t_out: threading.Thread | None = None
@@ -88,7 +90,7 @@ def _run_one_shell(pipeline: Pipeline, command: str) -> int:
     t_err.start()
 
     while True:
-        _drain_queue_to_db(pipeline, out_q)
+        _drain_queue_to_db(build_record, out_q)
         done_process = proc.poll() is not None
         readers_done = not t_out.is_alive() and not t_err.is_alive()
         if done_process and readers_done and out_q.empty():
@@ -96,17 +98,60 @@ def _run_one_shell(pipeline: Pipeline, command: str) -> int:
         time.sleep(0.05)
 
     return_code = proc.wait()
-    _drain_queue_to_db(pipeline, out_q)
+    _drain_queue_to_db(build_record, out_q)
     return int(return_code)
 
 
+def _finalize_shell_build(
+    *,
+    pipeline: Pipeline,
+    build_record: BuildRecord,
+    success: bool,
+    log_line: Optional[str] = None,
+) -> None:
+    now = timezone.now()
+    build_record.end_time = now
+    build_record.duration = (now - build_record.start_time).total_seconds()
+    build_record.status = (
+        BuildRecord.STATUS_SUCCESS if success else BuildRecord.STATUS_FAIL
+    )
+    u_fields = ["status", "end_time", "duration"]
+    build_record.save(update_fields=u_fields)
+    pipeline.status = (
+        Pipeline.STATUS_SUCCESS if success else Pipeline.STATUS_FAIL
+    )
+    pipeline.save(update_fields=["status"])
+    if log_line:
+        PipelineLog.objects.create(build_record=build_record, log_text=log_line)
+
+
 @app.task(bind=True, name="run_pipeline_task")
-def run_pipeline_task(self, pipeline_id: int, command: Optional[str] = None) -> None:
+def run_pipeline_task(
+    self,
+    pipeline_id: int,
+    command: Optional[str] = None,
+    build_record_id: Optional[int] = None,
+) -> None:
     """执行构建：``command`` 优先，否则使用 ``Pipeline.build_definition``。"""
     try:
         pipeline = Pipeline.objects.get(id=pipeline_id)
     except Pipeline.DoesNotExist:
         return
+
+    if build_record_id is None:
+        return
+
+    try:
+        build_record = BuildRecord.objects.get(
+            id=build_record_id, pipeline_id=pipeline_id
+        )
+    except BuildRecord.DoesNotExist:
+        return
+
+    celery_id = self.request.id or ""
+    build_record.status = BuildRecord.STATUS_RUNNING
+    build_record.celery_task_id = celery_id
+    build_record.save(update_fields=["status", "celery_task_id"])
 
     pipeline.status = Pipeline.STATUS_RUNNING
     pipeline.save(update_fields=["status"])
@@ -119,43 +164,47 @@ def run_pipeline_task(self, pipeline_id: int, command: Optional[str] = None) -> 
         if pipeline.kind == Pipeline.KIND_PIPELINE:
             chunks = _split_stage_chunks(effective)
             if len(chunks) <= 1:
-                rc = _run_one_shell(pipeline, chunks[0][1] if chunks else effective)
-                pipeline.status = (
-                    Pipeline.STATUS_SUCCESS if rc == 0 else Pipeline.STATUS_FAIL
+                rc = _run_one_shell(
+                    build_record, chunks[0][1] if chunks else effective
                 )
-                pipeline.save(update_fields=["status"])
+                _finalize_shell_build(
+                    pipeline=pipeline,
+                    build_record=build_record,
+                    success=rc == 0,
+                )
                 return
 
             for stage_name, body in chunks:
                 PipelineLog.objects.create(
-                    pipeline=pipeline,
+                    build_record=build_record,
                     log_text=f"[system] ===== 阶段: {stage_name} =====",
                 )
-                rc = _run_one_shell(pipeline, body)
+                rc = _run_one_shell(build_record, body)
                 if rc != 0:
-                    PipelineLog.objects.create(
+                    _finalize_shell_build(
                         pipeline=pipeline,
-                        log_text=f"[system] 阶段「{stage_name}」退出码 {rc}，构建失败",
+                        build_record=build_record,
+                        success=False,
+                        log_line=f"[system] 阶段「{stage_name}」退出码 {rc}，构建失败",
                     )
-                    pipeline.status = Pipeline.STATUS_FAIL
-                    pipeline.save(update_fields=["status"])
                     return
 
-            pipeline.status = Pipeline.STATUS_SUCCESS
-            pipeline.save(update_fields=["status"])
+            _finalize_shell_build(pipeline=pipeline, build_record=build_record, success=True)
             return
 
-        # 自由风格：整段作为一次 Shell
-        rc = _run_one_shell(pipeline, effective)
-        pipeline.status = (
-            Pipeline.STATUS_SUCCESS if rc == 0 else Pipeline.STATUS_FAIL
-        )
-        pipeline.save(update_fields=["status"])
+        rc = _run_one_shell(build_record, effective)
+        _finalize_shell_build(pipeline=pipeline, build_record=build_record, success=rc == 0)
     except Exception as exc:
         try:
             pipeline.refresh_from_db()
+            build_record.refresh_from_db()
         except Exception:
             return
-        PipelineLog.objects.create(pipeline=pipeline, log_text=str(exc))
+        PipelineLog.objects.create(build_record=build_record, log_text=str(exc))
+        now = timezone.now()
+        build_record.end_time = now
+        build_record.duration = (now - build_record.start_time).total_seconds()
+        build_record.status = BuildRecord.STATUS_FAIL
+        build_record.save(update_fields=["status", "end_time", "duration"])
         pipeline.status = Pipeline.STATUS_FAIL
         pipeline.save(update_fields=["status"])

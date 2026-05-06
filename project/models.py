@@ -223,14 +223,84 @@ class Pipeline(BaseModel):
         verbose_name = "流水线"
 
 
-class PipelineLog(models.Model):
-    """Log entry for a Pipeline execution step."""
+class BuildRecord(models.Model):
+    """单次流水线构建（挂载日志与 Celery / Docker 执行元数据）。"""
+
+    STATUS_PENDING = 0
+    STATUS_RUNNING = 1
+    STATUS_SUCCESS = 2
+    STATUS_FAIL = 3
+    STATUS_CANCELLED = 4
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_SUCCESS, "Success"),
+        (STATUS_FAIL, "Fail"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
 
     pipeline = models.ForeignKey(
         Pipeline,
         on_delete=models.CASCADE,
+        related_name="builds",
+        verbose_name="流水线",
+    )
+    build_number = models.PositiveIntegerField(verbose_name="构建号")
+    status = models.IntegerField(
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        verbose_name="构建状态",
+    )
+    start_time = models.DateTimeField(auto_now_add=True, verbose_name="开始时间")
+    end_time = models.DateTimeField(blank=True, null=True, verbose_name="结束时间")
+    workspace_path = models.CharField(
+        blank=True,
+        default="",
+        max_length=512,
+        verbose_name="工作区路径",
+        help_text="本次构建临时目录（如 /tmp/workspace/build_<id>），由任务写入。",
+    )
+    celery_task_id = models.CharField(
+        blank=True,
+        default="",
+        max_length=128,
+        verbose_name="Celery 任务 ID",
+    )
+    log_key = models.CharField(
+        blank=True,
+        default="",
+        max_length=256,
+        verbose_name="Redis 构建日志列表键",
+    )
+    duration = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name="耗时（秒）",
+        help_text="自开始至结束的 wall-clock 秒数。",
+    )
+
+    class Meta:
+        db_table = "pipeline_build_record"
+        verbose_name = "流水线构建记录"
+        verbose_name_plural = "流水线构建记录"
+        ordering = ["-build_number", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pipeline", "build_number"],
+                name="uniq_pipeline_build_number",
+            ),
+        ]
+
+
+class PipelineLog(models.Model):
+    """单次构建的日志行。"""
+
+    build_record = models.ForeignKey(
+        BuildRecord,
+        on_delete=models.CASCADE,
         related_name="logs",
-        verbose_name="关联流水线",
+        verbose_name="构建记录",
     )
     log_text = models.TextField(verbose_name="日志内容")
     timestamp = models.DateTimeField(auto_now_add=True, verbose_name="记录时间")

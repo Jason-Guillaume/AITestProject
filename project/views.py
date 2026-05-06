@@ -8,7 +8,16 @@ from common.views import BaseModelViewSet
 from common.services.audit import record_export_audit
 from common.models import AuditEvent
 from common.services.audit import record_audit_event
-from project.models import TestProject, TestTask, ReleasePlan, Pipeline, PipelineLog
+from django.db.models import Max
+
+from project.models import (
+    BuildRecord,
+    Pipeline,
+    PipelineLog,
+    ReleasePlan,
+    TestProject,
+    TestTask,
+)
 from project.serialize import (
     TestProjectSerializer,
     TestTaskSerializer,
@@ -496,12 +505,30 @@ class PipelineViewSet(BaseModelViewSet):
             command = None
 
         if body.get("clear_logs") is True:
-            PipelineLog.objects.filter(pipeline=pipeline).delete()
+            PipelineLog.objects.filter(build_record__pipeline=pipeline).delete()
+
+        max_bn = (
+            BuildRecord.objects.filter(pipeline=pipeline).aggregate(
+                m=Max("build_number")
+            ).get("m")
+        )
+        next_bn = (max_bn or 0) + 1
+        build_record = BuildRecord.objects.create(
+            pipeline=pipeline,
+            build_number=next_bn,
+            status=BuildRecord.STATUS_PENDING,
+        )
 
         from .tasks import run_pipeline_task
 
-        task = run_pipeline_task.delay(pipeline.id, command)
-        return Response({"task_id": task.id, "status": "queued"})
+        task = run_pipeline_task.delay(pipeline.id, command, build_record.id)
+        return Response(
+            {
+                "task_id": task.id,
+                "status": "queued",
+                "build_record_id": build_record.id,
+            }
+        )
 
     @action(detail=True, methods=["get"], url_path="logs")
     def logs(self, request, pk=None):
@@ -513,6 +540,10 @@ class PipelineViewSet(BaseModelViewSet):
         """
         pipeline = self.get_object()
         pipeline.refresh_from_db(fields=["status"])
+
+        build_record = (
+            BuildRecord.objects.filter(pipeline=pipeline).order_by("-id").first()
+        )
 
         after_id = request.query_params.get("after_id", "").strip()
         try:
@@ -526,13 +557,17 @@ class PipelineViewSet(BaseModelViewSet):
             limit = 500
         limit = max(1, min(limit, 2000))
 
-        qs = (
-            PipelineLog.objects.filter(pipeline=pipeline, id__gt=after_pk)
-            .order_by("id", "timestamp")[:limit]
-        )
-        serializer = PipelineLogSerializer(qs, many=True)
+        if build_record is None:
+            rows = []
+        else:
+            qs = (
+                PipelineLog.objects.filter(build_record=build_record, id__gt=after_pk)
+                .order_by("id", "timestamp")[:limit]
+            )
+            serializer = PipelineLogSerializer(qs, many=True)
+            rows = serializer.data
+
         last_log_id = after_pk
-        rows = serializer.data
         if rows:
             last_log_id = rows[-1]["id"]
 
@@ -541,5 +576,6 @@ class PipelineViewSet(BaseModelViewSet):
                 "pipeline_status": pipeline.status,
                 "items": rows,
                 "last_log_id": last_log_id,
+                "build_record_id": build_record.id if build_record else None,
             }
         )

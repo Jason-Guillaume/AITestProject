@@ -118,6 +118,7 @@ INSTALLED_APPS = _INSTALLED_PREFIX + [
     "django_apscheduler",
     "user.apps.UserConfig",
     "project.apps.ProjectConfig",
+    "engine.apps.EngineConfig",
     "testcase.apps.TestcaseConfig",
     "execution.apps.ExecutionConfig",
     "defect.apps.DefectConfig",

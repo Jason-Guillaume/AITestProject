@@ -1,0 +1,253 @@
+/**
+ * 全站「高级暗黑 / 赛博极客」设计令牌与 Element Plus 全局覆写。
+ * 依赖 index.html 上 html.dark；与 App.vue .app-root.dark 内页壳配合。
+ */
+
+:root {
+  --bg-main: #0a0a0c;
+  --bg-main-elevated: #0f1118;
+  --panel-bg: rgba(255, 255, 255, 0.03);
+  --panel-bg-strong: rgba(255, 255, 255, 0.055);
+  --panel-blur: blur(20px);
+  --accent-cyan: #00f0ff;
+  --accent-cyan-dim: rgba(0, 240, 255, 0.45);
+  --accent-glow: rgba(0, 240, 255, 0.22);
+  --border-subtle: 1px solid rgba(255, 255, 255, 0.08);
+  --border-accent: 1px solid rgba(0, 240, 255, 0.14);
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-muted: rgba(255, 255, 255, 0.55);
+  --scrollbar-thumb: rgba(0, 240, 255, 0.28);
+  --scrollbar-thumb-hover: rgba(0, 240, 255, 0.48);
+  --scrollbar-track: rgba(255, 255, 255, 0.04);
+}
+
+html.dark body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+}
+
+/* ========== 全局滚动条（Firefox + WebKit） ========== */
+html.dark {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+html.dark body,
+html.dark #app {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+html.dark *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html.dark *::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 3px;
+}
+
+html.dark *::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
+html.dark *::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+html.dark *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ========== Card：玻璃面板，去除实心灰底 ========== */
+html.dark .el-card {
+  --el-card-bg-color: transparent;
+  background: var(--panel-bg) !important;
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+  border: var(--border-subtle) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 240, 255, 0.04),
+    0 12px 40px rgba(0, 0, 0, 0.35) !important;
+  color: var(--text-primary);
+  border-radius: 12px;
+  transition:
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+html.dark .el-card:hover {
+  border-color: rgba(0, 240, 255, 0.18) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 240, 255, 0.08),
+    0 0 24px var(--accent-glow),
+    0 12px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+html.dark .el-card__header {
+  border-bottom: var(--border-subtle);
+  color: var(--text-primary);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+html.dark .el-card__body {
+  color: var(--text-primary);
+}
+
+/* ========== Table：透明底、表头细线、去竖线 ========== */
+html.dark .el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: transparent;
+  --el-table-row-hover-bg-color: rgba(0, 240, 255, 0.07);
+  --el-table-border-color: transparent;
+  --el-table-text-color: var(--text-primary);
+  --el-table-header-text-color: rgba(255, 255, 255, 0.72);
+}
+
+html.dark .el-table .el-table__inner-wrapper::before,
+html.dark .el-table::before {
+  display: none;
+}
+
+html.dark .el-table .el-table__header-wrapper th.el-table__cell {
+  background: transparent !important;
+  border-right: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  font-weight: 600;
+}
+
+html.dark .el-table .el-table__body-wrapper .el-table__body td.el-table__cell {
+  background: transparent !important;
+  border-right: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+html.dark .el-table .el-table__body-wrapper .el-table__body tr:last-child td.el-table__cell {
+  border-bottom: none !important;
+}
+
+html.dark .el-table .el-table__body tr:hover > td.el-table__cell {
+  background-color: rgba(0, 240, 255, 0.06) !important;
+}
+
+html.dark .el-table .el-table__empty-block {
+  background: transparent;
+}
+
+html.dark .el-table .el-loading-mask {
+  background-color: rgba(10, 10, 12, 0.62);
+  backdrop-filter: blur(4px);
+}
+
+html.dark .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+html.dark .el-table--border::after,
+html.dark .el-table--border::before,
+html.dark .el-table__border-left-patch,
+html.dark .el-table__inner-wrapper::before {
+  display: none !important;
+}
+
+html.dark .el-table--border .el-table__cell {
+  border-color: transparent !important;
+}
+
+/* ========== Pagination ========== */
+html.dark .el-pagination {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-text-color: var(--text-muted);
+  --el-pagination-button-color: rgba(255, 255, 255, 0.78);
+  --el-pagination-button-disabled-bg-color: transparent;
+  --el-pagination-hover-color: var(--accent-cyan);
+}
+
+html.dark .el-pagination .el-pager li {
+  background: transparent !important;
+}
+
+html.dark .el-pagination .el-pager li.is-active {
+  color: var(--accent-cyan) !important;
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 6px;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+html.dark .el-pagination .btn-prev,
+html.dark .el-pagination .btn-next {
+  background: transparent !important;
+}
+
+/* ========== 未加 class 的默认 Dialog（teleport body） ========== */
+html.dark .el-overlay-dialog .el-dialog:not(.cyber-dialog-dark) {
+  --el-dialog-bg-color: rgba(12, 14, 20, 0.94);
+  background: rgba(12, 14, 20, 0.94) !important;
+  border: var(--border-accent);
+  border-radius: 12px;
+  box-shadow: 0 0 48px rgba(0, 0, 0, 0.55), 0 0 1px rgba(0, 240, 255, 0.15);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+}
+
+html.dark .el-overlay-dialog .el-dialog:not(.cyber-dialog-dark) .el-dialog__header {
+  border-bottom: var(--border-subtle);
+}
+
+html.dark .el-overlay-dialog .el-dialog:not(.cyber-dialog-dark) .el-dialog__title {
+  color: var(--text-primary);
+}
+
+html.dark .el-overlay-dialog .el-dialog:not(.cyber-dialog-dark) .el-dialog__body {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+html.dark .el-overlay-dialog .el-dialog:not(.cyber-dialog-dark) .el-dialog__footer {
+  border-top: var(--border-subtle);
+}
+
+/* ========== Drawer ========== */
+html.dark .el-drawer:not(.cyber-drawer-dark) {
+  --el-drawer-bg-color: rgba(10, 10, 14, 0.96);
+  background: rgba(10, 10, 14, 0.96) !important;
+  border-left: var(--border-subtle);
+  backdrop-filter: var(--panel-blur);
+  -webkit-backdrop-filter: var(--panel-blur);
+}
+
+html.dark .el-drawer:not(.cyber-drawer-dark) .el-drawer__header {
+  border-bottom: var(--border-subtle);
+  color: var(--text-primary);
+}
+
+/* ========== Tabs / Divider / Empty ========== */
+html.dark .el-tabs__item {
+  color: var(--text-muted);
+}
+
+html.dark .el-tabs__item.is-active {
+  color: var(--accent-cyan);
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+html.dark .el-tabs__active-bar {
+  background-color: var(--accent-cyan);
+  box-shadow: 0 0 12px var(--accent-cyan-dim);
+}
+
+html.dark .el-tabs__nav-wrap::after {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+html.dark .el-divider {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html.dark .el-empty__description {
+  color: var(--text-muted);
+}

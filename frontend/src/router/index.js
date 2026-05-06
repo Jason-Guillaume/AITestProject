@@ -149,6 +149,18 @@ const routes = [
         component: () => import("@/views/performance/LoadTestMonitor.vue"),
       },
       {
+        path: "cicd",
+        name: "CicdPipelines",
+        component: () => import("@/views/cicd/Index.vue"),
+        meta: { title: "CI/CD" },
+      },
+      {
+        path: "cicd/pipeline/:id",
+        name: "CicdPipelineDetail",
+        component: () => import("@/views/cicd/PipelineDetail.vue"),
+        meta: { title: "流水线日志", hiddenInSidebar: true },
+      },
+      {
         path: "performance/environments",
         name: "EnvironmentManagement",
         component: () => import("@/views/performance/EnvironmentManagement.vue"),
@@ -178,23 +190,108 @@ const routes = [
         meta: { keepAlive: true },
       },
 
-      // 脚本执行中心
-      {
-        path: "script-hub",
-        name: "ScriptHub",
-        component: () => import("@/views/ScriptHub.vue"),
-      },
+      // 自动化指挥中心（原 script-hub，旧路径重定向保留书签兼容）
+      { path: "script-hub", redirect: "/automation-center/web" },
       {
         path: "script-hub/webui",
+        redirect: (to) => ({
+          path: "/automation-center/webui",
+          query: to.query,
+          hash: to.hash,
+        }),
+      },
+      {
+        path: "script-hub/pom-reports",
+        redirect: (to) => ({
+          path: "/automation-center/pom-reports",
+          query: to.query,
+          hash: to.hash,
+        }),
+      },
+      {
+        path: "automation-center",
+        component: () => import("@/views/automation-center/AutomationCenterLayout.vue"),
+        meta: { title: "自动化指挥中心" },
+        redirect: { name: "AutomationCenterWeb" },
+        children: [
+          { path: "mini-h5", redirect: { name: "AutomationCenterMiniprogram" } },
+          {
+            path: "web",
+            name: "AutomationCenterWeb",
+            component: () => import("@/views/automation-center/WebAutomationTree.vue"),
+            meta: { platform: "web", title: "Web" },
+          },
+          {
+            path: "mobile",
+            name: "AutomationCenterMobile",
+            component: () => import("@/views/automation-center/MobileAutomationTree.vue"),
+            meta: { platform: "mobile", title: "Mobile" },
+          },
+          {
+            path: "api",
+            name: "AutomationCenterApi",
+            component: () => import("@/views/automation-center/ApiAutomationTree.vue"),
+            meta: { platform: "api", title: "API" },
+          },
+          {
+            path: "miniprogram",
+            name: "AutomationCenterMiniprogram",
+            component: () => import("@/views/automation-center/MiniprogramAutomationTree.vue"),
+            meta: { platform: "miniprogram", title: "小程序" },
+          },
+          {
+            path: "h5",
+            name: "AutomationCenterH5",
+            component: () => import("@/views/automation-center/H5AutomationTree.vue"),
+            meta: { platform: "h5", title: "H5" },
+          },
+        ],
+      },
+      {
+        path: "automation-center/webui",
         name: "WebUIScriptWorkbench",
         component: () => import("@/views/script/WebUIWorkbench.vue"),
         meta: { hiddenInSidebar: true },
       },
       {
-        path: "script-hub/pom-reports",
+        path: "automation-center/pom-reports",
         name: "UiPomReportManagement",
         component: () => import("@/views/script/UiPomReportManagement.vue"),
         meta: { hiddenInSidebar: true },
+      },
+      {
+        path: "automation-center/recycle-bin",
+        name: "AutomationCenterRecycleBin",
+        component: () => import("@/views/automation-center/UiScriptRecycleBin.vue"),
+        meta: { title: "回收站" },
+      },
+      {
+        path: "automation-center/assets",
+        name: "AutomationCenterAssetHub",
+        component: () => import("@/views/automation-center/AssetHub.vue"),
+        meta: { title: "资产中心" },
+      },
+
+      // Analysis Lab（分析实验室）：深度报告多态布局
+      {
+        path: "analysis-lab",
+        name: "AnalysisLab",
+        component: () => import("@/views/analysis-lab/AnalysisLabIndex.vue"),
+        meta: { title: "Analysis Lab" },
+      },
+      {
+        path: "analysis-lab/reports/:id",
+        name: "AnalysisLabReportDepth",
+        component: () => import("@/views/analysis-lab/ReportDepthDetail.vue"),
+        meta: { title: "Depth Report", hiddenInSidebar: true },
+      },
+      {
+        path: "analysis-lab/report/:id",
+        redirect: (to) => ({
+          path: `/analysis-lab/reports/${String(to.params.id ?? "")}`,
+          query: to.query,
+          hash: to.hash,
+        }),
       },
 
       // system / knowledge / help 占位

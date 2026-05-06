@@ -424,6 +424,39 @@ class DashboardStreamView(View):
         return response
 
 
+class DashboardHostMetricsAPIView(APIView):
+    """
+    本机 CPU / 内存占用（可选）。
+    若未安装 psutil，返回 supported=false，前端隐藏负载区。
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            import psutil
+        except ImportError:
+            return Response({"success": True, "supported": False})
+
+        try:
+            cpu_percent = float(psutil.cpu_percent(interval=0.12))
+            vm = psutil.virtual_memory()
+            memory_percent = float(vm.percent)
+            cpu_count = int(psutil.cpu_count(logical=True) or 0)
+            return Response(
+                {
+                    "success": True,
+                    "supported": True,
+                    "cpu_percent": round(cpu_percent, 1),
+                    "memory_percent": round(memory_percent, 1),
+                    "cpu_count": cpu_count,
+                }
+            )
+        except Exception as exc:
+            logger.warning("DashboardHostMetricsAPIView failed: %s", exc)
+            return Response({"success": True, "supported": False})
+
+
 class TestPlanViewSet(BaseModelViewSet):
     queryset = TestPlan.objects.all().prefetch_related("testers")
     serializer_class = TestPlanSerializer

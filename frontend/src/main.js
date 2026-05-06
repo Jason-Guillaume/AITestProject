@@ -7,14 +7,18 @@ import Particles from "@tsparticles/vue3";
 import { loadSlim } from "@tsparticles/slim";
 import App from "./App.vue";
 import router from "./router";
+import { vContextmenuBlockNative } from "./directives/contextmenuBlockNative.js";
 
 import "./style.css";
 import "./styles/cyber-ui.css";
 import "./styles/dark-tech-dropdown.css";
+import "./assets/styles/theme.css";
 
 const pinia = createPinia();
 
-createApp(App)
+const app = createApp(App);
+app.directive("contextmenu-block-native", vContextmenuBlockNative);
+app
   .use(pinia)
   .use(router)
   .use(ElementPlus)

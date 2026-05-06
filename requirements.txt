@@ -1,0 +1,16 @@
+# =============================================================================
+# Django ASGI + WebSocket（Channels）第一阶段依赖
+# 与云 Redis 配合时请同时安装 channels-redis，并配置环境变量见 settings.py 注释。
+# =============================================================================
+# ASGI 服务器（生产/本地跑 WebSocket 推荐用 daphne 或 uvicorn 启动 application）
+daphne>=4.0.0,<5
+# Django Channels 核心
+channels>=4.0.0,<5
+# Channel layer 后端：多进程 / 多机必须使用 Redis；单机开发可依赖 settings 中 InMemory 降级
+channels-redis>=4.2.0,<5
+# CI/CD：Docker 容器构建（engine.tasks.run_build_task）
+docker>=7.0.0,<8
+# 可选：若使用 uvicorn 替代 daphne
+# uvicorn[standard]>=0.27.0,<1
+# 可选：前端底部状态栏「主机负载」需 psutil（未安装时接口返回 supported=false）
+psutil>=5.9.0,<7

@@ -1,0 +1,94 @@
+# =============================================================================
+# 测试与 UI 自动化「全家桶」依赖 — 安装到与 Django 相同的虚拟环境即可
+#
+#   pip install -r requirements-test-all.txt
+#
+# Playwright 浏览器内核需额外执行（装完本文件后二选一或全装）：
+#   playwright install
+#   playwright install chromium
+#   playwright install --with-deps chromium   # Linux CI 常用
+#
+# unittest 为 Python 标准库，无需 pip。
+# =============================================================================
+
+# --- pytest 核心与常用插件（与平台 multi_framework_runner / pytest.ini 对齐）---
+pytest>=7.4,<9
+pytest-html>=4.1
+pytest-cov>=4.0
+pytest-xdist>=3.3
+pytest-timeout>=2.1
+pytest-metadata>=3.0
+pytest-order>=1.1
+pytest-base-url>=2.0
+pytest-forked>=1.6
+pytest-django>=4.8
+pytest-rerunfailures>=14.0
+pytest-mock>=3.12
+
+# --- Allure 报告 ---
+allure-pytest>=2.13.2
+allure-python-commons>=2.13.2
+
+# --- Selenium 4（WebDriver；与 assistant.runtime.browser_env_patch 一致）---
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+
+# --- Playwright 与 pytest 集成 ---
+playwright>=1.49.0
+pytest-playwright>=0.6.0
+
+# --- 平台 multi_framework_runner 支持的其它 Python 测试入口 ---
+nose>=1.3.7
+robotframework>=6.1.0
+behave>=1.2.6
+
+# --- HTTP / 契约 / 数据（常见与 pytest 联用）---
+requests>=2.31.0
+httpx>=0.27.0
+responses>=0.25.0
+jsonschema>=4.20.0
+PyYAML>=6.0.2
+
+# --- Django 测试常用 ---
+factory-boy>=3.3.0
+Faker>=24.0.0
+
+# --- 覆盖率底层（pytest-cov 会用到）---
+coverage>=7.4.0
+
+# --- 与 requirements_ui_script_env 对齐：截图/OCR/邮件等脚本侧依赖 ---
+attrs>=23.1.0
+BeautifulReport==0.1.3
+certifi>=2023.7.22
+charset-normalizer>=3.2.0
+colorama>=0.4.6
+exceptiongroup>=1.1.3
+execnet>=2.0.2
+h11>=0.14.0
+idna>=3.4
+iniconfig>=2.0.0
+loguru>=0.7.2
+more-itertools>=10.1.0
+numpy>=2.1.0
+onnxruntime>=1.20.0
+opencv-python>=4.10.0
+outcome>=1.2.0
+packaging>=23.2
+Pillow>=10.4.0
+pluggy>=1.3.0
+pycparser>=2.21
+pyOpenSSL>=23.2.0
+PySocks>=1.7.1
+python-dotenv>=1.0.0
+sniffio>=1.3.0
+sortedcontainers>=2.4.0
+trio>=0.22.2
+trio-websocket>=0.11.1
+typing_extensions>=4.8.0
+urllib3>=2.0.5,<3
+websocket-client>=1.6.3
+wsproto>=1.2.0
+yagmail>=0.15.293
+
+# --- 可选：移动端 Appium（不需要可整行删掉或注释掉）---
+# Appium-Python-Client>=4.0.0

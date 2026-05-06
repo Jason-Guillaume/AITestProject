@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.aitesta</groupId>
+  <artifactId>java-linear-runtime</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+  <name>AITesta Java linear runtime (JUnit5 + Selenium)</name>
+  <description>仅用于 dependency:copy-dependencies，供无 pom 的 Java 线性脚本编译/运行。</description>
+
+  <properties>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <selenium.version>4.27.0</selenium.version>
+    <junit.platform.version>1.10.2</junit.platform.version>
+  </properties>
+
+  <dependencies>
+    <!-- 含 Console Launcher 与 JUnit Jupiter 运行所需类 -->
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-console-standalone</artifactId>
+      <version>${junit.platform.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.seleniumhq.selenium</groupId>
+      <artifactId>selenium-java</artifactId>
+      <version>${selenium.version}</version>
+    </dependency>
+  </dependencies>
+</project>

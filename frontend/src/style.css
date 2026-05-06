@@ -11,9 +11,12 @@ body,
   height: 100%;
 }
 
-/* 内页深色壳（与 App.vue .dark 配合） */
+/* 内页深色壳（与 App.vue .dark、theme.css 变量配合） */
 .app-root.dark {
   color-scheme: dark;
   min-height: 100%;
-  background: radial-gradient(ellipse 120% 80% at 50% -10%, #0f172a 0%, #020617 45%, #010409 100%);
+  background:
+    radial-gradient(ellipse 120% 90% at 50% -8%, #1a1a2e 0%, transparent 55%),
+    radial-gradient(ellipse 80% 60% at 100% 0%, rgba(0, 240, 255, 0.06) 0%, transparent 45%),
+    linear-gradient(180deg, #0e1018 0%, var(--bg-main) 42%, #050508 100%);
 }
