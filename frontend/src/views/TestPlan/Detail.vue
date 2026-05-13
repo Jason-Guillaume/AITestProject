@@ -6,17 +6,37 @@
         <span class="plan-id">{{ detail.id }}</span>
         <span class="plan-name">{{ detail.plan_name }}</span>
         <span class="update-tip">最近更新：{{ detail.updater_name }} {{ formatDate(detail.update_time) }}</span>
-        <el-tag :type="planTagType(detail.plan_status)" size="small">{{ planLabel(detail.plan_status) }}</el-tag>
+        <el-tag
+          :type="planTagType(detail.plan_status)"
+          size="small"
+        >
+          {{ planLabel(detail.plan_status) }}
+        </el-tag>
       </div>
       <div class="detail-header__right">
-        <el-button size="small" type="primary" @click="startTest">
+        <el-button
+          size="small"
+          type="primary"
+          @click="startTest"
+        >
           <el-icon><VideoPlay /></el-icon> 开始测试
         </el-button>
-        <el-button size="small" @click="genReport">
+        <el-button
+          size="small"
+          @click="genReport"
+        >
           <el-icon><Document /></el-icon> 生成测试报告
         </el-button>
-        <el-button size="small"><el-icon><CopyDocument /></el-icon> 复制</el-button>
-        <el-button size="small" type="danger" @click="removePlan"><el-icon><Delete /></el-icon> 删除</el-button>
+        <el-button size="small">
+          <el-icon><CopyDocument /></el-icon> 复制
+        </el-button>
+        <el-button
+          size="small"
+          type="danger"
+          @click="removePlan"
+        >
+          <el-icon><Delete /></el-icon> 删除
+        </el-button>
       </div>
     </div>
 
@@ -25,11 +45,27 @@
       <div class="plan-left cyber-glass">
         <div class="section-title">
           基本信息
-          <el-icon class="edit-icon" @click="toggleEditInfo"><Edit /></el-icon>
+          <el-icon
+            class="edit-icon"
+            @click="toggleEditInfo"
+          >
+            <Edit />
+          </el-icon>
         </div>
-        <el-form :model="detail" label-width="90px" class="info-form">
+        <el-form
+          :model="detail"
+          label-width="90px"
+          class="info-form"
+        >
           <el-form-item label="测试周期">
-            <el-date-picker v-model="dateRange" type="daterange" range-separator="至" :disabled="!editingInfo" size="small" value-format="YYYY-MM-DD" />
+            <el-date-picker
+              v-model="dateRange"
+              type="daterange"
+              range-separator="至"
+              :disabled="!editingInfo"
+              size="small"
+              value-format="YYYY-MM-DD"
+            />
           </el-form-item>
           <el-form-item label="测试人员">
             <template v-if="editingInfo">
@@ -51,64 +87,191 @@
                 />
               </el-select>
             </template>
-            <span v-else class="info-readonly">{{ detail.testers_display || '—' }}</span>
+            <span
+              v-else
+              class="info-readonly"
+            >{{ detail.testers_display || '—' }}</span>
           </el-form-item>
           <el-form-item label="计划描述">
-            <el-input v-model="detail.description" type="textarea" :rows="3" :disabled="!editingInfo" size="small" />
+            <el-input
+              v-model="detail.description"
+              type="textarea"
+              :rows="3"
+              :disabled="!editingInfo"
+              size="small"
+            />
           </el-form-item>
           <el-form-item label="关联迭代">
-            <el-input v-model="detail.iteration" :disabled="!editingInfo" size="small" />
+            <el-input
+              v-model="detail.iteration"
+              :disabled="!editingInfo"
+              size="small"
+            />
           </el-form-item>
           <el-form-item label="版本号">
-            <el-input v-model="detail.version_no" :disabled="!editingInfo" size="small" />
+            <el-input
+              v-model="detail.version_no"
+              :disabled="!editingInfo"
+              size="small"
+            />
           </el-form-item>
           <el-form-item label="测试环境">
-            <el-input v-model="detail.environment" :disabled="!editingInfo" size="small" />
+            <el-input
+              v-model="detail.environment"
+              :disabled="!editingInfo"
+              size="small"
+            />
           </el-form-item>
           <el-form-item label="测试目标">
-            <el-input v-model="detail.test_goal" :disabled="!editingInfo" size="small" />
+            <el-input
+              v-model="detail.test_goal"
+              :disabled="!editingInfo"
+              size="small"
+            />
           </el-form-item>
           <el-form-item v-if="editingInfo">
-            <el-button type="primary" size="small" @click="saveInfo">保存</el-button>
-            <el-button size="small" @click="cancelEdit">取消</el-button>
+            <el-button
+              type="primary"
+              size="small"
+              @click="saveInfo"
+            >
+              保存
+            </el-button>
+            <el-button
+              size="small"
+              @click="cancelEdit"
+            >
+              取消
+            </el-button>
           </el-form-item>
         </el-form>
 
         <!-- 需求范围 -->
-        <div class="section-title" style="margin-top:16px">需求范围</div>
-        <el-table :data="reqList" size="small" class="admin-data-table">
-          <el-table-column prop="id" label="需求ID" width="88" align="left" />
-          <el-table-column prop="title" label="需求标题" min-width="120" align="left" show-overflow-tooltip />
-          <el-table-column prop="priority" label="优先级" width="80" align="center" />
-          <el-table-column prop="status" label="状态" width="80" align="center" />
-          <el-table-column prop="handler" label="处理人" min-width="96" width="96" align="center" show-overflow-tooltip />
+        <div
+          class="section-title"
+          style="margin-top:16px"
+        >
+          需求范围
+        </div>
+        <el-table
+          :data="reqList"
+          size="small"
+          class="admin-data-table"
+        >
+          <el-table-column
+            prop="id"
+            label="需求ID"
+            width="88"
+            align="left"
+          />
+          <el-table-column
+            prop="title"
+            label="需求标题"
+            min-width="120"
+            align="left"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="priority"
+            label="优先级"
+            width="80"
+            align="center"
+          />
+          <el-table-column
+            prop="status"
+            label="状态"
+            width="80"
+            align="center"
+          />
+          <el-table-column
+            prop="handler"
+            label="处理人"
+            min-width="96"
+            width="96"
+            align="center"
+            show-overflow-tooltip
+          />
         </el-table>
       </div>
 
       <!-- 右侧测试用例 -->
       <div class="plan-right cyber-glass">
-        <div class="section-title">测试用例</div>
-        <el-table :data="caseList" size="small" class="admin-data-table">
-          <el-table-column prop="id" label="用例ID" width="88" align="left" />
-          <el-table-column label="等级" width="72" align="center">
+        <div class="section-title">
+          测试用例
+        </div>
+        <el-table
+          :data="caseList"
+          size="small"
+          class="admin-data-table"
+        >
+          <el-table-column
+            prop="id"
+            label="用例ID"
+            width="88"
+            align="left"
+          />
+          <el-table-column
+            label="等级"
+            width="72"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag size="small" :type="levelTagType(row.level)">{{ row.level }}</el-tag>
+              <el-tag
+                size="small"
+                :type="levelTagType(row.level)"
+              >
+                {{ row.level }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="case_name" label="用例名称" min-width="160" align="left" show-overflow-tooltip>
+          <el-table-column
+            prop="case_name"
+            label="用例名称"
+            min-width="160"
+            align="left"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">
-              <el-button link type="primary" size="small">{{ row.case_name }}</el-button>
+              <el-button
+                link
+                type="primary"
+                size="small"
+              >
+                {{ row.case_name }}
+              </el-button>
             </template>
           </el-table-column>
-          <el-table-column label="执行状态" width="90" align="center">
+          <el-table-column
+            label="执行状态"
+            width="90"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag :type="execTagType(row.exec_status)" size="small">{{ row.exec_status || '未开始' }}</el-tag>
+              <el-tag
+                :type="execTagType(row.exec_status)"
+                size="small"
+              >
+                {{ row.exec_status || '未开始' }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="执行结果" width="80" align="center">
+          <el-table-column
+            label="执行结果"
+            width="80"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag v-if="row.result" :type="row.result === '通过' ? 'success' : 'danger'" size="small">{{ row.result }}</el-tag>
-              <span v-else class="dash">——</span>
+              <el-tag
+                v-if="row.result"
+                :type="row.result === '通过' ? 'success' : 'danger'"
+                size="small"
+              >
+                {{ row.result }}
+              </el-tag>
+              <span
+                v-else
+                class="dash"
+              >——</span>
             </template>
           </el-table-column>
         </el-table>

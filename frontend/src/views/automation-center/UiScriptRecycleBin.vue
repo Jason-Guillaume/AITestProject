@@ -142,8 +142,12 @@ onMounted(() => {
   <div class="ui-recycle-bin">
     <header class="ui-recycle-bin__head">
       <div>
-        <h1 class="ui-recycle-bin__title">回收站 <span class="ui-recycle-bin__sub">Recycle Bin</span></h1>
-        <p class="ui-recycle-bin__desc">已软删除的 UI 脚本（Node），可还原或永久抹除；支持批量操作。</p>
+        <h1 class="ui-recycle-bin__title">
+          回收站 <span class="ui-recycle-bin__sub">Recycle Bin</span>
+        </h1>
+        <p class="ui-recycle-bin__desc">
+          已软删除的 UI 脚本（Node），可还原或永久抹除；支持批量操作。
+        </p>
       </div>
       <div class="ui-recycle-bin__toolbar">
         <el-button
@@ -164,7 +168,13 @@ onMounted(() => {
         >
           批量永久抹除
         </el-button>
-        <el-button type="primary" plain :icon="RefreshLeft" :loading="loading" @click="loadTrash">
+        <el-button
+          type="primary"
+          plain
+          :icon="RefreshLeft"
+          :loading="loading"
+          @click="loadTrash"
+        >
           刷新
         </el-button>
       </div>
@@ -181,18 +191,51 @@ onMounted(() => {
       class="ui-recycle-bin__table"
       @selection-change="onSelectionChange"
     >
-      <el-table-column type="selection" width="48" fixed />
-      <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="original_path" label="原始路径" min-width="220" show-overflow-tooltip />
-      <el-table-column label="删除时间" width="180">
+      <el-table-column
+        type="selection"
+        width="48"
+        fixed
+      />
+      <el-table-column
+        prop="name"
+        label="名称"
+        min-width="160"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="original_path"
+        label="原始路径"
+        min-width="220"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="删除时间"
+        width="180"
+      >
         <template #default="{ row }">
           {{ formatTime(row.deleted_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column
+        label="操作"
+        width="200"
+        fixed="right"
+      >
         <template #default="{ row }">
-          <el-button link type="primary" @click="onRestore(row)">还原</el-button>
-          <el-button link type="danger" @click="onPurge(row)">永久抹除</el-button>
+          <el-button
+            link
+            type="primary"
+            @click="onRestore(row)"
+          >
+            还原
+          </el-button>
+          <el-button
+            link
+            type="danger"
+            @click="onPurge(row)"
+          >
+            永久抹除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>

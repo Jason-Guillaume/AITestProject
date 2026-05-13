@@ -4,10 +4,16 @@
       <div class="build-terminal__meta">
         <span class="build-terminal__label">项目</span>
         <span class="build-terminal__project">{{ projectName || "—" }}</span>
-        <span class="build-terminal__divider" aria-hidden="true" />
+        <span
+          class="build-terminal__divider"
+          aria-hidden="true"
+        />
         <span class="build-terminal__label">任务 ID</span>
         <code class="build-terminal__task-id">{{ taskIdDisplay }}</code>
-        <span class="build-terminal__divider" aria-hidden="true" />
+        <span
+          class="build-terminal__divider"
+          aria-hidden="true"
+        />
         <span class="build-terminal__label">WS</span>
         <span
           class="build-terminal__ws-dot"
@@ -16,7 +22,11 @@
         />
       </div>
       <div class="build-terminal__actions">
-        <el-tag :type="statusTagType" effect="dark" class="build-terminal__tag">
+        <el-tag
+          :type="statusTagType"
+          effect="dark"
+          class="build-terminal__tag"
+        >
           {{ statusLabel }}
         </el-tag>
         <el-button
@@ -32,8 +42,14 @@
       </div>
     </header>
 
-    <div ref="terminalWrapRef" class="build-terminal__xterm-wrap">
-      <div ref="terminalHostRef" class="build-terminal__xterm-host" />
+    <div
+      ref="terminalWrapRef"
+      class="build-terminal__xterm-wrap"
+    >
+      <div
+        ref="terminalHostRef"
+        class="build-terminal__xterm-host"
+      />
     </div>
   </div>
 </template>

@@ -6,24 +6,48 @@
         <span class="report-id">{{ detail.id }}</span>
         <span class="report-name">{{ detail.report_name }}</span>
         <span class="update-tip">报告生成时间：{{ formatDate(detail.create_time) }}</span>
-        <el-tag type="warning" size="small">进行中</el-tag>
+        <el-tag
+          type="warning"
+          size="small"
+        >
+          进行中
+        </el-tag>
       </div>
       <div class="detail-header__right">
-        <el-button size="small" :disabled="!planLinkId" @click="router.push(`/test-plan/${planLinkId}`)">
+        <el-button
+          size="small"
+          :disabled="!planLinkId"
+          @click="router.push(`/test-plan/${planLinkId}`)"
+        >
           <el-icon><View /></el-icon> 查看测试计划
         </el-button>
-        <el-button size="small"><el-icon><Download /></el-icon> 下载</el-button>
-        <el-button size="small" type="danger" @click="onDelete"><el-icon><Delete /></el-icon> 删除</el-button>
+        <el-button size="small">
+          <el-icon><Download /></el-icon> 下载
+        </el-button>
+        <el-button
+          size="small"
+          type="danger"
+          @click="onDelete"
+        >
+          <el-icon><Delete /></el-icon> 删除
+        </el-button>
       </div>
     </div>
 
     <!-- 概览 -->
     <div class="section-card">
-      <div class="section-title">概览</div>
+      <div class="section-title">
+        概览
+      </div>
       <div class="overview-body">
         <div class="overview-circle">
-          <div ref="circleEl" class="circle-chart"></div>
-          <div class="circle-label">整体测试进度</div>
+          <div
+            ref="circleEl"
+            class="circle-chart"
+          />
+          <div class="circle-label">
+            整体测试进度
+          </div>
         </div>
         <div class="overview-info">
           <div class="info-row">
@@ -37,49 +61,105 @@
         </div>
         <div class="overview-stats">
           <div class="stat-item">
-            <div class="stat-num blue">{{ detail.case_count || 328 }}</div>
-            <div class="stat-lbl">用例总数</div>
+            <div class="stat-num blue">
+              {{ detail.case_count || 328 }}
+            </div>
+            <div class="stat-lbl">
+              用例总数
+            </div>
           </div>
           <div class="stat-item">
-            <div class="stat-num green">{{ detail.pass_rate || 65 }}%</div>
-            <div class="stat-lbl">测试通过率</div>
+            <div class="stat-num green">
+              {{ detail.pass_rate || 65 }}%
+            </div>
+            <div class="stat-lbl">
+              测试通过率
+            </div>
           </div>
           <div class="stat-item">
-            <div class="stat-lbl-top">用例执行进度</div>
-            <el-progress :percentage="Number(detail.coverage_rate || 60)" :show-text="true" style="width:120px" />
+            <div class="stat-lbl-top">
+              用例执行进度
+            </div>
+            <el-progress
+              :percentage="Number(detail.coverage_rate || 60)"
+              :show-text="true"
+              style="width:120px"
+            />
           </div>
           <div class="stat-item">
-            <div class="stat-num orange">{{ detail.defect_count || 5 }}</div>
-            <div class="stat-lbl">缺陷总数</div>
+            <div class="stat-num orange">
+              {{ detail.defect_count || 5 }}
+            </div>
+            <div class="stat-lbl">
+              缺陷总数
+            </div>
           </div>
           <div class="stat-item">
-            <div class="stat-num red">--</div>
-            <div class="stat-lbl">缺陷解决率</div>
+            <div class="stat-num red">
+              --
+            </div>
+            <div class="stat-lbl">
+              缺陷解决率
+            </div>
           </div>
           <div class="stat-item">
-            <div class="stat-num red">--</div>
-            <div class="stat-lbl">严重缺陷解决率</div>
+            <div class="stat-num red">
+              --
+            </div>
+            <div class="stat-lbl">
+              严重缺陷解决率
+            </div>
           </div>
           <div class="stat-item">
-            <div class="stat-num blue">0d 1h 2min</div>
-            <div class="stat-lbl">执行耗时</div>
+            <div class="stat-num blue">
+              0d 1h 2min
+            </div>
+            <div class="stat-lbl">
+              执行耗时
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 测试结论 -->
-    <div class="section-card" style="margin-top:16px">
+    <div
+      class="section-card"
+      style="margin-top:16px"
+    >
       <div class="section-title">
         测试结论
-        <el-icon class="edit-icon" @click="editingConclusion = !editingConclusion"><Edit /></el-icon>
+        <el-icon
+          class="edit-icon"
+          @click="editingConclusion = !editingConclusion"
+        >
+          <Edit />
+        </el-icon>
       </div>
-      <el-form :model="conclusion" label-width="80px" class="conclusion-form">
+      <el-form
+        :model="conclusion"
+        label-width="80px"
+        class="conclusion-form"
+      >
         <el-form-item label="测试结果">
-          <el-select v-model="conclusion.result" placeholder="请选测试结果" :disabled="!editingConclusion" style="width:200px">
-            <el-option label="通过" value="pass" />
-            <el-option label="不通过" value="fail" />
-            <el-option label="有条件通过" value="conditional" />
+          <el-select
+            v-model="conclusion.result"
+            placeholder="请选测试结果"
+            :disabled="!editingConclusion"
+            style="width:200px"
+          >
+            <el-option
+              label="通过"
+              value="pass"
+            />
+            <el-option
+              label="不通过"
+              value="fail"
+            />
+            <el-option
+              label="有条件通过"
+              value="conditional"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="测试总结">
@@ -93,23 +173,49 @@
           />
         </el-form-item>
         <el-form-item v-if="editingConclusion">
-          <el-button type="primary" size="small" @click="saveConclusion">确认</el-button>
-          <el-button size="small" @click="editingConclusion = false">取消</el-button>
+          <el-button
+            type="primary"
+            size="small"
+            @click="saveConclusion"
+          >
+            确认
+          </el-button>
+          <el-button
+            size="small"
+            @click="editingConclusion = false"
+          >
+            取消
+          </el-button>
         </el-form-item>
       </el-form>
     </div>
 
     <!-- 测试详情（图表区） -->
-    <div class="section-card" style="margin-top:16px">
-      <div class="section-title">测试详情</div>
+    <div
+      class="section-card"
+      style="margin-top:16px"
+    >
+      <div class="section-title">
+        测试详情
+      </div>
       <div class="detail-charts">
         <div class="detail-chart-wrap">
-          <div class="chart-sub-title">用例分布—按执行结果</div>
-          <div ref="execChartEl" style="height:180px"></div>
+          <div class="chart-sub-title">
+            用例分布—按执行结果
+          </div>
+          <div
+            ref="execChartEl"
+            style="height:180px"
+          />
         </div>
         <div class="detail-chart-wrap">
-          <div class="chart-sub-title">用例分布—按执行结果</div>
-          <div ref="distChartEl" style="height:180px"></div>
+          <div class="chart-sub-title">
+            用例分布—按执行结果
+          </div>
+          <div
+            ref="distChartEl"
+            style="height:180px"
+          />
         </div>
       </div>
     </div>

@@ -1,9 +1,17 @@
 <template>
   <div class="cyber-page admin-list-page scheduled-task-list-page">
-    <el-card class="admin-list-card" shadow="never">
+    <el-card
+      class="admin-list-card"
+      shadow="never"
+    >
       <div class="admin-toolbar-row">
         <div class="admin-toolbar-row__left">
-          <el-button type="primary" @click="router.push('/performance/scheduled-task')">新建定时任务</el-button>
+          <el-button
+            type="primary"
+            @click="router.push('/performance/scheduled-task')"
+          >
+            新建定时任务
+          </el-button>
           <el-button
             type="danger"
             plain
@@ -39,7 +47,9 @@
             class="search-input"
             @keyup.enter="onSearch"
           >
-            <template #suffix><el-icon><Search /></el-icon></template>
+            <template #suffix>
+              <el-icon><Search /></el-icon>
+            </template>
           </el-input>
         </div>
       </div>
@@ -52,23 +62,80 @@
         class="admin-data-table"
         @selection-change="onSelectionChange"
       >
-        <el-table-column type="selection" width="44" fixed="left" />
-        <el-table-column prop="id" label="ID" width="90" align="center" />
-        <el-table-column prop="name" label="任务名称" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="cron_expression" label="Cron" min-width="160" show-overflow-tooltip />
-        <el-table-column label="状态" width="120" align="center">
+        <el-table-column
+          type="selection"
+          width="44"
+          fixed="left"
+        />
+        <el-table-column
+          prop="id"
+          label="ID"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="name"
+          label="任务名称"
+          min-width="200"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="cron_expression"
+          label="Cron"
+          min-width="160"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="状态"
+          width="120"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)" effect="dark">{{ statusText(row.status) }}</el-tag>
+            <el-tag
+              :type="statusTagType(row.status)"
+              effect="dark"
+            >
+              {{ statusText(row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="environment" label="环境" width="110" align="center" />
-        <el-table-column prop="create_time" label="创建时间" width="184" align="center">
-          <template #default="{ row }">{{ formatDate(row.create_time) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right" align="center">
+        <el-table-column
+          prop="environment"
+          label="环境"
+          width="110"
+          align="center"
+        />
+        <el-table-column
+          prop="create_time"
+          label="创建时间"
+          width="184"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click="router.push(`/performance/scheduled-task/${row.id}`)">详情</el-button>
-            <el-button link type="danger" @click="delOne(row)">删除</el-button>
+            {{ formatDate(row.create_time) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          width="180"
+          fixed="right"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="router.push(`/performance/scheduled-task/${row.id}`)"
+            >
+              详情
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              @click="delOne(row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -84,20 +151,52 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="batchUpdateVisible" title="批量修改任务状态" width="420px" class="cyber-dialog-dark" destroy-on-close>
-      <el-alert type="warning" :closable="false" show-icon title="将对已选任务应用同一状态更新；若某些记录无权限，会被跳过。" class="mb-3" />
+    <el-dialog
+      v-model="batchUpdateVisible"
+      title="批量修改任务状态"
+      width="420px"
+      class="cyber-dialog-dark"
+      destroy-on-close
+    >
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        title="将对已选任务应用同一状态更新；若某些记录无权限，会被跳过。"
+        class="mb-3"
+      />
       <el-form label-width="110px">
         <el-form-item label="目标状态">
-          <el-select v-model="batchStatus" placeholder="请选择" class="w-full">
-            <el-option label="启用" value="active" />
-            <el-option label="暂停" value="paused" />
-            <el-option label="禁用" value="disabled" />
+          <el-select
+            v-model="batchStatus"
+            placeholder="请选择"
+            class="w-full"
+          >
+            <el-option
+              label="启用"
+              value="active"
+            />
+            <el-option
+              label="暂停"
+              value="paused"
+            />
+            <el-option
+              label="禁用"
+              value="disabled"
+            />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="batchUpdateVisible = false">取消</el-button>
-        <el-button type="primary" :loading="batchUpdating" :disabled="selectedIds.length === 0 || !batchStatus" @click="submitBatchUpdateStatus">
+        <el-button @click="batchUpdateVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="batchUpdating"
+          :disabled="selectedIds.length === 0 || !batchStatus"
+          @click="submitBatchUpdateStatus"
+        >
           应用到 {{ selectedIds.length }} 条
         </el-button>
       </template>

@@ -51,6 +51,11 @@ class TestDefect(BaseModel):
 
     class Meta:
         db_table = "test_defect"
+        indexes = [
+            models.Index(fields=['defect_no'], name='idx_defect_no'),
+            models.Index(fields=['status', 'is_deleted'], name='idx_defect_status_del'),
+            models.Index(fields=['severity', 'is_deleted'], name='idx_defect_severity_del'),
+        ]
         constraints = [
             UniqueConstraint(
                 fields=["defect_no", "is_deleted"],

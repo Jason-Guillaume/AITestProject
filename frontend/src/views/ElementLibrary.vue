@@ -1,9 +1,14 @@
 <template>
   <div class="element-library-page cyber-page">
-    <el-card class="sys-page-head" shadow="never">
+    <el-card
+      class="sys-page-head"
+      shadow="never"
+    >
       <div class="sys-page-head__row">
         <div>
-          <h2 class="sys-page-head__title">📚 元素库管理</h2>
+          <h2 class="sys-page-head__title">
+            📚 元素库管理
+          </h2>
           <p class="sys-page-head__sub">
             基于POM架构的页面元素管理，支持模块、页面、元素三层结构
           </p>
@@ -13,10 +18,19 @@
 
     <div class="element-library-layout">
       <!-- 左侧：模块和页面树 -->
-      <el-card class="tree-panel" shadow="never">
+      <el-card
+        class="tree-panel"
+        shadow="never"
+      >
         <div class="panel-header">
-          <h3 class="panel-title">模块与页面</h3>
-          <el-button type="primary" size="small" @click="handleAddModule">
+          <h3 class="panel-title">
+            模块与页面
+          </h3>
+          <el-button
+            type="primary"
+            size="small"
+            @click="handleAddModule"
+          >
             <el-icon><Plus /></el-icon>
             新建模块
           </el-button>
@@ -30,8 +44,8 @@
             node-key="id"
             :expand-on-click-node="false"
             :highlight-current="true"
-            @node-click="handleNodeClick"
             class="element-tree"
+            @node-click="handleNodeClick"
           >
             <template #default="{ node, data }">
               <div class="tree-node">
@@ -72,7 +86,10 @@
       </el-card>
 
       <!-- 右侧：元素列表 -->
-      <el-card class="table-panel" shadow="never">
+      <el-card
+        class="table-panel"
+        shadow="never"
+      >
         <div class="panel-header">
           <h3 class="panel-title">
             {{ selectedNode ? `${selectedNode.label} - 元素列表` : '请选择页面' }}
@@ -102,28 +119,62 @@
         </div>
 
         <el-table
+          v-loading="loading"
           :data="elementList"
           stripe
           class="element-table"
-          v-loading="loading"
         >
-          <el-table-column prop="name" label="元素名称" width="180" />
-          <el-table-column prop="locator_type" label="定位方式" width="120">
+          <el-table-column
+            prop="name"
+            label="元素名称"
+            width="180"
+          />
+          <el-table-column
+            prop="locator_type"
+            label="定位方式"
+            width="120"
+          >
             <template #default="{ row }">
-              <el-tag size="small" :type="getLocatorTypeTag(row.locator_type)">
+              <el-tag
+                size="small"
+                :type="getLocatorTypeTag(row.locator_type)"
+              >
                 {{ row.locator_type }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="locator_value" label="定位表达式" min-width="250" show-overflow-tooltip />
-          <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column
+            prop="locator_value"
+            label="定位表达式"
+            min-width="250"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="description"
+            label="描述"
+            min-width="200"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            label="操作"
+            width="150"
+            fixed="right"
+          >
             <template #default="{ row }">
-              <el-button link size="small" @click="handleEditElement(row)">
+              <el-button
+                link
+                size="small"
+                @click="handleEditElement(row)"
+              >
                 <el-icon><Edit /></el-icon>
                 编辑
               </el-button>
-              <el-button link size="small" type="danger" @click="handleDeleteElement(row)">
+              <el-button
+                link
+                size="small"
+                type="danger"
+                @click="handleDeleteElement(row)"
+              >
                 <el-icon><Delete /></el-icon>
                 删除
               </el-button>
@@ -139,12 +190,25 @@
       :title="moduleForm.id ? '编辑模块' : '新建模块'"
       width="500px"
     >
-      <el-form :model="moduleForm" label-width="100px">
-        <el-form-item label="模块名称" required>
-          <el-input v-model="moduleForm.name" placeholder="请输入模块名称" />
+      <el-form
+        :model="moduleForm"
+        label-width="100px"
+      >
+        <el-form-item
+          label="模块名称"
+          required
+        >
+          <el-input
+            v-model="moduleForm.name"
+            placeholder="请输入模块名称"
+          />
         </el-form-item>
         <el-form-item label="父模块">
-          <el-select v-model="moduleForm.parent" placeholder="选择父模块（可选）" clearable>
+          <el-select
+            v-model="moduleForm.parent"
+            placeholder="选择父模块（可选）"
+            clearable
+          >
             <el-option
               v-for="mod in allModules"
               :key="mod.id"
@@ -155,12 +219,23 @@
           </el-select>
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="moduleForm.description" type="textarea" :rows="3" />
+          <el-input
+            v-model="moduleForm.description"
+            type="textarea"
+            :rows="3"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="moduleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveModule">保存</el-button>
+        <el-button @click="moduleDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleSaveModule"
+        >
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -170,20 +245,43 @@
       :title="pageForm.id ? '编辑页面' : '新建页面'"
       width="500px"
     >
-      <el-form :model="pageForm" label-width="100px">
-        <el-form-item label="页面名称" required>
-          <el-input v-model="pageForm.name" placeholder="请输入页面名称" />
+      <el-form
+        :model="pageForm"
+        label-width="100px"
+      >
+        <el-form-item
+          label="页面名称"
+          required
+        >
+          <el-input
+            v-model="pageForm.name"
+            placeholder="请输入页面名称"
+          />
         </el-form-item>
         <el-form-item label="页面URL">
-          <el-input v-model="pageForm.url" placeholder="https://example.com/page" />
+          <el-input
+            v-model="pageForm.url"
+            placeholder="https://example.com/page"
+          />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="pageForm.description" type="textarea" :rows="3" />
+          <el-input
+            v-model="pageForm.description"
+            type="textarea"
+            :rows="3"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="pageDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSavePage">保存</el-button>
+        <el-button @click="pageDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleSavePage"
+        >
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -193,23 +291,65 @@
       :title="elementForm.id ? '编辑元素' : '新建元素'"
       width="600px"
     >
-      <el-form :model="elementForm" label-width="100px">
-        <el-form-item label="元素名称" required>
-          <el-input v-model="elementForm.name" placeholder="请输入元素名称" />
+      <el-form
+        :model="elementForm"
+        label-width="100px"
+      >
+        <el-form-item
+          label="元素名称"
+          required
+        >
+          <el-input
+            v-model="elementForm.name"
+            placeholder="请输入元素名称"
+          />
         </el-form-item>
-        <el-form-item label="定位方式" required>
-          <el-select v-model="elementForm.locator_type" placeholder="选择定位方式">
-            <el-option label="ID" value="id" />
-            <el-option label="Name" value="name" />
-            <el-option label="XPath" value="xpath" />
-            <el-option label="CSS Selector" value="css" />
-            <el-option label="Class Name" value="class" />
-            <el-option label="Tag Name" value="tag" />
-            <el-option label="Link Text" value="link_text" />
-            <el-option label="Partial Link Text" value="partial_link_text" />
+        <el-form-item
+          label="定位方式"
+          required
+        >
+          <el-select
+            v-model="elementForm.locator_type"
+            placeholder="选择定位方式"
+          >
+            <el-option
+              label="ID"
+              value="id"
+            />
+            <el-option
+              label="Name"
+              value="name"
+            />
+            <el-option
+              label="XPath"
+              value="xpath"
+            />
+            <el-option
+              label="CSS Selector"
+              value="css"
+            />
+            <el-option
+              label="Class Name"
+              value="class"
+            />
+            <el-option
+              label="Tag Name"
+              value="tag"
+            />
+            <el-option
+              label="Link Text"
+              value="link_text"
+            />
+            <el-option
+              label="Partial Link Text"
+              value="partial_link_text"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="定位表达式" required>
+        <el-form-item
+          label="定位表达式"
+          required
+        >
           <el-input
             v-model="elementForm.locator_value"
             type="textarea"
@@ -218,12 +358,23 @@
           />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="elementForm.description" type="textarea" :rows="2" />
+          <el-input
+            v-model="elementForm.description"
+            type="textarea"
+            :rows="2"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="elementDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveElement">保存</el-button>
+        <el-button @click="elementDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleSaveElement"
+        >
+          保存
+        </el-button>
       </template>
     </el-dialog>
   </div>

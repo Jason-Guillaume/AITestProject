@@ -1,37 +1,82 @@
 <template>
   <div class="cyber-page quality-page">
-    <el-card class="admin-list-card" shadow="never">
+    <el-card
+      class="admin-list-card"
+      shadow="never"
+    >
       <div class="admin-toolbar-row">
         <div class="admin-toolbar-row__left">
           <span class="quality-title">测试质量分析（近30天）</span>
         </div>
         <div class="admin-toolbar-row__right">
-          <el-button :loading="loading" @click="loadData">刷新</el-button>
+          <el-button
+            :loading="loading"
+            @click="loadData"
+          >
+            刷新
+          </el-button>
         </div>
       </div>
 
-      <el-row :gutter="12" class="metric-cards">
-        <el-col :xs="24" :sm="8">
-          <el-card shadow="never" class="metric-card">
-            <div class="metric-card__label">最新通过率</div>
-            <div class="metric-card__value">{{ latest.pass_rate }}%</div>
+      <el-row
+        :gutter="12"
+        class="metric-cards"
+      >
+        <el-col
+          :xs="24"
+          :sm="8"
+        >
+          <el-card
+            shadow="never"
+            class="metric-card"
+          >
+            <div class="metric-card__label">
+              最新通过率
+            </div>
+            <div class="metric-card__value">
+              {{ latest.pass_rate }}%
+            </div>
           </el-card>
         </el-col>
-        <el-col :xs="24" :sm="8">
-          <el-card shadow="never" class="metric-card">
-            <div class="metric-card__label">最新缺陷密度</div>
-            <div class="metric-card__value">{{ latest.defect_density }}</div>
+        <el-col
+          :xs="24"
+          :sm="8"
+        >
+          <el-card
+            shadow="never"
+            class="metric-card"
+          >
+            <div class="metric-card__label">
+              最新缺陷密度
+            </div>
+            <div class="metric-card__value">
+              {{ latest.defect_density }}
+            </div>
           </el-card>
         </el-col>
-        <el-col :xs="24" :sm="8">
-          <el-card shadow="never" class="metric-card">
-            <div class="metric-card__label">最新需求覆盖率</div>
-            <div class="metric-card__value">{{ latest.requirement_coverage }}%</div>
+        <el-col
+          :xs="24"
+          :sm="8"
+        >
+          <el-card
+            shadow="never"
+            class="metric-card"
+          >
+            <div class="metric-card__label">
+              最新需求覆盖率
+            </div>
+            <div class="metric-card__value">
+              {{ latest.requirement_coverage }}%
+            </div>
           </el-card>
         </el-col>
       </el-row>
 
-      <div ref="chartEl" class="quality-chart" v-loading="loading" />
+      <div
+        ref="chartEl"
+        v-loading="loading"
+        class="quality-chart"
+      />
     </el-card>
   </div>
 </template>

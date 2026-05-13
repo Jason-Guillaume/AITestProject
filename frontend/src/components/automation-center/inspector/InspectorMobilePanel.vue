@@ -1,22 +1,38 @@
 <template>
   <div class="inspector-mobile-panel">
     <section class="inspector-block">
-      <h4 class="inspector-block__h">Device List（模拟）</h4>
+      <h4 class="inspector-block__h">
+        Device List（模拟）
+      </h4>
       <ul class="device-list">
-        <li v-for="d in devices" :key="d.id" class="device-list__item">
+        <li
+          v-for="d in devices"
+          :key="d.id"
+          class="device-list__item"
+        >
           <span class="device-list__name">{{ d.name }}</span>
-          <el-tag :type="d.online ? 'success' : 'info'" size="small">
+          <el-tag
+            :type="d.online ? 'success' : 'info'"
+            size="small"
+          >
             {{ d.online ? 'Online' : 'Offline' }}
           </el-tag>
         </li>
       </ul>
     </section>
     <section class="inspector-block">
-      <h4 class="inspector-block__h">Appium Server</h4>
-      <p class="appium-status" :class="{ 'is-up': appiumUp }">
+      <h4 class="inspector-block__h">
+        Appium Server
+      </h4>
+      <p
+        class="appium-status"
+        :class="{ 'is-up': appiumUp }"
+      >
         {{ appiumUp ? '● LISTENING :4723（占位）' : '○ STOPPED' }}
       </p>
-      <p class="inspector-block__desc">真实状态将在设备 Telemetry 接通后由后端推送。</p>
+      <p class="inspector-block__desc">
+        真实状态将在设备 Telemetry 接通后由后端推送。
+      </p>
     </section>
   </div>
 </template>

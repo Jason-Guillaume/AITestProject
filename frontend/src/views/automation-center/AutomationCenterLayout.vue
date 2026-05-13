@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   DocumentChecked,
@@ -14,10 +14,10 @@ import MobileExecParamsFields from '@/components/automation-center/MobileExecPar
 import ApiExecParamsFields from '@/components/automation-center/ApiExecParamsFields.vue'
 import MiniprogramExecParamsFields from '@/components/automation-center/MiniprogramExecParamsFields.vue'
 import H5ExecParamsFields from '@/components/automation-center/H5ExecParamsFields.vue'
+import ActionBuilder from '@/components/automation-center/ActionBuilder.vue'
 
 import './automation-center-workstation.css'
 
-const MonacoEditor = defineAsyncComponent(() => import('@/components/MonacoEditor/index.vue'))
 const MobileWorkspaceShell = defineAsyncComponent(
   () => import('@/components/automation-center/MobileWorkspaceShell.vue'),
 )
@@ -41,8 +41,48 @@ const crossPlaceholderDescription = computed(() =>
 const crossPlaceholderHint = computed(() =>
   hub.activePlatform === 'miniprogram'
     ? '遥测面板与 Web 共用；后续小程序执行日志将写入此处。'
-    : '遥测面板与 Web 共用；后续 H5 执行日志将写入此处。',
+    : '遥测面板与 Web 共用；后续 H5 执行日志将写入此处。'
 )
+
+const actionBuilderRef = ref<InstanceType<typeof ActionBuilder> | null>(null)
+
+const kwExecuting = ref(false)
+
+function onKwSave() {
+  actionBuilderRef.value?.saveAll()
+}
+
+function onKwExecute() {
+  if (kwExecuting.value) return
+  kwExecuting.value = true
+  hub.bottomTab = 'telemetry'
+  actionBuilderRef.value?.onExecute()
+}
+
+function onKwExecutionLog(entry: { timestamp: string; type: string; message: string }) {
+  const t = entry.timestamp && !Number.isNaN(Date.parse(entry.timestamp))
+    ? new Date(entry.timestamp).toLocaleTimeString()
+    : ''
+  const prefix = t ? `[${t}] ` : ''
+  if (entry.type === 'stderr') {
+    hubTerminalRef.value?.writeLog(`\u001b[31m${prefix}\u001b[0m\u001b[31m${entry.message}\u001b[0m\r\n`)
+  } else if (entry.type === 'system') {
+    hubTerminalRef.value?.writeLog(`\u001b[36m${prefix}\u001b[0m${entry.message}\r\n`)
+  } else {
+    hubTerminalRef.value?.writeLog(`\u001b[32m${prefix}\u001b[0m${entry.message}\r\n`)
+  }
+}
+
+function onKwExecutionStatus(status: string) {
+  if (status === 'success' || status === 'failed' || status === 'cancelled') {
+    kwExecuting.value = false
+  }
+}
+
+function onKwStop() {
+  actionBuilderRef.value?.onStop()
+  kwExecuting.value = false
+}
 </script>
 
 <template>
@@ -66,8 +106,7 @@ const crossPlaceholderHint = computed(() =>
               class="action-header__btn"
               :icon="DocumentChecked"
               :loading="hub.saveLoading"
-              :disabled="!hub.canSave || isCrossPlaceholder"
-              @click="hub.onSaveClick"
+              @click="onKwSave"
             >
               保存
             </el-button>
@@ -82,11 +121,11 @@ const crossPlaceholderHint = computed(() =>
             <el-button
               plain
               class="action-header__btn action-header__btn--exec"
-              :class="{ 'action-header__btn--exec-running': hub.executeLoading }"
+              :class="{ 'action-header__btn--exec-running': kwExecuting }"
               :icon="VideoPlay"
-              :loading="hub.executeLoading"
+              :loading="kwExecuting"
               :disabled="!isWebPlatform"
-              @click="hub.onExecuteClick"
+              @click="onKwExecute"
             >
               执行
             </el-button>
@@ -94,8 +133,8 @@ const crossPlaceholderHint = computed(() =>
               plain
               class="action-header__btn action-header__btn--stop"
               :icon="VideoPause"
-              :disabled="!hub.executeLoading"
-              @click="hub.onStopClick"
+              :disabled="!kwExecuting"
+              @click="onKwStop"
             >
               停止
             </el-button>
@@ -111,31 +150,40 @@ const crossPlaceholderHint = computed(() =>
             v-show="hub.activePlatform === 'web' || hub.activePlatform === 'api'"
             class="editor-stack workspace-main-mount"
           >
-            <p class="editor-path" :title="hub.editorChromeTitle">{{ hub.editorChromeTitle }}</p>
-            <div v-loading="hub.editorLoading" class="monaco-wrap">
-              <p v-if="!hub.isEditorReady" class="editor-defer-hint">编辑器初始化中（500ms 受控唤醒）…</p>
-              <MonacoEditor
-                v-if="hub.isEditorReady"
-                v-model="hub.editorContent"
-                :language="hub.editorLanguage"
-                :read-only="hub.editorReadOnly"
-                copilot-bridge-id="automation-center-main"
-                :copilot-label="hub.editorChromeTitle"
-              />
-            </div>
+            <ActionBuilder
+              ref="actionBuilderRef"
+              :case-name="hub.editorChromeTitle"
+              :project-id="hub.selectedProjectId ?? undefined"
+              :browser-type="hub.browserType"
+              :headless="hub.isHeadless"
+              @update:json="(payload) => console.log('[KW] JSON:', payload)"
+              @execution-log="onKwExecutionLog"
+              @execution-status="onKwExecutionStatus"
+            />
           </div>
           <div
             v-show="isCrossPlaceholder"
             class="workspace-main-mount workspace-main-mount--cross-placeholder"
           >
-            <el-empty :description="crossPlaceholderDescription" :image-size="96" />
-            <p class="ac-cross-main__hint">{{ crossPlaceholderHint }}</p>
+            <el-empty
+              :description="crossPlaceholderDescription"
+              :image-size="96"
+            />
+            <p class="ac-cross-main__hint">
+              {{ crossPlaceholderHint }}
+            </p>
           </div>
 
           <div class="bottom-telemetry-zone">
             <div class="bottom-telemetry-zone__row">
-              <el-tabs v-model="hub.bottomTab" class="bottom-tabs bottom-telemetry-zone__tabs">
-                <el-tab-pane label="Telemetry（遥测流）" name="telemetry">
+              <el-tabs
+                v-model="hub.bottomTab"
+                class="bottom-tabs bottom-telemetry-zone__tabs"
+              >
+                <el-tab-pane
+                  label="Telemetry（遥测流）"
+                  name="telemetry"
+                >
                   <div class="bottom-pane bottom-pane--terminal">
                     <TerminalTerminal
                       ref="hubTerminalRef"
@@ -143,7 +191,10 @@ const crossPlaceholderHint = computed(() =>
                     />
                   </div>
                 </el-tab-pane>
-                <el-tab-pane label="Artifacts（产物）" name="artifacts">
+                <el-tab-pane
+                  label="Artifacts（产物）"
+                  name="artifacts"
+                >
                   <div class="bottom-pane bottom-pane--artifacts">
                     <el-empty
                       description="Artifacts：报告截图、日志包、结构化导出将汇总于此（执行结束后可从 Telemetry 侧栏进入 Analysis Lab）"
@@ -175,21 +226,37 @@ const crossPlaceholderHint = computed(() =>
           </button>
         </div>
 
-        <aside v-show="hub.inspectorOpen" class="workstation-panel__col workstation-panel__col--inspector">
+        <aside
+          v-show="hub.inspectorOpen"
+          class="workstation-panel__col workstation-panel__col--inspector"
+        >
           <div class="inspector-head">
             <span class="inspector-head__title">{{ hub.inspectorHeadTitle }}</span>
-            <el-button text type="primary" class="inspector-head__collapse" @click="hub.inspectorOpen = false">
+            <el-button
+              text
+              type="primary"
+              class="inspector-head__collapse"
+              @click="hub.inspectorOpen = false"
+            >
               折叠
             </el-button>
           </div>
           <div class="inspector-body">
             <section class="inspector-block">
-              <h4 class="inspector-block__h">节点元数据 (Node Metadata)</h4>
-              <p class="inspector-block__placeholder">{{ hub.inspectorMetadataPlaceholder }}</p>
+              <h4 class="inspector-block__h">
+                节点元数据 (Node Metadata)
+              </h4>
+              <p class="inspector-block__placeholder">
+                {{ hub.inspectorMetadataPlaceholder }}
+              </p>
             </section>
             <section class="inspector-block">
-              <h4 class="inspector-block__h">最近一次 Telemetry 状态</h4>
-              <p class="inspector-block__mono inspector-block__mono--status">{{ hub.lastTelemetryStatusDisplay }}</p>
+              <h4 class="inspector-block__h">
+                最近一次 Telemetry 状态
+              </h4>
+              <p class="inspector-block__mono inspector-block__mono--status">
+                {{ hub.lastTelemetryStatusDisplay }}
+              </p>
             </section>
           </div>
         </aside>

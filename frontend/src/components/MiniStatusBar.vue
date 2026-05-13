@@ -1,17 +1,36 @@
 <template>
-  <div class="mini-status-bar" role="status" aria-live="polite">
+  <div
+    class="mini-status-bar"
+    role="status"
+    aria-live="polite"
+  >
     <div class="mini-status-bar__inner">
-      <span class="mini-status-bar__sep" aria-hidden="true" />
-      <span class="mini-status-bar__item" title="当前项目">
+      <span
+        class="mini-status-bar__sep"
+        aria-hidden="true"
+      />
+      <span
+        class="mini-status-bar__item"
+        title="当前项目"
+      >
         <span class="mini-status-bar__key">PROJ</span>
         <span class="mini-status-bar__val">{{ projectLabel }}</span>
       </span>
-      <span class="mini-status-bar__sep" aria-hidden="true" />
-      <span class="mini-status-bar__item" title="当前测试环境">
+      <span
+        class="mini-status-bar__sep"
+        aria-hidden="true"
+      />
+      <span
+        class="mini-status-bar__item"
+        title="当前测试环境"
+      >
         <span class="mini-status-bar__key">ENV</span>
         <span class="mini-status-bar__val">{{ envLabel }}</span>
       </span>
-      <span class="mini-status-bar__sep" aria-hidden="true" />
+      <span
+        class="mini-status-bar__sep"
+        aria-hidden="true"
+      />
       <span
         class="mini-status-bar__item mini-status-bar__item--link"
         :title="linkTitle"
@@ -29,13 +48,20 @@
         <span class="mini-status-bar__val">{{ linkText }}</span>
       </span>
       <template v-if="hostSupported">
-        <span class="mini-status-bar__sep" aria-hidden="true" />
-        <span class="mini-status-bar__item" title="后端进程所在主机负载（本地开发）">
+        <span
+          class="mini-status-bar__sep"
+          aria-hidden="true"
+        />
+        <span
+          class="mini-status-bar__item"
+          title="后端进程所在主机负载（本地开发）"
+        >
           <span class="mini-status-bar__key">LOAD</span>
-          <span class="mini-status-bar__val"
-            >CPU {{ hostCpu }}% · MEM {{ hostMem }}%</span
-          >
-          <span v-if="hostCpuCount" class="mini-status-bar__meta">({{ hostCpuCount }}c)</span>
+          <span class="mini-status-bar__val">CPU {{ hostCpu }}% · MEM {{ hostMem }}%</span>
+          <span
+            v-if="hostCpuCount"
+            class="mini-status-bar__meta"
+          >({{ hostCpuCount }}c)</span>
         </span>
       </template>
       <span class="mini-status-bar__fill" />

@@ -1,8 +1,12 @@
 <template>
   <div class="user-center cyber-page">
     <header class="uc-header">
-      <h1 class="uc-title">个人中心</h1>
-      <p class="uc-sub">基础资料可即时保存；用户名与登录密码变更需管理员邮件审批。</p>
+      <h1 class="uc-title">
+        个人中心
+      </h1>
+      <p class="uc-sub">
+        基础资料可即时保存；用户名与登录密码变更需管理员邮件审批。
+      </p>
     </header>
 
     <!-- 基础信息 -->
@@ -20,35 +24,82 @@
             class="uc-avatar-input"
             accept="image/jpeg,image/png,image/webp,image/gif"
             @change="onAvatarFile"
-          />
-          <button type="button" class="uc-avatar" @click="avatarInputRef?.click()">
-            <img v-if="avatarPreview || profile.avatar_url" :src="avatarPreview || profile.avatar_url" alt="" />
-            <div v-else class="uc-avatar__placeholder">
-              <el-icon :size="36"><User /></el-icon>
+          >
+          <button
+            type="button"
+            class="uc-avatar"
+            @click="avatarInputRef?.click()"
+          >
+            <img
+              v-if="avatarPreview || profile.avatar_url"
+              :src="avatarPreview || profile.avatar_url"
+              alt=""
+            >
+            <div
+              v-else
+              class="uc-avatar__placeholder"
+            >
+              <el-icon :size="36">
+                <User />
+              </el-icon>
             </div>
             <span class="uc-avatar__edit">更换头像</span>
           </button>
-          <p class="uc-avatar-tip">点击选择图片，与下方资料一并保存</p>
+          <p class="uc-avatar-tip">
+            点击选择图片，与下方资料一并保存
+          </p>
         </div>
 
-        <el-form ref="basicFormRef" :model="basicForm" label-position="top" class="uc-form">
+        <el-form
+          ref="basicFormRef"
+          :model="basicForm"
+          label-position="top"
+          class="uc-form"
+        >
           <el-form-item label="显示名称">
-            <el-input v-model="basicForm.real_name" placeholder="真实姓名 / 显示名" class="uc-input" />
+            <el-input
+              v-model="basicForm.real_name"
+              placeholder="真实姓名 / 显示名"
+              class="uc-input"
+            />
           </el-form-item>
           <el-form-item label="手机号">
-            <el-input v-model="basicForm.phone_number" placeholder="手机号码" class="uc-input" />
+            <el-input
+              v-model="basicForm.phone_number"
+              placeholder="手机号码"
+              class="uc-input"
+            />
           </el-form-item>
           <el-form-item label="邮箱">
-            <el-input v-model="basicForm.email" placeholder="电子邮箱" class="uc-input" />
+            <el-input
+              v-model="basicForm.email"
+              placeholder="电子邮箱"
+              class="uc-input"
+            />
           </el-form-item>
           <el-form-item label="登录用户名（只读）">
-            <el-input v-model="profile.username" disabled class="uc-input uc-input--disabled" />
+            <el-input
+              v-model="profile.username"
+              disabled
+              class="uc-input uc-input--disabled"
+            />
           </el-form-item>
           <div class="uc-actions">
-            <el-button type="primary" class="uc-btn-primary" :loading="savingBasic" @click="saveBasic">
+            <el-button
+              type="primary"
+              class="uc-btn-primary"
+              :loading="savingBasic"
+              @click="saveBasic"
+            >
               保存资料
             </el-button>
-            <el-button class="uc-btn-ghost" :loading="loadingProfile" @click="loadAll">刷新</el-button>
+            <el-button
+              class="uc-btn-ghost"
+              :loading="loadingProfile"
+              @click="loadAll"
+            >
+              刷新
+            </el-button>
           </div>
         </el-form>
       </div>
@@ -63,11 +114,22 @@
 
       <div class="uc-security-grid">
         <div class="security-card">
-          <div class="security-card__icon"><el-icon><Key /></el-icon></div>
+          <div class="security-card__icon">
+            <el-icon><Key /></el-icon>
+          </div>
           <div class="security-card__body">
-            <h3 class="security-card__title">登录用户名</h3>
-            <p class="security-card__desc">修改后需管理员审核，审核通过后将更新为新的登录名。</p>
-            <div v-if="pendingStatus.pending_username" class="pending-badge">Pending Admin Approval</div>
+            <h3 class="security-card__title">
+              登录用户名
+            </h3>
+            <p class="security-card__desc">
+              修改后需管理员审核，审核通过后将更新为新的登录名。
+            </p>
+            <div
+              v-if="pendingStatus.pending_username"
+              class="pending-badge"
+            >
+              Pending Admin Approval
+            </div>
             <el-button
               class="uc-btn-outline"
               :disabled="pendingStatus.pending_username"
@@ -78,11 +140,22 @@
           </div>
         </div>
         <div class="security-card">
-          <div class="security-card__icon"><el-icon><Lock /></el-icon></div>
+          <div class="security-card__icon">
+            <el-icon><Lock /></el-icon>
+          </div>
           <div class="security-card__body">
-            <h3 class="security-card__title">登录密码</h3>
-            <p class="security-card__desc">新密码以安全形式提交，审批通过后生效。</p>
-            <div v-if="pendingStatus.pending_password" class="pending-badge">Pending Admin Approval</div>
+            <h3 class="security-card__title">
+              登录密码
+            </h3>
+            <p class="security-card__desc">
+              新密码以安全形式提交，审批通过后生效。
+            </p>
+            <div
+              v-if="pendingStatus.pending_password"
+              class="pending-badge"
+            >
+              Pending Admin Approval
+            </div>
             <el-button
               class="uc-btn-outline"
               :disabled="pendingStatus.pending_password"
@@ -111,14 +184,31 @@
       <p class="uc-security-notice-zh">
         安全提示：修改用户名或密码需经管理员审批，系统将向管理员发送邮件通知。
       </p>
-      <el-form label-position="top" class="uc-modal-form">
+      <el-form
+        label-position="top"
+        class="uc-modal-form"
+      >
         <el-form-item label="新用户名">
-          <el-input v-model="usernameForm.new_username" placeholder="请输入新用户名" class="uc-input" />
+          <el-input
+            v-model="usernameForm.new_username"
+            placeholder="请输入新用户名"
+            class="uc-input"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button class="uc-btn-ghost" @click="usernameModalVisible = false">取消</el-button>
-        <el-button type="primary" class="uc-btn-primary" :loading="submittingSensitive" @click="submitUsername">
+        <el-button
+          class="uc-btn-ghost"
+          @click="usernameModalVisible = false"
+        >
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          class="uc-btn-primary"
+          :loading="submittingSensitive"
+          @click="submitUsername"
+        >
           提交申请
         </el-button>
       </template>
@@ -140,17 +230,42 @@
       <p class="uc-security-notice-zh">
         安全提示：修改用户名或密码需经管理员审批，系统将向管理员发送邮件通知。
       </p>
-      <el-form label-position="top" class="uc-modal-form">
+      <el-form
+        label-position="top"
+        class="uc-modal-form"
+      >
         <el-form-item label="新密码">
-          <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="至少 6 位" class="uc-input" />
+          <el-input
+            v-model="passwordForm.new_password"
+            type="password"
+            show-password
+            placeholder="至少 6 位"
+            class="uc-input"
+          />
         </el-form-item>
         <el-form-item label="确认新密码">
-          <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="再次输入" class="uc-input" />
+          <el-input
+            v-model="passwordForm.confirm_password"
+            type="password"
+            show-password
+            placeholder="再次输入"
+            class="uc-input"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button class="uc-btn-ghost" @click="passwordModalVisible = false">取消</el-button>
-        <el-button type="primary" class="uc-btn-primary" :loading="submittingSensitive" @click="submitPasswordRequest">
+        <el-button
+          class="uc-btn-ghost"
+          @click="passwordModalVisible = false"
+        >
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          class="uc-btn-primary"
+          :loading="submittingSensitive"
+          @click="submitPasswordRequest"
+        >
           提交申请
         </el-button>
       </template>

@@ -2,32 +2,71 @@
   <div class="cyber-page admin-list-page env-management-page">
     <div class="env-content-shell">
       <div class="env-stat-row">
-        <div v-for="card in statCards" :key="card.key" class="env-stat-card">
+        <div
+          v-for="card in statCards"
+          :key="card.key"
+          class="env-stat-card"
+        >
           <div class="env-stat-card__head">
             <span class="env-stat-card__icon">
               <el-icon><component :is="card.icon" /></el-icon>
             </span>
             <span class="env-stat-card__label">{{ card.label }}</span>
           </div>
-          <div class="env-stat-card__value tech-metric">{{ card.value }}</div>
-          <div class="env-stat-card__sub">{{ card.sub }}</div>
+          <div class="env-stat-card__value tech-metric">
+            {{ card.value }}
+          </div>
+          <div class="env-stat-card__sub">
+            {{ card.sub }}
+          </div>
           <div class="env-stat-card__bar">
-            <span class="env-stat-card__bar-fill" :style="{ width: card.barWidth, background: card.barColor }" />
+            <span
+              class="env-stat-card__bar-fill"
+              :style="{ width: card.barWidth, background: card.barColor }"
+            />
           </div>
         </div>
       </div>
 
-      <el-card class="admin-list-card env-cyber-card" shadow="never">
+      <el-card
+        class="admin-list-card env-cyber-card"
+        shadow="never"
+      >
         <div class="admin-toolbar-row env-toolbar-row">
           <div class="admin-toolbar-row__left env-toolbar-left">
-            <el-button type="primary" class="env-primary-btn" @click="openCreateDialog">新增环境</el-button>
+            <el-button
+              type="primary"
+              class="env-primary-btn"
+              @click="openCreateDialog"
+            >
+              新增环境
+            </el-button>
           </div>
         </div>
 
-        <el-table :data="envList" border stripe class="admin-data-table env-data-table" v-loading="loading">
-          <el-table-column prop="name" label="环境名称" min-width="140" />
-          <el-table-column prop="env_type" label="环境类型" width="120" />
-          <el-table-column prop="base_url" label="Base URL" min-width="220" show-overflow-tooltip />
+        <el-table
+          v-loading="loading"
+          :data="envList"
+          border
+          stripe
+          class="admin-data-table env-data-table"
+        >
+          <el-table-column
+            prop="name"
+            label="环境名称"
+            min-width="140"
+          />
+          <el-table-column
+            prop="env_type"
+            label="环境类型"
+            width="120"
+          />
+          <el-table-column
+            prop="base_url"
+            label="Base URL"
+            min-width="220"
+            show-overflow-tooltip
+          />
           <el-table-column
             prop="health_check_path"
             label="健康检查路径"
@@ -38,10 +77,23 @@
               <span>{{ row.health_check_path || "—" }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
-          <el-table-column label="操作" width="240" align="center">
+          <el-table-column
+            prop="description"
+            label="描述"
+            min-width="160"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            label="操作"
+            width="240"
+            align="center"
+          >
             <template #default="{ row }">
-              <TableActionGroup :row="row" :actions="envTableActions(row)" @action="handleEnvTableAction" />
+              <TableActionGroup
+                :row="row"
+                :actions="envTableActions(row)"
+                @action="handleEnvTableAction"
+              />
             </template>
           </el-table-column>
         </el-table>
@@ -55,21 +107,59 @@
       class="cyber-dialog-dark"
       destroy-on-close
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
-        <el-form-item label="环境名称" prop="name">
-          <el-input v-model="form.name" placeholder="例如：测试环境-A" />
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="96px"
+      >
+        <el-form-item
+          label="环境名称"
+          prop="name"
+        >
+          <el-input
+            v-model="form.name"
+            placeholder="例如：测试环境-A"
+          />
         </el-form-item>
-        <el-form-item label="环境类型" prop="env_type">
-          <el-select v-model="form.env_type" class="w-full">
-            <el-option label="开发环境" value="dev" />
-            <el-option label="测试环境" value="test" />
-            <el-option label="预发环境" value="staging" />
-            <el-option label="生产镜像" value="prod" />
-            <el-option label="自定义" value="custom" />
+        <el-form-item
+          label="环境类型"
+          prop="env_type"
+        >
+          <el-select
+            v-model="form.env_type"
+            class="w-full"
+          >
+            <el-option
+              label="开发环境"
+              value="dev"
+            />
+            <el-option
+              label="测试环境"
+              value="test"
+            />
+            <el-option
+              label="预发环境"
+              value="staging"
+            />
+            <el-option
+              label="生产镜像"
+              value="prod"
+            />
+            <el-option
+              label="自定义"
+              value="custom"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="Base URL" prop="base_url">
-          <el-input v-model="form.base_url" placeholder="https://api.example.com" />
+        <el-form-item
+          label="Base URL"
+          prop="base_url"
+        >
+          <el-input
+            v-model="form.base_url"
+            placeholder="https://api.example.com"
+          />
         </el-form-item>
         <el-form-item label="健康检查路径">
           <el-input
@@ -83,16 +173,28 @@
             v-model="dbConfigText"
             type="textarea"
             :rows="5"
-            placeholder='{"host":"127.0.0.1","port":3306,"user":"root","password":"***"}'
+            placeholder="{&quot;host&quot;:&quot;127.0.0.1&quot;,&quot;port&quot;:3306,&quot;user&quot;:&quot;root&quot;,&quot;password&quot;:&quot;***&quot;}"
           />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" />
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="3"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="onSubmit">保存</el-button>
+        <el-button @click="dialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="onSubmit"
+        >
+          保存
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -203,7 +305,7 @@ const statCards = computed(() => [
     value: `${healthyRate.value}%`,
     sub: "连通性健康率",
     barWidth: `${Math.max(10, healthyRate.value)}%`,
-    barColor: "linear-gradient(90deg, #22d3ee, #818cf8, #c026fc)",
+    barColor: "linear-gradient(90deg, #22d3ee, #22d3ee, #a78bfa)",
     icon: Opportunity,
   },
   {
@@ -547,7 +649,7 @@ onMounted(fetchEnvironments);
 :deep(.env-primary-btn.el-button--primary) {
   border-color: rgba(34, 211, 238, 0.42);
   color: #e0f2fe;
-  background: linear-gradient(120deg, #00d8ff 0%, #3b82f6 52%, #a855f7 100%);
+  background: linear-gradient(120deg, #00d8ff 0%, #06b6d4 52%, #a78bfa 100%);
   box-shadow:
     0 0 0 1px rgba(34, 211, 238, 0.18),
     0 0 18px rgba(56, 189, 248, 0.25),

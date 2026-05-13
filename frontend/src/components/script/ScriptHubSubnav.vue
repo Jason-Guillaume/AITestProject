@@ -1,8 +1,28 @@
 <template>
   <div class="script-hub-subnav">
-    <el-button v-if="showScriptHub" text type="primary" @click="goScriptHub">返回自动化指挥中心</el-button>
-    <el-button text type="primary" @click="goDashboard">返回工作台</el-button>
-    <el-button v-if="showWebUiTrash" text type="warning" @click="goWebUiTrash">Web UI 回收站</el-button>
+    <el-button
+      v-if="showScriptHub"
+      text
+      type="primary"
+      @click="goScriptHub"
+    >
+      返回自动化指挥中心
+    </el-button>
+    <el-button
+      text
+      type="primary"
+      @click="goDashboard"
+    >
+      返回工作台
+    </el-button>
+    <el-button
+      v-if="showWebUiTrash"
+      text
+      type="warning"
+      @click="goWebUiTrash"
+    >
+      Web UI 回收站
+    </el-button>
   </div>
 </template>
 

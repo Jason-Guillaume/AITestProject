@@ -1,17 +1,34 @@
 <template>
   <div class="page-wrap cyber-page admin-list-page">
-    <el-card class="admin-list-card" shadow="never">
+    <el-card
+      class="admin-list-card"
+      shadow="never"
+    >
       <div class="admin-toolbar-row">
         <div class="admin-toolbar-row__left">
-          <el-button type="primary" @click="showDialog = true">
+          <el-button
+            type="primary"
+            @click="showDialog = true"
+          >
             <el-icon><Plus /></el-icon> 新增测试设计
           </el-button>
-          <el-button class="filter-btn" :type="isRecycleMode ? 'warning' : ''" @click="toggleRecycleMode">
+          <el-button
+            class="filter-btn"
+            :type="isRecycleMode ? 'warning' : ''"
+            @click="toggleRecycleMode"
+          >
             {{ isRecycleMode ? '返回列表' : '回收站' }}
           </el-button>
-          <el-button class="filter-btn" :type="isSelectMode ? 'info' : ''" @click="toggleSelectMode">
+          <el-button
+            class="filter-btn"
+            :type="isSelectMode ? 'info' : ''"
+            @click="toggleSelectMode"
+          >
             {{ isSelectMode ? '取消选择' : '选择' }}
-            <span v-if="isSelectMode && selectedIds.length" style="margin-left: 6px">（{{ selectedIds.length }}）</span>
+            <span
+              v-if="isSelectMode && selectedIds.length"
+              style="margin-left: 6px"
+            >（{{ selectedIds.length }}）</span>
           </el-button>
 
           <el-button
@@ -59,68 +76,189 @@
           >
             <el-button plain>
               批量评审状态
-              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              <el-icon class="el-icon--right">
+                <ArrowDown />
+              </el-icon>
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="1">未评审</el-dropdown-item>
-                <el-dropdown-item command="2">评审中</el-dropdown-item>
-                <el-dropdown-item command="3">已评审</el-dropdown-item>
+                <el-dropdown-item command="1">
+                  未评审
+                </el-dropdown-item>
+                <el-dropdown-item command="2">
+                  评审中
+                </el-dropdown-item>
+                <el-dropdown-item command="3">
+                  已评审
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
         </div>
         <div class="admin-toolbar-row__right">
-          <el-input v-model="searchKw" placeholder="请输入测试设计名称" clearable class="search-input">
-            <template #suffix><el-icon><Search /></el-icon></template>
+          <el-input
+            v-model="searchKw"
+            placeholder="请输入测试设计名称"
+            clearable
+            class="search-input"
+          >
+            <template #suffix>
+              <el-icon><Search /></el-icon>
+            </template>
           </el-input>
         </div>
       </div>
 
       <div class="admin-table-panel">
         <el-table
-          :data="filteredList"
           v-loading="loading"
+          :data="filteredList"
           stripe
           border
           class="admin-data-table"
           size="default"
           @selection-change="onSelectionChange"
         >
-          <el-table-column v-if="isSelectMode" type="selection" width="44" fixed="left" />
-          <el-table-column label="测试设计名称" min-width="180" align="left">
+          <el-table-column
+            v-if="isSelectMode"
+            type="selection"
+            width="44"
+            fixed="left"
+          />
+          <el-table-column
+            label="测试设计名称"
+            min-width="180"
+            align="left"
+          >
             <template #default="{ row }">
-              <el-button link type="primary" @click="router.push(`/test-design/${row.id}`)">{{ row.design_name }}</el-button>
+              <el-button
+                link
+                type="primary"
+                @click="router.push(`/test-design/${row.id}`)"
+              >
+                {{ row.design_name }}
+              </el-button>
             </template>
           </el-table-column>
-          <el-table-column prop="req_count" label="需求数量" min-width="112" width="112" align="center" />
-          <el-table-column prop="point_count" label="测试点数量" min-width="128" width="128" align="center" />
-          <el-table-column prop="case_count" label="用例数量" min-width="112" width="112" align="center" />
-          <el-table-column label="评审状态" min-width="120" width="120" align="center">
+          <el-table-column
+            prop="req_count"
+            label="需求数量"
+            min-width="112"
+            width="112"
+            align="center"
+          />
+          <el-table-column
+            prop="point_count"
+            label="测试点数量"
+            min-width="128"
+            width="128"
+            align="center"
+          />
+          <el-table-column
+            prop="case_count"
+            label="用例数量"
+            min-width="112"
+            width="112"
+            align="center"
+          />
+          <el-table-column
+            label="评审状态"
+            min-width="120"
+            width="120"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag :type="reviewTagType(row.review_status)" size="small">{{ reviewLabel(row.review_status) }}</el-tag>
+              <el-tag
+                :type="reviewTagType(row.review_status)"
+                size="small"
+              >
+                {{ reviewLabel(row.review_status) }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="归档状态" min-width="120" width="120" align="center">
+          <el-table-column
+            label="归档状态"
+            min-width="120"
+            width="120"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag :type="row.archive_status === 2 ? 'success' : 'warning'" size="small">
+              <el-tag
+                :type="row.archive_status === 2 ? 'success' : 'warning'"
+                size="small"
+              >
                 {{ row.archive_status === 2 ? '已归档' : '未归档' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="updater_name" label="更新人" min-width="112" width="112" align="center" show-overflow-tooltip />
-          <el-table-column label="更新时间" min-width="184" width="184" align="center" class-name="col-datetime">
-            <template #default="{ row }">{{ formatDate(row.update_time) }}</template>
-          </el-table-column>
-          <el-table-column prop="creator_name" label="创建人" min-width="112" width="112" align="center" show-overflow-tooltip />
-          <el-table-column label="创建时间" min-width="184" width="184" align="center" class-name="col-datetime">
-            <template #default="{ row }">{{ formatDate(row.create_time) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" min-width="216" width="216" fixed="right" align="center">
+          <el-table-column
+            prop="updater_name"
+            label="更新人"
+            min-width="112"
+            width="112"
+            align="center"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            label="更新时间"
+            min-width="184"
+            width="184"
+            align="center"
+            class-name="col-datetime"
+          >
             <template #default="{ row }">
-              <div v-if="isRecycleMode" class="recycle-row-actions">
-                <el-button link type="success" size="small" :disabled="isSelectMode" @click="restoreRow(row)">恢复</el-button>
-                <el-button link type="danger" size="small" :disabled="isSelectMode" @click="hardDeleteRow(row)">彻底删除</el-button>
+              {{ formatDate(row.update_time) }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="creator_name"
+            label="创建人"
+            min-width="112"
+            width="112"
+            align="center"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            label="创建时间"
+            min-width="184"
+            width="184"
+            align="center"
+            class-name="col-datetime"
+          >
+            <template #default="{ row }">
+              {{ formatDate(row.create_time) }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="操作"
+            min-width="216"
+            width="216"
+            fixed="right"
+            align="center"
+          >
+            <template #default="{ row }">
+              <div
+                v-if="isRecycleMode"
+                class="recycle-row-actions"
+              >
+                <el-button
+                  link
+                  type="success"
+                  size="small"
+                  :disabled="isSelectMode"
+                  @click="restoreRow(row)"
+                >
+                  恢复
+                </el-button>
+                <el-button
+                  link
+                  type="danger"
+                  size="small"
+                  :disabled="isSelectMode"
+                  @click="hardDeleteRow(row)"
+                >
+                  彻底删除
+                </el-button>
               </div>
               <TableActionGroup
                 v-else
@@ -145,15 +283,39 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="showDialog" title="新增测试设计" width="440px" class="cyber-dialog-dark">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
-        <el-form-item label="设计名称" prop="design_name">
-          <el-input v-model="form.design_name" placeholder="请输入设计名称" />
+    <el-dialog
+      v-model="showDialog"
+      title="新增测试设计"
+      width="440px"
+      class="cyber-dialog-dark"
+    >
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="90px"
+      >
+        <el-form-item
+          label="设计名称"
+          prop="design_name"
+        >
+          <el-input
+            v-model="form.design_name"
+            placeholder="请输入设计名称"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submit">确定</el-button>
+        <el-button @click="showDialog = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="submit"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>

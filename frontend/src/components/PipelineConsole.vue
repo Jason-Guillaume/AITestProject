@@ -2,13 +2,32 @@
   <div class="pipeline-console">
     <header class="pc-header">
       <span class="pc-title">PIPELINE // LOG STREAM</span>
-      <span v-if="pipelineId" class="pc-meta">
+      <span
+        v-if="pipelineId"
+        class="pc-meta"
+      >
         ID {{ pipelineId }} · {{ statusLabel }} · {{ modeLabel }}
       </span>
     </header>
-    <div class="pc-panel" ref="logPanelRef" role="log" aria-live="polite">
-      <div v-for="(line, idx) in lines" :key="idx" class="pc-line">{{ line }}</div>
-      <div v-if="!lines.length" class="pc-empty">等待日志输出…</div>
+    <div
+      ref="logPanelRef"
+      class="pc-panel"
+      role="log"
+      aria-live="polite"
+    >
+      <div
+        v-for="(line, idx) in lines"
+        :key="idx"
+        class="pc-line"
+      >
+        {{ line }}
+      </div>
+      <div
+        v-if="!lines.length"
+        class="pc-empty"
+      >
+        等待日志输出…
+      </div>
     </div>
   </div>
 </template>

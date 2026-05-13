@@ -1,4 +1,5 @@
-from common.views import *
+from common.views import BaseModelViewSet
+from common.mixins import RecyclableMixin
 from common.services.audit import record_execute_audit
 from execution.models import *
 from execution.serialize import *
@@ -19,15 +20,17 @@ from django.http import StreamingHttpResponse, JsonResponse
 from django.views import View
 from datetime import timedelta, datetime, time
 from django.db import transaction
-from django.db.models import Avg, Count, DateField, Q
+from django.db.models import Avg, Case, Count, DateField, Q, When
 from django.db.models.functions import TruncDate
 
 import logging
 import uuid
 import json
 import asyncio
+import secrets
 from asgiref.sync import sync_to_async
 from typing import List
+from django.contrib.auth import get_user_model
 
 from execution.services.scenario_generator import (
     build_scenario_draft_from_curl_list,
@@ -37,6 +40,8 @@ from common.services.audit import record_audit_event
 from common.models import AuditEvent
 
 logger = logging.getLogger(__name__)
+
+User = get_user_model()
 
 
 class ApiScenarioViewSet(BaseModelViewSet):
@@ -365,6 +370,15 @@ class ApiScenarioStepRunViewSet(BaseModelViewSet):
         return qs
 
 
+class SseTicketAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ticket = secrets.token_urlsafe(32)
+        cache.set(f"sse_ticket:{ticket}", request.user.pk, timeout=30)
+        return Response({"ticket": ticket})
+
+
 class DashboardStreamView(View):
     """
     Dashboard SSE 事件流（推送刷新信号）。
@@ -376,6 +390,15 @@ class DashboardStreamView(View):
         user = getattr(request, "user", None)
         if user and user.is_authenticated:
             return user
+        ticket = (request.GET.get("ticket") or "").strip()
+        if ticket:
+            uid = cache.get(f"sse_ticket:{ticket}")
+            if uid:
+                cache.delete(f"sse_ticket:{ticket}")
+                try:
+                    return User.objects.get(pk=uid, is_active=True)
+                except User.DoesNotExist:
+                    return None
         token_key = (request.GET.get("token") or "").strip()
         if not token_key:
             auth_header = request.META.get("HTTP_AUTHORIZATION", "")
@@ -405,13 +428,33 @@ class DashboardStreamView(View):
 
         async def event_stream():
             yield "retry: 3000\n\n"
+            last_heartbeat = asyncio.get_event_loop().time()
             while True:
-                payload = {
-                    "type": "dashboard_tick",
-                    "ts": timezone.now().isoformat(),
-                    "project_id": project_id,
-                }
-                yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                now = asyncio.get_event_loop().time()
+                if now - last_heartbeat >= 30:
+                    payload = {
+                        "type": "dashboard_heartbeat",
+                        "ts": timezone.now().isoformat(),
+                        "project_id": project_id,
+                    }
+                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                    last_heartbeat = now
+                try:
+                    from django.core.cache import cache as sync_cache
+                    signal_key = f"dashboard_signal:{project_id or 'all'}"
+                    signal = await sync_to_async(sync_cache.get)(signal_key)
+                    if signal:
+                        await sync_to_async(sync_cache.delete)(signal_key)
+                        payload = {
+                            "type": "dashboard_update",
+                            "ts": timezone.now().isoformat(),
+                            "project_id": project_id,
+                            "signal": signal,
+                        }
+                        yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                        last_heartbeat = now
+                except Exception:
+                    pass
                 await asyncio.sleep(3)
 
         response = StreamingHttpResponse(
@@ -457,7 +500,7 @@ class DashboardHostMetricsAPIView(APIView):
             return Response({"success": True, "supported": False})
 
 
-class TestPlanViewSet(BaseModelViewSet):
+class TestPlanViewSet(RecyclableMixin, BaseModelViewSet):
     queryset = TestPlan.objects.all().prefetch_related("testers")
     serializer_class = TestPlanSerializer
 
@@ -484,30 +527,6 @@ class TestPlanViewSet(BaseModelViewSet):
                 qs = self._apply_member_scope(qs, user)
             return qs.order_by("-update_time", "-id")
         return super().get_queryset()
-
-    def _parse_id_list(self, raw_ids):
-        if raw_ids is None:
-            raise ValidationError({"msg": "ids 必填", "code": 400, "data": None})
-        if not isinstance(raw_ids, list):
-            raise ValidationError({"msg": "ids 必须为数组", "code": 400, "data": None})
-        ids = []
-        for x in raw_ids:
-            try:
-                ids.append(int(x))
-            except (TypeError, ValueError):
-                continue
-        ids = [i for i in ids if i > 0]
-        if not ids:
-            raise ValidationError({"msg": "ids 不能为空", "code": 400, "data": None})
-        # 去重但保持顺序
-        seen = set()
-        uniq = []
-        for i in ids:
-            if i in seen:
-                continue
-            seen.add(i)
-            uniq.append(i)
-        return uniq
 
     @action(detail=False, methods=["post"], url_path="batch-copy")
     def batch_copy(self, request):
@@ -657,124 +676,9 @@ class TestPlanViewSet(BaseModelViewSet):
             }
         )
 
-    @action(detail=False, methods=["get"], url_path="recycle")
-    def recycle(self, request):
-        """回收站列表：等价于 ?recycle=1。"""
-        qp = request.query_params
-        mutable = getattr(qp, "_mutable", False)
-        qp._mutable = True
-        qp["recycle"] = "1"
-        try:
-            return self.list(request)
-        finally:
-            qp.pop("recycle", None)
-            qp._mutable = mutable
-
-    @action(detail=True, methods=["post"], url_path="restore")
-    def restore(self, request, pk=None):
-        """回收站恢复：仅允许恢复 is_deleted=True 的记录。"""
-        obj = get_object_or_404(TestPlan.objects.filter(is_deleted=True), pk=pk)
-        obj.is_deleted = False
-        obj.save(update_fields=["is_deleted", "update_time"])
-        return Response({"success": True, "id": int(obj.id)})
-
-    @action(detail=False, methods=["post"], url_path="bulk-soft-delete")
-    def bulk_soft_delete(self, request):
-        """批量软删除：body { ids: [] }。"""
-        if not isinstance(request.data, dict):
-            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
-        ids = self._parse_id_list(request.data.get("ids"))
-        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
-        found_ids = list(qs.values_list("id", flat=True))
-        if not found_ids:
-            return Response({"success": True, "deleted": 0, "skipped": len(ids), "missing_ids": ids})
-        with transaction.atomic():
-            updated = qs.update(is_deleted=True)
-        missing = [i for i in ids if i not in set(found_ids)]
-        return Response({"success": True, "deleted": int(updated), "skipped": len(missing), "missing_ids": missing})
-
-    @action(detail=False, methods=["post"], url_path="bulk-restore")
-    def bulk_restore(self, request):
-        """回收站批量恢复：body { ids: [] }。"""
-        if not isinstance(request.data, dict):
-            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
-        ids = self._parse_id_list(request.data.get("ids"))
-        user = getattr(request, "user", None)
-        qs = TestPlan.objects.filter(id__in=ids, is_deleted=True)
-        if (
-            self.enable_data_scope
-            and user
-            and getattr(user, "is_authenticated", False)
-            and not self._is_admin_user(user)
-        ):
-            qs = self._apply_member_scope(qs, user)
-        found_ids = list(qs.values_list("id", flat=True))
-        if not found_ids:
-            return Response({"success": True, "restored": 0, "skipped": len(ids), "missing_ids": ids})
-        with transaction.atomic():
-            updated = qs.update(is_deleted=False)
-        missing = [i for i in ids if i not in set(found_ids)]
-        return Response({"success": True, "restored": int(updated), "skipped": len(missing), "missing_ids": missing})
-
-    @action(detail=True, methods=["post"], url_path="hard-delete")
-    def hard_delete(self, request, pk=None):
-        """回收站彻底删除：仅允许删除 is_deleted=True 的记录。"""
-        obj = get_object_or_404(TestPlan.objects.filter(is_deleted=True), pk=pk)
-        user = getattr(request, "user", None)
-        before = obj
-        obj.delete()
-        try:
-            record_audit_event(
-                action=AuditEvent.ACTION_DELETE,
-                actor=user,
-                instance=before,
-                request=request,
-                before=before,
-                after=None,
-            )
-        except Exception:
-            pass
-        return Response({"success": True})
-
-    @action(detail=False, methods=["post"], url_path="bulk-hard-delete")
-    def bulk_hard_delete(self, request):
-        """回收站批量彻底删除：body { ids: [] }，仅对 is_deleted=True 生效。"""
-        if not isinstance(request.data, dict):
-            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
-        ids = self._parse_id_list(request.data.get("ids"))
-        user = getattr(request, "user", None)
-        qs = TestPlan.objects.filter(id__in=ids, is_deleted=True).order_by("id")
-        if (
-            self.enable_data_scope
-            and user
-            and getattr(user, "is_authenticated", False)
-            and not self._is_admin_user(user)
-        ):
-            qs = self._apply_member_scope(qs, user)
-        deleted = 0
-        errors = []
-        for obj in qs.iterator(chunk_size=200):
-            try:
-                before = obj
-                obj.delete()
-                deleted += 1
-                try:
-                    record_audit_event(
-                        action=AuditEvent.ACTION_DELETE,
-                        actor=user,
-                        instance=before,
-                        request=request,
-                        before=before,
-                        after=None,
-                    )
-                except Exception:
-                    pass
-            except Exception as e:
-                errors.append({"id": int(getattr(obj, "id", 0) or 0), "error": str(e)})
-        return Response({"success": len(errors) == 0, "count": deleted, "errors": errors})
 
 
-class TestReportViewSet(BaseModelViewSet):
+class TestReportViewSet(RecyclableMixin, BaseModelViewSet):
     queryset = TestReport.objects.all()
     serializer_class = TestReportSerializer
 
@@ -801,29 +705,6 @@ class TestReportViewSet(BaseModelViewSet):
                 qs = self._apply_member_scope(qs, user)
             return qs.order_by("-update_time", "-id")
         return super().get_queryset()
-
-    def _parse_id_list(self, raw_ids):
-        if raw_ids is None:
-            raise ValidationError({"msg": "ids 必填", "code": 400, "data": None})
-        if not isinstance(raw_ids, list):
-            raise ValidationError({"msg": "ids 必须为数组", "code": 400, "data": None})
-        ids = []
-        for x in raw_ids:
-            try:
-                ids.append(int(x))
-            except (TypeError, ValueError):
-                continue
-        ids = [i for i in ids if i > 0]
-        if not ids:
-            raise ValidationError({"msg": "ids 不能为空", "code": 400, "data": None})
-        seen = set()
-        uniq = []
-        for i in ids:
-            if i in seen:
-                continue
-            seen.add(i)
-            uniq.append(i)
-        return uniq
 
     @action(detail=False, methods=["post"], url_path="batch-delete")
     def batch_delete(self, request):
@@ -1084,121 +965,6 @@ class TestReportViewSet(BaseModelViewSet):
             }
         )
 
-    @action(detail=False, methods=["get"], url_path="recycle")
-    def recycle(self, request):
-        """回收站列表：等价于 ?recycle=1。"""
-        qp = request.query_params
-        mutable = getattr(qp, "_mutable", False)
-        qp._mutable = True
-        qp["recycle"] = "1"
-        try:
-            return self.list(request)
-        finally:
-            qp.pop("recycle", None)
-            qp._mutable = mutable
-
-    @action(detail=True, methods=["post"], url_path="restore")
-    def restore(self, request, pk=None):
-        """回收站恢复：仅允许恢复 is_deleted=True 的记录。"""
-        obj = get_object_or_404(TestReport.objects.filter(is_deleted=True), pk=pk)
-        obj.is_deleted = False
-        obj.save(update_fields=["is_deleted", "update_time"])
-        return Response({"success": True, "id": int(obj.id)})
-
-    @action(detail=False, methods=["post"], url_path="bulk-soft-delete")
-    def bulk_soft_delete(self, request):
-        """批量软删除：body { ids: [] }。"""
-        if not isinstance(request.data, dict):
-            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
-        ids = self._parse_id_list(request.data.get("ids"))
-        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
-        found_ids = list(qs.values_list("id", flat=True))
-        if not found_ids:
-            return Response({"success": True, "deleted": 0, "skipped": len(ids), "missing_ids": ids})
-        with transaction.atomic():
-            updated = qs.update(is_deleted=True)
-        missing = [i for i in ids if i not in set(found_ids)]
-        return Response({"success": True, "deleted": int(updated), "skipped": len(missing), "missing_ids": missing})
-
-    @action(detail=False, methods=["post"], url_path="bulk-restore")
-    def bulk_restore(self, request):
-        """回收站批量恢复：body { ids: [] }。"""
-        if not isinstance(request.data, dict):
-            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
-        ids = self._parse_id_list(request.data.get("ids"))
-        user = getattr(request, "user", None)
-        qs = TestReport.objects.filter(id__in=ids, is_deleted=True)
-        if (
-            self.enable_data_scope
-            and user
-            and getattr(user, "is_authenticated", False)
-            and not self._is_admin_user(user)
-        ):
-            qs = self._apply_member_scope(qs, user)
-        found_ids = list(qs.values_list("id", flat=True))
-        if not found_ids:
-            return Response({"success": True, "restored": 0, "skipped": len(ids), "missing_ids": ids})
-        with transaction.atomic():
-            updated = qs.update(is_deleted=False)
-        missing = [i for i in ids if i not in set(found_ids)]
-        return Response({"success": True, "restored": int(updated), "skipped": len(missing), "missing_ids": missing})
-
-    @action(detail=True, methods=["post"], url_path="hard-delete")
-    def hard_delete(self, request, pk=None):
-        """回收站彻底删除：仅允许删除 is_deleted=True 的记录。"""
-        obj = get_object_or_404(TestReport.objects.filter(is_deleted=True), pk=pk)
-        user = getattr(request, "user", None)
-        before = obj
-        obj.delete()
-        try:
-            record_audit_event(
-                action=AuditEvent.ACTION_DELETE,
-                actor=user,
-                instance=before,
-                request=request,
-                before=before,
-                after=None,
-            )
-        except Exception:
-            pass
-        return Response({"success": True})
-
-    @action(detail=False, methods=["post"], url_path="bulk-hard-delete")
-    def bulk_hard_delete(self, request):
-        """回收站批量彻底删除：body { ids: [] }，仅对 is_deleted=True 生效。"""
-        if not isinstance(request.data, dict):
-            raise ValidationError({"msg": "请求体必须为 JSON 对象", "code": 400, "data": None})
-        ids = self._parse_id_list(request.data.get("ids"))
-        user = getattr(request, "user", None)
-        qs = TestReport.objects.filter(id__in=ids, is_deleted=True).order_by("id")
-        if (
-            self.enable_data_scope
-            and user
-            and getattr(user, "is_authenticated", False)
-            and not self._is_admin_user(user)
-        ):
-            qs = self._apply_member_scope(qs, user)
-        deleted = 0
-        errors = []
-        for obj in qs.iterator(chunk_size=200):
-            try:
-                before = obj
-                obj.delete()
-                deleted += 1
-                try:
-                    record_audit_event(
-                        action=AuditEvent.ACTION_DELETE,
-                        actor=user,
-                        instance=before,
-                        request=request,
-                        before=before,
-                        after=None,
-                    )
-                except Exception:
-                    pass
-            except Exception as e:
-                errors.append({"id": int(getattr(obj, "id", 0) or 0), "error": str(e)})
-        return Response({"success": len(errors) == 0, "count": deleted, "errors": errors})
 
 
 class PerfTaskPagination(PageNumberPagination):
@@ -1476,6 +1242,12 @@ class DashboardSummaryAPIView(APIView):
             )
         )
 
+        uid = user.id if user and getattr(user, "is_authenticated", False) else "anon"
+        cache_key = f"dashboard_summary:{project_id}:{is_admin}:{uid}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
         def _case_scope_qs():
             qs = TestCase.objects.filter(is_deleted=False)
             if project_id:
@@ -1514,34 +1286,84 @@ class DashboardSummaryAPIView(APIView):
                     ).distinct()
             return qs
 
-        # --------------------------
-        # 统计卡片
-        # --------------------------
-        total_cases = _case_scope_qs().count()
+        def _report_scope_qs():
+            qs = TestReport.objects.filter(is_deleted=False)
+            if project_id:
+                try:
+                    pid = int(project_id)
+                except (TypeError, ValueError):
+                    return qs.none()
+                if hasattr(TestReport, "project_id"):
+                    return qs.filter(project_id=pid)
+                else:
+                    return qs.filter(plan__version__project_id=pid)
+            return qs
 
-        # 今日“执行用例”近似：今日生成的测试报告数量
         today = timezone.localdate()
+        yesterday = today - timedelta(days=1)
         start_today = timezone.make_aware(datetime.combine(today, time.min))
         end_today = start_today + timedelta(days=1)
-        today_reports_qs = TestReport.objects.filter(
-            is_deleted=False, create_time__gte=start_today, create_time__lt=end_today
-        )
-        if project_id:
-            try:
-                pid = int(project_id)
-            except (TypeError, ValueError):
-                pid = None
-            if pid is not None:
-                if hasattr(TestReport, "project_id"):
-                    today_reports_qs = today_reports_qs.filter(project_id=pid)
-                else:
-                    today_reports_qs = today_reports_qs.filter(
-                        plan__version__project_id=pid
-                    )
-        today_reports = today_reports_qs.count()
+        start_yesterday = timezone.make_aware(datetime.combine(yesterday, time.min))
+        end_yesterday = start_yesterday + timedelta(days=1)
 
-        # 未解决缺陷：状态非“已关闭”(4)
-        unresolved_defects = _defect_scope_qs().exclude(status=4).count()
+        # --------------------------
+        # 统计卡片 - 条件聚合合并为 3 次查询
+        # --------------------------
+        case_stats = _case_scope_qs().aggregate(
+            total_cases=Count("id"),
+            today_new_cases=Count(
+                Case(When(create_time__gte=start_today, create_time__lt=end_today, then=1))
+            ),
+            yesterday_new_cases=Count(
+                Case(When(create_time__gte=start_yesterday, create_time__lt=end_yesterday, then=1))
+            ),
+        )
+
+        report_stats = _report_scope_qs().aggregate(
+            today_reports=Count(
+                Case(When(create_time__gte=start_today, create_time__lt=end_today, then=1))
+            ),
+            yesterday_reports=Count(
+                Case(When(create_time__gte=start_yesterday, create_time__lt=end_yesterday, then=1))
+            ),
+        )
+
+        defect_stats = _defect_scope_qs().aggregate(
+            unresolved_defects=Count(Case(When(~Q(status=4), then=1))),
+            today_unresolved_new=Count(
+                Case(
+                    When(
+                        ~Q(status=4),
+                        create_time__gte=start_today,
+                        create_time__lt=end_today,
+                        then=1,
+                    )
+                )
+            ),
+            yesterday_unresolved_new=Count(
+                Case(
+                    When(
+                        ~Q(status=4),
+                        create_time__gte=start_yesterday,
+                        create_time__lt=end_yesterday,
+                        then=1,
+                    )
+                )
+            ),
+        )
+
+        total_cases = case_stats["total_cases"]
+        today_new_cases = case_stats["today_new_cases"]
+        yesterday_new_cases = case_stats["yesterday_new_cases"]
+        today_reports = report_stats["today_reports"]
+        yesterday_reports = report_stats["yesterday_reports"]
+        unresolved_defects = defect_stats["unresolved_defects"]
+        today_unresolved_new = defect_stats["today_unresolved_new"]
+        yesterday_unresolved_new = defect_stats["yesterday_unresolved_new"]
+
+        total_cases_delta = today_new_cases - yesterday_new_cases
+        today_reports_delta = today_reports - yesterday_reports
+        unresolved_defects_delta = today_unresolved_new - yesterday_unresolved_new
 
         completed_plans = TestPlan.objects.filter(is_deleted=False, plan_status=3)
         if completed_plans.exists():
@@ -1551,57 +1373,6 @@ class DashboardSummaryAPIView(APIView):
             )
         else:
             pass_rate = 0.0
-
-        # 对比昨日：同样采用“今日/昨日”口径的简单增量（用于前端展示）
-        yesterday = today - timedelta(days=1)
-        start_yesterday = timezone.make_aware(datetime.combine(yesterday, time.min))
-        end_yesterday = start_yesterday + timedelta(days=1)
-        yesterday_reports_qs = TestReport.objects.filter(
-            is_deleted=False,
-            create_time__gte=start_yesterday,
-            create_time__lt=end_yesterday,
-        )
-        if project_id:
-            try:
-                pid = int(project_id)
-            except (TypeError, ValueError):
-                pid = None
-            if pid is not None:
-                if hasattr(TestReport, "project_id"):
-                    yesterday_reports_qs = yesterday_reports_qs.filter(project_id=pid)
-                else:
-                    yesterday_reports_qs = yesterday_reports_qs.filter(
-                        plan__version__project_id=pid
-                    )
-        yesterday_reports = yesterday_reports_qs.count()
-        yesterday_unresolved_new = (
-            _defect_scope_qs()
-            .exclude(status=4)
-            .filter(create_time__gte=start_yesterday, create_time__lt=end_yesterday)
-            .count()
-        )
-
-        # 总用例：对比“昨日新增用例数”
-        yesterday_new_cases = (
-            _case_scope_qs()
-            .filter(create_time__gte=start_yesterday, create_time__lt=end_yesterday)
-            .count()
-        )
-        today_new_cases = (
-            _case_scope_qs()
-            .filter(create_time__gte=start_today, create_time__lt=end_today)
-            .count()
-        )
-
-        total_cases_delta = today_new_cases - yesterday_new_cases
-        today_reports_delta = today_reports - yesterday_reports
-        today_unresolved_new = (
-            _defect_scope_qs()
-            .exclude(status=4)
-            .filter(create_time__gte=start_today, create_time__lt=end_today)
-            .count()
-        )
-        unresolved_defects_delta = today_unresolved_new - yesterday_unresolved_new
 
         # --------------------------
         # 图表数据
@@ -1620,10 +1391,16 @@ class DashboardSummaryAPIView(APIView):
         # 饼图：按缺陷严重程度映射到“安全/合规/性能/功能”
         # 1 致命 -> 安全；2 严重 -> 合规；3 一般 -> 性能；4 建议 -> 功能
         severity_map = {1: "安全", 2: "合规", 3: "性能", 4: "功能"}
-        pie_items = []
-        for sev in [1, 2, 3, 4]:
-            v = TestDefect.objects.filter(is_deleted=False, severity=sev).count()
-            pie_items.append({"name": severity_map[sev], "value": v})
+        pie_stats = TestDefect.objects.filter(is_deleted=False).aggregate(
+            sev1=Count(Case(When(severity=1, then=1))),
+            sev2=Count(Case(When(severity=2, then=1))),
+            sev3=Count(Case(When(severity=3, then=1))),
+            sev4=Count(Case(When(severity=4, then=1))),
+        )
+        pie_items = [
+            {"name": severity_map[sev], "value": pie_stats[f"sev{sev}"]}
+            for sev in [1, 2, 3, 4]
+        ]
 
         # 柱状图：近 7 天缺陷新增数
         bar_x = week_x
@@ -1697,59 +1474,60 @@ class DashboardSummaryAPIView(APIView):
         # --------------------------
         # 返回
         # --------------------------
-        return Response(
-            {
-                "statCards": {
-                    "totalCases": {
-                        "value": total_cases,
-                        "label": "测试用例总数",
-                        "delta": total_cases_delta,
-                        "barBg": "#e6f4ff",
-                        "barColor": "#1677ff",
-                        "barWidth": f"{max(10, min(100, 50 + total_cases_delta * 10))}%",
-                    },
-                    "todayExecuted": {
-                        "value": today_reports,
-                        "label": "今日执行用例",
-                        "delta": today_reports_delta,
-                        "barBg": "#e6fffb",
-                        "barColor": "#13c2c2",
-                        "barWidth": f"{max(10, min(100, 50 + today_reports_delta * 20))}%",
-                    },
-                    "unresolvedDefects": {
-                        "value": unresolved_defects,
-                        "label": "未解决缺陷",
-                        "delta": unresolved_defects_delta,
-                        "barBg": "#fff7e6",
-                        "barColor": "#fa8c16",
-                        "barWidth": f"{max(10, min(100, 50 + unresolved_defects_delta * 10))}%",
-                    },
-                    "passRate": {
-                        "value": f"{round(pass_rate, 0)}%",
-                        "label": "用例通过率",
-                        "delta": 0,
-                        "barBg": "#f6ffed",
-                        "barColor": "#52c41a",
-                        "barWidth": f"{min(max(int(pass_rate), 0), 100)}%",
-                    },
+        data = {
+            "statCards": {
+                "totalCases": {
+                    "value": total_cases,
+                    "label": "测试用例总数",
+                    "delta": total_cases_delta,
+                    "barBg": "#e6f4ff",
+                    "barColor": "#1677ff",
+                    "barWidth": f"{max(10, min(100, 50 + total_cases_delta * 10))}%",
                 },
-                "lineChart": {
-                    "week": {
-                        "x": week_x,
-                        "executed": week_executed,
-                        "defects": week_defects,
-                    },
-                    "month": {
-                        "x": month_x,
-                        "executed": month_executed,
-                        "defects": month_defects,
-                    },
+                "todayExecuted": {
+                    "value": today_reports,
+                    "label": "今日执行用例",
+                    "delta": today_reports_delta,
+                    "barBg": "#e6fffb",
+                    "barColor": "#13c2c2",
+                    "barWidth": f"{max(10, min(100, 50 + today_reports_delta * 20))}%",
                 },
-                "pieChart": {"items": pie_items},
-                "barChart": {"x": bar_x, "values": bar_values},
-                "activities": activities[:6],
-            }
-        )
+                "unresolvedDefects": {
+                    "value": unresolved_defects,
+                    "label": "未解决缺陷",
+                    "delta": unresolved_defects_delta,
+                    "barBg": "#fff7e6",
+                    "barColor": "#fa8c16",
+                    "barWidth": f"{max(10, min(100, 50 + unresolved_defects_delta * 10))}%",
+                },
+                "passRate": {
+                    "value": f"{round(pass_rate, 0)}%",
+                    "label": "用例通过率",
+                    "delta": 0,
+                    "barBg": "#f6ffed",
+                    "barColor": "#52c41a",
+                    "barWidth": f"{min(max(int(pass_rate), 0), 100)}%",
+                },
+            },
+            "lineChart": {
+                "week": {
+                    "x": week_x,
+                    "executed": week_executed,
+                    "defects": week_defects,
+                },
+                "month": {
+                    "x": month_x,
+                    "executed": month_executed,
+                    "defects": month_defects,
+                },
+            },
+            "pieChart": {"items": pie_items},
+            "barChart": {"x": bar_x, "values": bar_values},
+            "activities": activities[:6],
+        }
+
+        cache.set(cache_key, data, 60)
+        return Response(data)
 
 
 class QualityDashboardView(APIView):
@@ -1803,10 +1581,23 @@ class QualityDashboardView(APIView):
         cur = start_date
         while cur <= end_date:
             days.append(cur)
-            calculator.calc_pass_rate(pid, cur)
-            calculator.calc_defect_density(pid, cur)
-            calculator.calc_requirement_coverage(pid, cur)
             cur += timedelta(days=1)
+
+        existing_dates = set(
+            TestQualityMetric.objects.filter(
+                is_deleted=False,
+                metric_date__gte=start_date,
+                metric_date__lte=end_date,
+            )
+            .filter(dimension__project_id=(pid if pid is not None else None))
+            .values_list("metric_date", flat=True)
+        )
+
+        missing_days = [d for d in days if d not in existing_dates]
+        for d in missing_days:
+            calculator.calc_pass_rate(pid, d)
+            calculator.calc_defect_density(pid, d)
+            calculator.calc_requirement_coverage(pid, d)
 
         metrics_qs = TestQualityMetric.objects.filter(
             is_deleted=False,
@@ -1947,29 +1738,6 @@ class QualityDashboardView(APIView):
 class ScheduledTaskViewSet(BaseModelViewSet):
     queryset = ScheduledTask.objects.prefetch_related("test_cases").all()
     serializer_class = ScheduledTaskSerializer
-
-    def _parse_id_list(self, raw_ids):
-        if raw_ids is None:
-            raise ValidationError({"msg": "ids 必填", "code": 400, "data": None})
-        if not isinstance(raw_ids, list):
-            raise ValidationError({"msg": "ids 必须为数组", "code": 400, "data": None})
-        ids = []
-        for x in raw_ids:
-            try:
-                ids.append(int(x))
-            except (TypeError, ValueError):
-                continue
-        ids = [i for i in ids if i > 0]
-        if not ids:
-            raise ValidationError({"msg": "ids 不能为空", "code": 400, "data": None})
-        seen = set()
-        uniq = []
-        for i in ids:
-            if i in seen:
-                continue
-            seen.add(i)
-            uniq.append(i)
-        return uniq
 
     @action(detail=False, methods=["post"], url_path="batch-delete")
     def batch_delete(self, request):
@@ -2160,29 +1928,6 @@ class ScheduledTaskViewSet(BaseModelViewSet):
 class ScheduledTaskLogViewSet(BaseModelViewSet):
     queryset = ScheduledTaskLog.objects.select_related("scheduled_task").all()
     serializer_class = ScheduledTaskLogSerializer
-
-    def _parse_id_list(self, raw_ids):
-        if raw_ids is None:
-            raise ValidationError({"msg": "ids 必填", "code": 400, "data": None})
-        if not isinstance(raw_ids, list):
-            raise ValidationError({"msg": "ids 必须为数组", "code": 400, "data": None})
-        ids = []
-        for x in raw_ids:
-            try:
-                ids.append(int(x))
-            except (TypeError, ValueError):
-                continue
-        ids = [i for i in ids if i > 0]
-        if not ids:
-            raise ValidationError({"msg": "ids 不能为空", "code": 400, "data": None})
-        seen = set()
-        uniq = []
-        for i in ids:
-            if i in seen:
-                continue
-            seen.add(i)
-            uniq.append(i)
-        return uniq
 
     def get_queryset(self):
         qs = super().get_queryset()

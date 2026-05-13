@@ -1,6 +1,9 @@
 <template>
   <div class="cyber-page admin-list-page pipeline-list-page">
-    <el-card class="admin-list-card" shadow="never">
+    <el-card
+      class="admin-list-card"
+      shadow="never"
+    >
       <template #header>
         <div class="card-header-row">
           <div class="card-header-row__title">
@@ -12,12 +15,23 @@
 
       <div class="admin-toolbar-row">
         <div class="admin-toolbar-row__left">
-          <el-button type="primary" @click="router.push('/pipelines/new')">
-            <el-icon class="el-icon--left"><Plus /></el-icon>
+          <el-button
+            type="primary"
+            @click="router.push('/pipelines/new')"
+          >
+            <el-icon class="el-icon--left">
+              <Plus />
+            </el-icon>
             新建项目
           </el-button>
-          <el-button type="primary" :loading="loading" @click="loadList">
-            <el-icon class="el-icon--left"><Refresh /></el-icon>
+          <el-button
+            type="primary"
+            :loading="loading"
+            @click="loadList"
+          >
+            <el-icon class="el-icon--left">
+              <Refresh />
+            </el-icon>
             刷新
           </el-button>
         </div>
@@ -45,31 +59,91 @@
         row-key="id"
       >
         <template #empty>
-          <el-empty description="暂无流水线数据" :image-size="88" />
+          <el-empty
+            description="暂无流水线数据"
+            :image-size="88"
+          />
         </template>
-        <el-table-column prop="id" label="ID" width="88" align="center" />
-        <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip>
+        <el-table-column
+          prop="id"
+          label="ID"
+          width="88"
+          align="center"
+        />
+        <el-table-column
+          prop="name"
+          label="名称"
+          min-width="160"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click="goDetail(row.id)">{{ row.name || `流水线 #${row.id}` }}</el-button>
+            <el-button
+              link
+              type="primary"
+              @click="goDetail(row.id)"
+            >
+              {{ row.name || `流水线 #${row.id}` }}
+            </el-button>
           </template>
         </el-table-column>
-        <el-table-column label="类型" width="120" align="center">
+        <el-table-column
+          label="类型"
+          width="120"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag size="small" :type="row.kind === 1 ? 'warning' : 'info'">{{ kindLabel(row.kind) }}</el-tag>
+            <el-tag
+              size="small"
+              :type="row.kind === 1 ? 'warning' : 'info'"
+            >
+              {{ kindLabel(row.kind) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="repo_url" label="代码仓库" min-width="200" show-overflow-tooltip />
-        <el-table-column label="状态" width="120" align="center">
+        <el-table-column
+          prop="repo_url"
+          label="代码仓库"
+          min-width="200"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="状态"
+          width="120"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+            <el-tag
+              :type="statusTagType(row.status)"
+              size="small"
+            >
+              {{ statusLabel(row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" width="176" align="center">
-          <template #default="{ row }">{{ formatDate(row.create_time) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right" align="center">
+        <el-table-column
+          label="创建时间"
+          width="176"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="goDetail(row.id)">控制台</el-button>
+            {{ formatDate(row.create_time) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          width="200"
+          fixed="right"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              size="small"
+              @click="goDetail(row.id)"
+            >
+              控制台
+            </el-button>
             <el-button
               link
               type="danger"

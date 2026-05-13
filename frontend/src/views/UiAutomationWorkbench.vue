@@ -2,8 +2,12 @@
   <div class="ui-automation-workbench">
     <!-- Header -->
     <div class="workbench-header">
-      <h1 class="header-title">UI自动化脚本工作台</h1>
-      <p class="header-subtitle">支持AI生成、单文件上传和ZIP/Git导入三种方式</p>
+      <h1 class="header-title">
+        UI自动化脚本工作台
+      </h1>
+      <p class="header-subtitle">
+        支持AI生成、单文件上传和ZIP/Git导入三种方式
+      </p>
     </div>
 
     <div class="workbench-content">
@@ -11,17 +15,31 @@
       <div class="control-panel">
         <!-- 脚本来源切换 -->
         <div class="source-selector">
-          <div class="section-title">脚本来源</div>
-          <el-radio-group v-model="scriptSource" class="source-radio-group">
-            <el-radio-button label="ai" class="source-radio-btn">
+          <div class="section-title">
+            脚本来源
+          </div>
+          <el-radio-group
+            v-model="scriptSource"
+            class="source-radio-group"
+          >
+            <el-radio-button
+              label="ai"
+              class="source-radio-btn"
+            >
               <span class="radio-icon">🤖</span>
               <span class="radio-text">AI 生成</span>
             </el-radio-button>
-            <el-radio-button label="linear" class="source-radio-btn">
+            <el-radio-button
+              label="linear"
+              class="source-radio-btn"
+            >
               <span class="radio-icon">📄</span>
               <span class="radio-text">单文件上传(线性)</span>
             </el-radio-button>
-            <el-radio-button label="pom" class="source-radio-btn">
+            <el-radio-button
+              label="pom"
+              class="source-radio-btn"
+            >
               <span class="radio-icon">📦</span>
               <span class="radio-text">ZIP/Git导入(POM)</span>
             </el-radio-button>
@@ -29,8 +47,13 @@
         </div>
 
         <!-- AI 生成配置 -->
-        <div v-if="scriptSource === 'ai'" class="config-section">
-          <div class="section-title">AI 生成配置</div>
+        <div
+          v-if="scriptSource === 'ai'"
+          class="config-section"
+        >
+          <div class="section-title">
+            AI 生成配置
+          </div>
 
           <div class="form-item">
             <label class="form-label">目标 URL</label>
@@ -56,8 +79,8 @@
             type="primary"
             :loading="generating"
             :disabled="!canGenerateAI"
-            @click="handleGenerateAI"
             class="action-btn"
+            @click="handleGenerateAI"
           >
             <span v-if="generating">生成中...</span>
             <span v-else>生成脚本</span>
@@ -65,8 +88,13 @@
         </div>
 
         <!-- 单文件上传 -->
-        <div v-if="scriptSource === 'linear'" class="config-section">
-          <div class="section-title">单文件上传</div>
+        <div
+          v-if="scriptSource === 'linear'"
+          class="config-section"
+        >
+          <div class="section-title">
+            单文件上传
+          </div>
 
           <div class="form-item">
             <label class="form-label">脚本名称</label>
@@ -90,9 +118,15 @@
               :file-list="linearConfig.file ? [{ name: linearConfig.file.name }] : []"
             >
               <div class="upload-content">
-                <el-icon class="upload-icon"><UploadFilled /></el-icon>
-                <div class="upload-text">拖拽 .py 文件到此处</div>
-                <div class="upload-hint">或点击选择文件</div>
+                <el-icon class="upload-icon">
+                  <UploadFilled />
+                </el-icon>
+                <div class="upload-text">
+                  拖拽 .py 文件到此处
+                </div>
+                <div class="upload-hint">
+                  或点击选择文件
+                </div>
               </div>
             </el-upload>
           </div>
@@ -101,8 +135,8 @@
             type="primary"
             :loading="uploading"
             :disabled="!canUploadLinear"
-            @click="handleUploadLinear"
             class="action-btn"
+            @click="handleUploadLinear"
           >
             <span v-if="uploading">上传中...</span>
             <span v-else>上传脚本</span>
@@ -110,8 +144,13 @@
         </div>
 
         <!-- ZIP/Git 导入 -->
-        <div v-if="scriptSource === 'pom'" class="config-section">
-          <div class="section-title">ZIP/Git 导入</div>
+        <div
+          v-if="scriptSource === 'pom'"
+          class="config-section"
+        >
+          <div class="section-title">
+            ZIP/Git 导入
+          </div>
 
           <div class="form-item">
             <label class="form-label">脚本名称</label>
@@ -125,12 +164,19 @@
           <div class="form-item">
             <label class="form-label">导入方式</label>
             <el-radio-group v-model="pomConfig.importType">
-              <el-radio label="zip">ZIP 文件</el-radio>
-              <el-radio label="git">Git 仓库</el-radio>
+              <el-radio label="zip">
+                ZIP 文件
+              </el-radio>
+              <el-radio label="git">
+                Git 仓库
+              </el-radio>
             </el-radio-group>
           </div>
 
-          <div v-if="pomConfig.importType === 'zip'" class="form-item">
+          <div
+            v-if="pomConfig.importType === 'zip'"
+            class="form-item"
+          >
             <label class="form-label">上传 ZIP 文件</label>
             <el-upload
               class="cyber-upload"
@@ -143,14 +189,23 @@
               :file-list="pomConfig.file ? [{ name: pomConfig.file.name }] : []"
             >
               <div class="upload-content">
-                <el-icon class="upload-icon"><UploadFilled /></el-icon>
-                <div class="upload-text">拖拽 .zip 文件到此处</div>
-                <div class="upload-hint">最大50MB</div>
+                <el-icon class="upload-icon">
+                  <UploadFilled />
+                </el-icon>
+                <div class="upload-text">
+                  拖拽 .zip 文件到此处
+                </div>
+                <div class="upload-hint">
+                  最大50MB
+                </div>
               </div>
             </el-upload>
           </div>
 
-          <div v-if="pomConfig.importType === 'git'" class="form-item">
+          <div
+            v-if="pomConfig.importType === 'git'"
+            class="form-item"
+          >
             <label class="form-label">Git 仓库 URL</label>
             <el-input
               v-model="pomConfig.gitRepoUrl"
@@ -172,8 +227,8 @@
             type="primary"
             :loading="uploading"
             :disabled="!canUploadPom"
-            @click="handleUploadPom"
             class="action-btn"
+            @click="handleUploadPom"
           >
             <span v-if="uploading">导入中...</span>
             <span v-else>导入脚本</span>
@@ -184,12 +239,18 @@
       <!-- 右侧预览区 -->
       <div class="preview-panel">
         <div class="panel-header">
-          <h3 class="panel-title">生成结果</h3>
+          <h3 class="panel-title">
+            生成结果
+          </h3>
         </div>
 
         <div class="empty-state">
-          <div class="empty-icon">🤖</div>
-          <p class="empty-text">填写左侧配置后开始</p>
+          <div class="empty-icon">
+            🤖
+          </div>
+          <p class="empty-text">
+            填写左侧配置后开始
+          </p>
         </div>
       </div>
     </div>
@@ -357,7 +418,7 @@ const handleUploadPom = async () => {
   font-weight: 700;
   color: #e2e8f0;
   margin: 0 0 8px 0;
-  background: linear-gradient(135deg, #00d8ff 0%, #0ea5e9 50%, #3b82f6 100%);
+  background: linear-gradient(135deg, #00d8ff 0%, #0ea5e9 50%, #06b6d4 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

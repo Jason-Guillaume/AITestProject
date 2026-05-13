@@ -1,54 +1,126 @@
 <template>
   <div class="layout sw-cyber">
     <aside class="sw-cyber-panel col-form">
-      <div class="panel-head sw-glow-text">运行参数</div>
-      <el-form label-position="top" class="form">
+      <div class="panel-head sw-glow-text">
+        运行参数
+      </div>
+      <el-form
+        label-position="top"
+        class="form"
+      >
         <el-form-item label="脚本">
-          <el-radio-group v-model="wb.selectedPerfScriptKey" size="small" class="script-pick">
-            <el-radio-button label="smoke">smoke.js</el-radio-button>
-            <el-radio-button label="load">load.js</el-radio-button>
+          <el-radio-group
+            v-model="wb.selectedPerfScriptKey"
+            size="small"
+            class="script-pick"
+          >
+            <el-radio-button label="smoke">
+              smoke.js
+            </el-radio-button>
+            <el-radio-button label="load">
+              load.js
+            </el-radio-button>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="虚拟用户数 (VUs)">
-          <el-input-number v-model="wb.perfForm.vus" :min="1" :max="500" class="full" />
+          <el-input-number
+            v-model="wb.perfForm.vus"
+            :min="1"
+            :max="500"
+            class="full"
+          />
         </el-form-item>
         <el-form-item label="持续时间 (秒)">
-          <el-input-number v-model="wb.perfForm.durationSec" :min="10" :max="3600" class="full" />
+          <el-input-number
+            v-model="wb.perfForm.durationSec"
+            :min="10"
+            :max="3600"
+            class="full"
+          />
         </el-form-item>
         <el-form-item label="QPS 告警阈值">
-          <el-input-number v-model="wb.perfForm.qpsThreshold" :min="1" :max="1000000" class="full" />
+          <el-input-number
+            v-model="wb.perfForm.qpsThreshold"
+            :min="1"
+            :max="1000000"
+            class="full"
+          />
         </el-form-item>
       </el-form>
-      <el-button class="ghost-btn accent full-w" :icon="VideoPlay" @click="wb.runPerfMock">运行 k6（演示）</el-button>
+      <el-button
+        class="ghost-btn accent full-w"
+        :icon="VideoPlay"
+        @click="wb.runPerfMock"
+      >
+        运行 k6（演示）
+      </el-button>
     </aside>
     <div class="col-center">
       <div class="sw-cyber-panel is-active editor-wrap">
-        <p class="path sw-glow-text">k6 脚本 · {{ perfScriptName }}.js</p>
+        <p class="path sw-glow-text">
+          k6 脚本 · {{ perfScriptName }}.js
+        </p>
         <div class="monaco-box">
           <Suspense v-if="showMonaco">
             <template #default>
-              <MonacoEditor v-model="jsModel" language="javascript" />
+              <MonacoEditor
+                v-model="jsModel"
+                language="javascript"
+              />
             </template>
             <template #fallback>
-              <div class="monaco-ph">加载编辑器组件…</div>
+              <div class="monaco-ph">
+                加载编辑器组件…
+              </div>
             </template>
           </Suspense>
-          <div v-else class="monaco-ph">准备编辑器…</div>
+          <div
+            v-else
+            class="monaco-ph"
+          >
+            准备编辑器…
+          </div>
         </div>
       </div>
       <div class="sw-cyber-panel chart-zone">
-        <el-empty description="实时压力曲线图（接入压测引擎后展示）" :image-size="120" />
+        <el-empty
+          description="实时压力曲线图（接入压测引擎后展示）"
+          :image-size="120"
+        />
       </div>
     </div>
     <aside class="sw-cyber-panel col-side">
-      <div class="panel-head sw-glow-text">摘要</div>
-      <div class="kv"><span class="k">最近运行</span><span class="v sw-glow-text">{{ wb.perfLatest.runAt }}</span></div>
-      <div class="kv"><span class="k">RPS</span><span class="v sw-glow-text">{{ wb.perfLatest.rps }}</span></div>
-      <div class="kv"><span class="k">P95</span><span class="v sw-glow-text">{{ wb.perfLatest.p95ms }}ms</span></div>
-      <div ref="sideChart" class="mini-chart sw-cyber-panel" />
-      <el-table :data="wb.perfDetailRows" class="tbl" :border="false" size="small">
-        <el-table-column prop="metric" label="指标" />
-        <el-table-column prop="value" label="值" width="100" />
+      <div class="panel-head sw-glow-text">
+        摘要
+      </div>
+      <div class="kv">
+        <span class="k">最近运行</span><span class="v sw-glow-text">{{ wb.perfLatest.runAt }}</span>
+      </div>
+      <div class="kv">
+        <span class="k">RPS</span><span class="v sw-glow-text">{{ wb.perfLatest.rps }}</span>
+      </div>
+      <div class="kv">
+        <span class="k">P95</span><span class="v sw-glow-text">{{ wb.perfLatest.p95ms }}ms</span>
+      </div>
+      <div
+        ref="sideChart"
+        class="mini-chart sw-cyber-panel"
+      />
+      <el-table
+        :data="wb.perfDetailRows"
+        class="tbl"
+        :border="false"
+        size="small"
+      >
+        <el-table-column
+          prop="metric"
+          label="指标"
+        />
+        <el-table-column
+          prop="value"
+          label="值"
+          width="100"
+        />
       </el-table>
     </aside>
   </div>

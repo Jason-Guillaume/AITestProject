@@ -2,7 +2,9 @@
   <div class="h-screen w-full flex bg-gray-100">
     <aside class="w-64 bg-slate-900 text-slate-200 flex flex-col">
       <div class="h-16 flex items-center px-6 border-b border-slate-800">
-        <div class="text-lg font-semibold tracking-wide text-white">AI测试平台</div>
+        <div class="text-lg font-semibold tracking-wide text-white">
+          AI测试平台
+        </div>
       </div>
 
       <el-menu
@@ -12,18 +14,38 @@
         text-color="#cbd5e1"
         active-text-color="#60a5fa"
       >
-        <el-menu-item index="home">首页</el-menu-item>
-        <el-menu-item index="tools">测试工具</el-menu-item>
-        <el-menu-item index="api-auto">接口自动化</el-menu-item>
-        <el-menu-item index="web-auto">Web自动化</el-menu-item>
-        <el-menu-item index="app-auto">App自动化</el-menu-item>
+        <el-menu-item index="home">
+          首页
+        </el-menu-item>
+        <el-menu-item index="tools">
+          测试工具
+        </el-menu-item>
+        <el-menu-item index="api-auto">
+          接口自动化
+        </el-menu-item>
+        <el-menu-item index="web-auto">
+          Web自动化
+        </el-menu-item>
+        <el-menu-item index="app-auto">
+          App自动化
+        </el-menu-item>
         <el-sub-menu index="perf">
-          <template #title>性能测试</template>
-          <el-menu-item index="perf-task-management">任务管理</el-menu-item>
+          <template #title>
+            性能测试
+          </template>
+          <el-menu-item index="perf-task-management">
+            任务管理
+          </el-menu-item>
         </el-sub-menu>
-        <el-menu-item index="mock-service">Mock服务</el-menu-item>
-        <el-menu-item index="openclaw">OpenClaw AI助手</el-menu-item>
-        <el-menu-item index="settings">配置中心</el-menu-item>
+        <el-menu-item index="mock-service">
+          Mock服务
+        </el-menu-item>
+        <el-menu-item index="openclaw">
+          OpenClaw AI助手
+        </el-menu-item>
+        <el-menu-item index="settings">
+          配置中心
+        </el-menu-item>
       </el-menu>
     </aside>
 
@@ -36,7 +58,9 @@
 
         <el-dropdown>
           <div class="flex items-center gap-2 cursor-pointer">
-            <el-avatar :size="32">U</el-avatar>
+            <el-avatar :size="32">
+              U
+            </el-avatar>
             <span class="text-sm text-gray-700">管理员</span>
             <el-icon><arrow-down /></el-icon>
           </div>
@@ -44,7 +68,9 @@
             <el-dropdown-menu>
               <el-dropdown-item>个人中心</el-dropdown-item>
               <el-dropdown-item>修改密码</el-dropdown-item>
-              <el-dropdown-item divided>退出登录</el-dropdown-item>
+              <el-dropdown-item divided>
+                退出登录
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -52,30 +78,80 @@
 
       <main class="flex-1 overflow-auto p-6">
         <div class="bg-white rounded-lg border border-gray-200 p-4">
-          <el-form :inline="true" :model="searchForm" class="mb-4">
+          <el-form
+            :inline="true"
+            :model="searchForm"
+            class="mb-4"
+          >
             <el-form-item label="任务名称">
-              <el-input v-model="searchForm.name" clearable placeholder="请输入任务名称" class="!w-52" />
+              <el-input
+                v-model="searchForm.name"
+                clearable
+                placeholder="请输入任务名称"
+                class="!w-52"
+              />
             </el-form-item>
             <el-form-item label="任务状态">
-              <el-select v-model="searchForm.status" clearable placeholder="请选择状态" class="!w-44">
-                <el-option label="全部" value="" />
-                <el-option label="运行中" value="running" />
-                <el-option label="已完成" value="completed" />
-                <el-option label="失败" value="failed" />
-                <el-option label="待执行" value="pending" />
+              <el-select
+                v-model="searchForm.status"
+                clearable
+                placeholder="请选择状态"
+                class="!w-44"
+              >
+                <el-option
+                  label="全部"
+                  value=""
+                />
+                <el-option
+                  label="运行中"
+                  value="running"
+                />
+                <el-option
+                  label="已完成"
+                  value="completed"
+                />
+                <el-option
+                  label="失败"
+                  value="failed"
+                />
+                <el-option
+                  label="待执行"
+                  value="pending"
+                />
               </el-select>
             </el-form-item>
             <el-form-item label="执行人">
-              <el-input v-model="searchForm.executor" clearable placeholder="请输入执行人" class="!w-44" />
+              <el-input
+                v-model="searchForm.executor"
+                clearable
+                placeholder="请输入执行人"
+                class="!w-44"
+              />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="loading" @click="handleSearch">查询</el-button>
-              <el-button :disabled="loading" @click="handleReset">重置</el-button>
+              <el-button
+                type="primary"
+                :loading="loading"
+                @click="handleSearch"
+              >
+                查询
+              </el-button>
+              <el-button
+                :disabled="loading"
+                @click="handleReset"
+              >
+                重置
+              </el-button>
             </el-form-item>
           </el-form>
 
           <div class="mb-4 perf-task-toolbar">
-            <el-button type="primary" @click="openCreateDialog">新建任务</el-button>
+            <el-button
+              type="primary"
+              @click="openCreateDialog"
+            >
+              新建任务
+            </el-button>
             <el-button
               type="danger"
               plain
@@ -102,13 +178,48 @@
             >
               批量复制
             </el-button>
-            <el-button @click="toEnvironmentManagement">环境管理</el-button>
-            <CurrentEnvironmentSelect :show-label="true" compact />
-            <el-button type="warning" plain @click="toLoadTestMonitor">k6 压测看板</el-button>
-            <el-button type="warning" plain @click="toK6Sessions">k6 会话列表</el-button>
-            <el-button type="success" plain @click="toScheduledTaskCreate">新建定时任务</el-button>
-            <el-button type="success" plain @click="toScheduledTaskList">定时任务列表</el-button>
-            <el-button type="info" plain @click="toScheduledTaskLogs">调度日志</el-button>
+            <el-button @click="toEnvironmentManagement">
+              环境管理
+            </el-button>
+            <CurrentEnvironmentSelect
+              :show-label="true"
+              compact
+            />
+            <el-button
+              type="warning"
+              plain
+              @click="toLoadTestMonitor"
+            >
+              k6 压测看板
+            </el-button>
+            <el-button
+              type="warning"
+              plain
+              @click="toK6Sessions"
+            >
+              k6 会话列表
+            </el-button>
+            <el-button
+              type="success"
+              plain
+              @click="toScheduledTaskCreate"
+            >
+              新建定时任务
+            </el-button>
+            <el-button
+              type="success"
+              plain
+              @click="toScheduledTaskList"
+            >
+              定时任务列表
+            </el-button>
+            <el-button
+              type="info"
+              plain
+              @click="toScheduledTaskLogs"
+            >
+              调度日志
+            </el-button>
           </div>
 
           <el-table
@@ -119,26 +230,86 @@
             class="w-full perf-task-table"
             @selection-change="onSelectionChange"
           >
-            <el-table-column type="selection" width="44" fixed="left" />
-            <el-table-column prop="task_id" label="任务ID" width="120" align="left" show-overflow-tooltip />
-            <el-table-column prop="task_name" label="任务名称" min-width="180" align="left" show-overflow-tooltip />
-            <el-table-column prop="scenario" label="测试场景" min-width="180" align="center">
+            <el-table-column
+              type="selection"
+              width="44"
+              fixed="left"
+            />
+            <el-table-column
+              prop="task_id"
+              label="任务ID"
+              width="120"
+              align="left"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="task_name"
+              label="任务名称"
+              min-width="180"
+              align="left"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="scenario"
+              label="测试场景"
+              min-width="180"
+              align="center"
+            >
               <template #default="{ row }">
                 {{ scenarioLabel(row.scenario) }}
               </template>
             </el-table-column>
-            <el-table-column prop="concurrency" label="并发数" width="96" align="center" />
-            <el-table-column prop="duration" label="持续时间" width="112" align="center" />
-            <el-table-column label="状态" width="120" align="center">
+            <el-table-column
+              prop="concurrency"
+              label="并发数"
+              width="96"
+              align="center"
+            />
+            <el-table-column
+              prop="duration"
+              label="持续时间"
+              width="112"
+              align="center"
+            />
+            <el-table-column
+              label="状态"
+              width="120"
+              align="center"
+            >
               <template #default="{ row }">
-                <el-tag :type="statusTagType(row.status)" effect="light">{{ statusText(row.status) }}</el-tag>
+                <el-tag
+                  :type="statusTagType(row.status)"
+                  effect="light"
+                >
+                  {{ statusText(row.status) }}
+                </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="executor" label="执行人" width="108" align="center" show-overflow-tooltip />
-            <el-table-column prop="created_at" label="创建时间" width="184" align="center" />
-            <el-table-column label="操作" width="200" fixed="right" align="center">
+            <el-table-column
+              prop="executor"
+              label="执行人"
+              width="108"
+              align="center"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="created_at"
+              label="创建时间"
+              width="184"
+              align="center"
+            />
+            <el-table-column
+              label="操作"
+              width="200"
+              fixed="right"
+              align="center"
+            >
               <template #default="{ row }">
-                <TableActionGroup :row="row" :actions="taskTableActions" @action="handleTaskTableAction" />
+                <TableActionGroup
+                  :row="row"
+                  :actions="taskTableActions"
+                  @action="handleTaskTableAction"
+                />
               </template>
             </el-table-column>
           </el-table>
@@ -158,51 +329,138 @@
       </main>
     </div>
 
-    <el-dialog v-model="createDialogVisible" title="新建性能任务" width="520px" destroy-on-close>
-      <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="90px">
-        <el-form-item label="任务名称" prop="task_name">
-          <el-input v-model="createForm.task_name" placeholder="请输入任务名称" />
+    <el-dialog
+      v-model="createDialogVisible"
+      title="新建性能任务"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form
+        ref="createFormRef"
+        :model="createForm"
+        :rules="createRules"
+        label-width="90px"
+      >
+        <el-form-item
+          label="任务名称"
+          prop="task_name"
+        >
+          <el-input
+            v-model="createForm.task_name"
+            placeholder="请输入任务名称"
+          />
         </el-form-item>
-        <el-form-item label="测试场景" prop="scenario">
-          <el-select v-model="createForm.scenario" placeholder="请选择场景" class="w-full">
-            <el-option label="JMeter" value="jmeter" />
-            <el-option label="Locust" value="locust" />
+        <el-form-item
+          label="测试场景"
+          prop="scenario"
+        >
+          <el-select
+            v-model="createForm.scenario"
+            placeholder="请选择场景"
+            class="w-full"
+          >
+            <el-option
+              label="JMeter"
+              value="jmeter"
+            />
+            <el-option
+              label="Locust"
+              value="locust"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="并发数" prop="concurrency">
-          <el-input-number v-model="createForm.concurrency" :min="1" :max="100000" class="!w-full" />
+        <el-form-item
+          label="并发数"
+          prop="concurrency"
+        >
+          <el-input-number
+            v-model="createForm.concurrency"
+            :min="1"
+            :max="100000"
+            class="!w-full"
+          />
         </el-form-item>
-        <el-form-item label="持续时间" prop="duration">
-          <el-input v-model="createForm.duration" placeholder="例如: 30s / 10m / 2h" />
+        <el-form-item
+          label="持续时间"
+          prop="duration"
+        >
+          <el-input
+            v-model="createForm.duration"
+            placeholder="例如: 30s / 10m / 2h"
+          />
         </el-form-item>
-        <el-form-item label="执行人" prop="executor">
-          <el-input v-model="createForm.executor" placeholder="可选" />
+        <el-form-item
+          label="执行人"
+          prop="executor"
+        >
+          <el-input
+            v-model="createForm.executor"
+            placeholder="可选"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="createLoading" @click="submitCreate">确定</el-button>
+        <el-button @click="createDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="createLoading"
+          @click="submitCreate"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
 
-    <el-drawer v-model="detailDrawerVisible" title="任务详情" size="420px">
-      <el-descriptions :column="1" border v-if="detailTask">
-        <el-descriptions-item label="任务ID">{{ detailTask.task_id }}</el-descriptions-item>
-        <el-descriptions-item label="任务名称">{{ detailTask.task_name }}</el-descriptions-item>
-        <el-descriptions-item label="测试场景">{{ scenarioLabel(detailTask.scenario) }}</el-descriptions-item>
-        <el-descriptions-item label="并发数">{{ detailTask.concurrency }}</el-descriptions-item>
-        <el-descriptions-item label="持续时间">{{ detailTask.duration }}</el-descriptions-item>
-        <el-descriptions-item label="执行人">{{ detailTask.executor || "-" }}</el-descriptions-item>
+    <el-drawer
+      v-model="detailDrawerVisible"
+      title="任务详情"
+      size="420px"
+    >
+      <el-descriptions
+        v-if="detailTask"
+        :column="1"
+        border
+      >
+        <el-descriptions-item label="任务ID">
+          {{ detailTask.task_id }}
+        </el-descriptions-item>
+        <el-descriptions-item label="任务名称">
+          {{ detailTask.task_name }}
+        </el-descriptions-item>
+        <el-descriptions-item label="测试场景">
+          {{ scenarioLabel(detailTask.scenario) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="并发数">
+          {{ detailTask.concurrency }}
+        </el-descriptions-item>
+        <el-descriptions-item label="持续时间">
+          {{ detailTask.duration }}
+        </el-descriptions-item>
+        <el-descriptions-item label="执行人">
+          {{ detailTask.executor || "-" }}
+        </el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="statusTagType(detailTask.status)" effect="light">
+          <el-tag
+            :type="statusTagType(detailTask.status)"
+            effect="light"
+          >
             {{ statusText(detailTask.status) }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ detailTask.created_at || "-" }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间">
+          {{ detailTask.created_at || "-" }}
+        </el-descriptions-item>
       </el-descriptions>
     </el-drawer>
 
-    <el-dialog v-model="batchUpdateVisible" title="批量修改任务状态" width="420px" destroy-on-close>
+    <el-dialog
+      v-model="batchUpdateVisible"
+      title="批量修改任务状态"
+      width="420px"
+      destroy-on-close
+    >
       <el-alert
         type="warning"
         :closable="false"
@@ -212,16 +470,34 @@
       />
       <el-form label-width="110px">
         <el-form-item label="目标状态">
-          <el-select v-model="batchStatus" placeholder="请选择" class="w-full">
-            <el-option label="待执行" value="pending" />
-            <el-option label="运行中" value="running" />
-            <el-option label="已完成" value="completed" />
-            <el-option label="失败" value="failed" />
+          <el-select
+            v-model="batchStatus"
+            placeholder="请选择"
+            class="w-full"
+          >
+            <el-option
+              label="待执行"
+              value="pending"
+            />
+            <el-option
+              label="运行中"
+              value="running"
+            />
+            <el-option
+              label="已完成"
+              value="completed"
+            />
+            <el-option
+              label="失败"
+              value="failed"
+            />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="batchUpdateVisible = false">取消</el-button>
+        <el-button @click="batchUpdateVisible = false">
+          取消
+        </el-button>
         <el-button
           type="primary"
           :loading="batchUpdating"
@@ -330,7 +606,7 @@ async function fetchTasks() {
         error?.response?.data?.detail || error?.response?.data?.msg || "获取任务列表失败"
       );
     }
-    // eslint-disable-next-line no-console
+     
     console.error(error);
   } finally {
     loading.value = false;

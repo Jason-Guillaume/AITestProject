@@ -1,56 +1,121 @@
 <template>
   <div class="page-wrap cyber-page scenario-gen-page">
-    <el-card class="sys-page-head" shadow="never">
+    <el-card
+      class="sys-page-head"
+      shadow="never"
+    >
       <div class="sys-page-head__row">
         <div>
-          <h2 class="sys-page-head__title">接口场景生成</h2>
+          <h2 class="sys-page-head__title">
+            接口场景生成
+          </h2>
           <p class="sys-page-head__sub">
             从 OpenAPI(JSON/YAML) 或 cURL 列表生成可执行场景草稿；可选一键落库为 API 用例 + 场景编排。
           </p>
         </div>
         <div class="sys-page-head__actions">
-          <el-button :loading="loading" @click="generate(false)">生成草稿</el-button>
-          <el-button type="primary" :loading="creating" :disabled="!canCreate" @click="generate(true)">
+          <el-button
+            :loading="loading"
+            @click="generate(false)"
+          >
+            生成草稿
+          </el-button>
+          <el-button
+            type="primary"
+            :loading="creating"
+            :disabled="!canCreate"
+            @click="generate(true)"
+          >
             创建并保存
           </el-button>
         </div>
       </div>
     </el-card>
 
-    <el-card class="sys-filter-card" shadow="never">
+    <el-card
+      class="sys-filter-card"
+      shadow="never"
+    >
       <div class="form-row">
         <div class="field">
-          <div class="label">当前项目</div>
-          <div class="value">{{ projectId || "未选择" }}</div>
+          <div class="label">
+            当前项目
+          </div>
+          <div class="value">
+            {{ projectId || "未选择" }}
+          </div>
         </div>
         <div class="field">
-          <div class="label">当前环境</div>
-          <div class="value">{{ envId || "未选择" }}</div>
+          <div class="label">
+            当前环境
+          </div>
+          <div class="value">
+            {{ envId || "未选择" }}
+          </div>
         </div>
         <div class="field field--wide">
-          <div class="label">模块（用例归属）</div>
-          <el-select v-model="moduleId" filterable clearable placeholder="请选择模块" style="width: 100%" @visible-change="onModuleDropdown">
-            <el-option v-for="m in modules" :key="m.id" :label="m.name" :value="m.id" />
+          <div class="label">
+            模块（用例归属）
+          </div>
+          <el-select
+            v-model="moduleId"
+            filterable
+            clearable
+            placeholder="请选择模块"
+            style="width: 100%"
+            @visible-change="onModuleDropdown"
+          >
+            <el-option
+              v-for="m in modules"
+              :key="m.id"
+              :label="m.name"
+              :value="m.id"
+            />
           </el-select>
         </div>
         <div class="field field--wide">
-          <div class="label">base_url（可选）</div>
-          <el-input v-model="baseUrl" placeholder="如 https://api.example.com（优先于 OpenAPI servers[0].url）" />
+          <div class="label">
+            base_url（可选）
+          </div>
+          <el-input
+            v-model="baseUrl"
+            placeholder="如 https://api.example.com（优先于 OpenAPI servers[0].url）"
+          />
         </div>
         <div class="field field--wide">
-          <div class="label">场景名称（可选）</div>
-          <el-input v-model="scenarioName" placeholder="留空将自动命名" />
+          <div class="label">
+            场景名称（可选）
+          </div>
+          <el-input
+            v-model="scenarioName"
+            placeholder="留空将自动命名"
+          />
         </div>
         <div class="field">
-          <div class="label">最大步数</div>
-          <el-input-number v-model="maxSteps" :min="1" :max="100" />
+          <div class="label">
+            最大步数
+          </div>
+          <el-input-number
+            v-model="maxSteps"
+            :min="1"
+            :max="100"
+          />
         </div>
       </div>
     </el-card>
 
-    <el-card class="sys-table-card" shadow="never">
-      <el-tabs v-model="mode" class="mode-tabs">
-        <el-tab-pane label="OpenAPI" name="openapi">
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
+      <el-tabs
+        v-model="mode"
+        class="mode-tabs"
+      >
+        <el-tab-pane
+          label="OpenAPI"
+          name="openapi"
+        >
           <el-input
             v-model="openapiSpec"
             type="textarea"
@@ -58,7 +123,10 @@
             placeholder="粘贴 OpenAPI JSON/YAML（含 paths），支持 servers[0].url"
           />
         </el-tab-pane>
-        <el-tab-pane label="cURL 列表" name="curl">
+        <el-tab-pane
+          label="cURL 列表"
+          name="curl"
+        >
           <el-input
             v-model="curlText"
             type="textarea"
@@ -69,32 +137,76 @@
       </el-tabs>
     </el-card>
 
-    <el-card v-if="draft" class="sys-table-card" shadow="never">
+    <el-card
+      v-if="draft"
+      class="sys-table-card"
+      shadow="never"
+    >
       <div class="result-head">
-        <div class="result-head__title">生成结果</div>
-        <div class="result-head__sub">steps: {{ (draft.steps || []).length }}</div>
+        <div class="result-head__title">
+          生成结果
+        </div>
+        <div class="result-head__sub">
+          steps: {{ (draft.steps || []).length }}
+        </div>
       </div>
-      <el-table :data="draft.steps" border class="admin-data-table sys-enterprise-table" max-height="380">
-        <el-table-column prop="order" label="#" width="60" align="center" />
-        <el-table-column prop="name" label="步骤名" min-width="220" show-overflow-tooltip />
-        <el-table-column label="请求" min-width="320" show-overflow-tooltip>
+      <el-table
+        :data="draft.steps"
+        border
+        class="admin-data-table sys-enterprise-table"
+        max-height="380"
+      >
+        <el-table-column
+          prop="order"
+          label="#"
+          width="60"
+          align="center"
+        />
+        <el-table-column
+          prop="name"
+          label="步骤名"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="请求"
+          min-width="320"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
             <span class="mono">{{ row?.request?.method }} {{ row?.request?.url }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="期望状态码" width="120" align="center">
+        <el-table-column
+          label="期望状态码"
+          width="120"
+          align="center"
+        >
           <template #default="{ row }">
             {{ row?.request?.expected_status ?? "—" }}
           </template>
         </el-table-column>
-        <el-table-column label="提取规则" width="100" align="center">
+        <el-table-column
+          label="提取规则"
+          width="100"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag size="small" type="info" effect="plain">{{ (row?.extraction_rules || []).length }}</el-tag>
+            <el-tag
+              size="small"
+              type="info"
+              effect="plain"
+            >
+              {{ (row?.extraction_rules || []).length }}
+            </el-tag>
           </template>
         </el-table-column>
       </el-table>
 
-      <div v-if="createdScenarioId" class="created-tip">
+      <div
+        v-if="createdScenarioId"
+        class="created-tip"
+      >
         已创建场景：ID = <span class="mono">{{ createdScenarioId }}</span>
       </div>
     </el-card>

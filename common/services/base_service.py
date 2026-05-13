@@ -95,24 +95,13 @@ class BaseService(Generic[T]):
 
     @transaction.atomic
     def create(self, data: Dict[str, Any], user=None) -> T:
-        """
-        创建对象
+        self._validate_create_data(data)
 
-        Args:
-            data: 对象数据字典
-            user: 当前用户（可选）
-
-        Returns:
-            创建的对象实例
-        """
-        # 添加创建人信息
         if user:
             data['creator'] = user
 
-        # 调用 Repository 创建
         obj = self.repository.create(data)
 
-        # 执行创建后的钩子
         self._after_create(obj, user)
 
         return obj
@@ -153,26 +142,14 @@ class BaseService(Generic[T]):
         data: Dict[str, Any],
         user=None
     ) -> Optional[T]:
-        """
-        更新对象
+        self._validate_update_data(obj_id, data)
 
-        Args:
-            obj_id: 对象 ID
-            data: 更新的数据字典
-            user: 当前用户（可选）
-
-        Returns:
-            更新后的对象实例，如果不存在返回 None
-        """
-        # 添加更新人信息
         if user:
             data['updater'] = user
 
-        # 调用 Repository 更新
         obj = self.repository.update(obj_id, data)
 
         if obj:
-            # 执行更新后的钩子
             self._after_update(obj, user)
 
         return obj
@@ -200,28 +177,15 @@ class BaseService(Generic[T]):
         return result
 
     @transaction.atomic
-    def batch_delete(
-        self,
-        obj_ids: List[int],
-        user=None,
-        soft: bool = True
-    ) -> int:
-        """
-        批量删除对象
-
-        Args:
-            obj_ids: 对象 ID 列表
-            user: 当前用户（可选）
-            soft: 是否软删除
-
-        Returns:
-            删除的对象数量
-        """
-        count = 0
-        for obj_id in obj_ids:
-            if self.delete(obj_id, user, soft):
-                count += 1
-
+    def batch_delete(self, obj_ids: List[int], user=None, soft: bool = True) -> int:
+        if not obj_ids:
+            return 0
+        if soft:
+            count = self.repository.batch_soft_delete(obj_ids)
+        else:
+            count = self.repository.batch_hard_delete(obj_ids)
+        if count:
+            self._after_batch_delete(obj_ids, user)
         return count
 
     # ==================== 钩子方法 ====================
@@ -270,6 +234,16 @@ class BaseService(Generic[T]):
 
         Args:
             obj_id: 删除的对象 ID
+            user: 当前用户
+        """
+        pass
+
+    def _after_batch_delete(self, obj_ids: List[int], user=None):
+        """
+        批量删除后的钩子方法
+
+        Args:
+            obj_ids: 删除的对象 ID 列表
             user: 当前用户
         """
         pass

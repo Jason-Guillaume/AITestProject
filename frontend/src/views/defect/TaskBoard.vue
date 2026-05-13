@@ -3,41 +3,78 @@
     <div class="board-layout">
       <!-- 三列看板 -->
       <div class="board-columns">
-        <div class="board-col" v-for="col in columns" :key="col.key" :class="`board-col--${col.key}`">
-          <div class="col-header" :class="`col-header--${col.key}`">
+        <div
+          v-for="col in columns"
+          :key="col.key"
+          class="board-col"
+          :class="`board-col--${col.key}`"
+        >
+          <div
+            class="col-header"
+            :class="`col-header--${col.key}`"
+          >
             <span class="col-title">{{ col.label }}</span>
             <span class="col-count">{{ col.tasks.length }}</span>
           </div>
           <div class="col-body">
-            <div v-if="!col.tasks.length" class="col-empty">
-              <el-empty description="暂无缺陷" :image-size="56" />
+            <div
+              v-if="!col.tasks.length"
+              class="col-empty"
+            >
+              <el-empty
+                description="暂无缺陷"
+                :image-size="56"
+              />
             </div>
             <div
-              class="task-card"
               v-for="task in col.tasks"
               :key="task.id"
+              class="task-card"
               draggable="true"
               @dragstart="onDragStart(task, col.key)"
               @dragover.prevent
               @drop="onDrop(col.key)"
             >
               <div class="task-card__header">
-                <el-tag :type="severityTag(task.severity)" size="small">{{ severityLabel(task.severity) }}</el-tag>
+                <el-tag
+                  :type="severityTag(task.severity)"
+                  size="small"
+                >
+                  {{ severityLabel(task.severity) }}
+                </el-tag>
                 <span class="task-id">{{ task.defect_no }}</span>
               </div>
-              <div class="task-title">{{ task.defect_name || task.task_title }}</div>
-              <div class="task-desc" v-if="task.task_desc">{{ task.task_desc }}</div>
+              <div class="task-title">
+                {{ task.defect_name || task.task_title }}
+              </div>
+              <div
+                v-if="task.task_desc"
+                class="task-desc"
+              >
+                {{ task.task_desc }}
+              </div>
               <div class="task-footer">
                 <span class="task-assignee">处理人：{{ task.handler_name || task.assignee_name || '-' }}</span>
                 <span class="task-footer__right">
-                  <el-button link type="primary" size="small" @click.stop="router.push(`/defect/detail/${task.id}`)">详情</el-button>
+                  <el-button
+                    link
+                    type="primary"
+                    size="small"
+                    @click.stop="router.push(`/defect/detail/${task.id}`)"
+                  >详情</el-button>
                   <span class="task-date">{{ formatDate(task.update_time) }}</span>
                 </span>
               </div>
             </div>
 
-            <button type="button" class="add-card-btn" @click="addTask(col)">
-              <el-icon class="add-card-btn__icon"><Plus /></el-icon>
+            <button
+              type="button"
+              class="add-card-btn"
+              @click="addTask(col)"
+            >
+              <el-icon class="add-card-btn__icon">
+                <Plus />
+              </el-icon>
               <span class="add-card-btn__text">在此列新增缺陷</span>
             </button>
           </div>
@@ -46,32 +83,78 @@
 
       <!-- 右侧统计 -->
       <aside class="board-sidebar">
-        <el-card class="board-widget-card" shadow="never">
+        <el-card
+          class="board-widget-card"
+          shadow="never"
+        >
           <template #header>
             <span class="board-widget-card__title">缺陷严重程度统计</span>
           </template>
           <div class="board-widget-card__body board-widget-card__body--chart">
-            <div ref="pieEl" class="board-chart-host" />
+            <div
+              ref="pieEl"
+              class="board-chart-host"
+            />
           </div>
         </el-card>
-        <el-card class="board-widget-card board-widget-card--table" shadow="never">
+        <el-card
+          class="board-widget-card board-widget-card--table"
+          shadow="never"
+        >
           <template #header>
             <span class="board-widget-card__title">版本发布计划</span>
           </template>
           <div class="board-widget-card__body">
-            <el-table class="sidebar-table--sci admin-data-table" :data="releasePlans" size="small">
-              <el-table-column prop="version_no" label="版本" min-width="72" width="72" align="left" show-overflow-tooltip />
-              <el-table-column prop="project_name" label="产品" min-width="88" align="left" show-overflow-tooltip />
-              <el-table-column label="状态" width="76" align="center">
+            <el-table
+              class="sidebar-table--sci admin-data-table"
+              :data="releasePlans"
+              size="small"
+            >
+              <el-table-column
+                prop="version_no"
+                label="版本"
+                min-width="72"
+                width="72"
+                align="left"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                prop="project_name"
+                label="产品"
+                min-width="88"
+                align="left"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                label="状态"
+                width="76"
+                align="center"
+              >
                 <template #default="{ row }">
-                  <el-tag :type="releaseTag(row.status)" size="small">{{ releaseLabel(row.status) }}</el-tag>
+                  <el-tag
+                    :type="releaseTag(row.status)"
+                    size="small"
+                  >
+                    {{ releaseLabel(row.status) }}
+                  </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="日期" min-width="104" width="104" align="center" class-name="col-datetime">
-                <template #default="{ row }">{{ formatDate(row.release_date) }}</template>
+              <el-table-column
+                label="日期"
+                min-width="104"
+                width="104"
+                align="center"
+                class-name="col-datetime"
+              >
+                <template #default="{ row }">
+                  {{ formatDate(row.release_date) }}
+                </template>
               </el-table-column>
               <template #empty>
-                <el-empty description="暂无发布计划" :image-size="64" />
+                <el-empty
+                  description="暂无发布计划"
+                  :image-size="64"
+                />
               </template>
             </el-table>
           </div>

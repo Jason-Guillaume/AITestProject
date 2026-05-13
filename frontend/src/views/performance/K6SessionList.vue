@@ -1,9 +1,17 @@
 <template>
   <div class="cyber-page admin-list-page k6-session-list-page">
-    <el-card class="admin-list-card" shadow="never">
+    <el-card
+      class="admin-list-card"
+      shadow="never"
+    >
       <div class="admin-toolbar-row">
         <div class="admin-toolbar-row__left">
-          <el-button type="primary" @click="router.push('/performance/load-monitor')">去压测看板</el-button>
+          <el-button
+            type="primary"
+            @click="router.push('/performance/load-monitor')"
+          >
+            去压测看板
+          </el-button>
           <el-button
             type="danger"
             plain
@@ -24,19 +32,63 @@
           </el-button>
         </div>
         <div class="admin-toolbar-row__right">
-          <el-input v-model="filters.run_id" clearable placeholder="按 run_id 关键字" style="width: 220px" @keyup.enter="onSearch" />
-          <el-select v-model="filters.status" clearable placeholder="按状态" style="width: 160px" @change="onSearch">
-            <el-option label="pending" value="pending" />
-            <el-option label="generating" value="generating" />
-            <el-option label="running" value="running" />
-            <el-option label="completed" value="completed" />
-            <el-option label="failed" value="failed" />
+          <el-input
+            v-model="filters.run_id"
+            clearable
+            placeholder="按 run_id 关键字"
+            style="width: 220px"
+            @keyup.enter="onSearch"
+          />
+          <el-select
+            v-model="filters.status"
+            clearable
+            placeholder="按状态"
+            style="width: 160px"
+            @change="onSearch"
+          >
+            <el-option
+              label="pending"
+              value="pending"
+            />
+            <el-option
+              label="generating"
+              value="generating"
+            />
+            <el-option
+              label="running"
+              value="running"
+            />
+            <el-option
+              label="completed"
+              value="completed"
+            />
+            <el-option
+              label="failed"
+              value="failed"
+            />
           </el-select>
-          <el-select v-model="filters.ordering" placeholder="排序" style="width: 160px; margin-left: 10px" @change="onSearch">
-            <el-option label="创建时间↓" value="-create_time" />
-            <el-option label="创建时间↑" value="create_time" />
-            <el-option label="状态↑" value="status" />
-            <el-option label="状态↓" value="-status" />
+          <el-select
+            v-model="filters.ordering"
+            placeholder="排序"
+            style="width: 160px; margin-left: 10px"
+            @change="onSearch"
+          >
+            <el-option
+              label="创建时间↓"
+              value="-create_time"
+            />
+            <el-option
+              label="创建时间↑"
+              value="create_time"
+            />
+            <el-option
+              label="状态↑"
+              value="status"
+            />
+            <el-option
+              label="状态↓"
+              value="-status"
+            />
           </el-select>
           <el-date-picker
             v-model="filters.createdRange"
@@ -48,26 +100,89 @@
             style="width: 260px; margin-left: 10px"
             @change="onSearch"
           />
-          <el-checkbox v-model="filters.created_by_me" @change="onSearch" style="margin-left: 10px">
+          <el-checkbox
+            v-model="filters.created_by_me"
+            style="margin-left: 10px"
+            @change="onSearch"
+          >
             只看我创建的
           </el-checkbox>
         </div>
       </div>
 
-      <el-table v-loading="loading" :data="rows" border stripe class="admin-data-table" @selection-change="onSelectionChange">
-        <el-table-column type="selection" width="44" fixed="left" />
-        <el-table-column prop="id" label="ID" width="90" align="center" />
-        <el-table-column prop="run_id" label="run_id" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="status" label="状态" width="120" align="center" />
-        <el-table-column prop="vus" label="vus" width="90" align="center" />
-        <el-table-column prop="duration" label="duration" width="110" align="center" />
-        <el-table-column prop="use_ai" label="use_ai" width="90" align="center" />
-        <el-table-column prop="create_time" label="创建时间" width="184" align="center">
-          <template #default="{ row }">{{ formatDate(row.create_time) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right" align="center">
+      <el-table
+        v-loading="loading"
+        :data="rows"
+        border
+        stripe
+        class="admin-data-table"
+        @selection-change="onSelectionChange"
+      >
+        <el-table-column
+          type="selection"
+          width="44"
+          fixed="left"
+        />
+        <el-table-column
+          prop="id"
+          label="ID"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="run_id"
+          label="run_id"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="status"
+          label="状态"
+          width="120"
+          align="center"
+        />
+        <el-table-column
+          prop="vus"
+          label="vus"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="duration"
+          label="duration"
+          width="110"
+          align="center"
+        />
+        <el-table-column
+          prop="use_ai"
+          label="use_ai"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="create_time"
+          label="创建时间"
+          width="184"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click="router.push(`/performance/load-monitor?run_id=${row.run_id}`)">查看</el-button>
+            {{ formatDate(row.create_time) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          width="140"
+          fixed="right"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click="router.push(`/performance/load-monitor?run_id=${row.run_id}`)"
+            >
+              查看
+            </el-button>
           </template>
         </el-table-column>
       </el-table>

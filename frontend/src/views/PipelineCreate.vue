@@ -1,9 +1,16 @@
 <template>
   <div class="cyber-page pipeline-create-page">
-    <el-card class="admin-list-card" shadow="never">
+    <el-card
+      class="admin-list-card"
+      shadow="never"
+    >
       <template #header>
         <div class="hdr">
-          <el-button text type="primary" @click="router.push('/pipelines')">
+          <el-button
+            text
+            type="primary"
+            @click="router.push('/pipelines')"
+          >
             <el-icon><ArrowLeft /></el-icon>
             返回列表
           </el-button>
@@ -14,30 +21,66 @@
         </div>
       </template>
 
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" class="create-form">
-        <el-form-item label="项目类型" prop="kind">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="120px"
+        class="create-form"
+      >
+        <el-form-item
+          label="项目类型"
+          prop="kind"
+        >
           <el-radio-group v-model="form.kind">
-            <el-radio-button :value="0">自由风格</el-radio-button>
-            <el-radio-button :value="1">流水线脚本</el-radio-button>
+            <el-radio-button :value="0">
+              自由风格
+            </el-radio-button>
+            <el-radio-button :value="1">
+              流水线脚本
+            </el-radio-button>
           </el-radio-group>
           <div class="hint">
-            <template v-if="form.kind === 0">单次 Shell 执行，适合编译、脚本、调用工具链等。</template>
-            <template v-else>按行首「<code># stage: 名称</code>」拆成多个阶段依次执行；任一段失败则构建失败。</template>
+            <template v-if="form.kind === 0">
+              单次 Shell 执行，适合编译、脚本、调用工具链等。
+            </template>
+            <template v-else>
+              按行首「<code># stage: 名称</code>」拆成多个阶段依次执行；任一段失败则构建失败。
+            </template>
           </div>
         </el-form-item>
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" maxlength="255" show-word-limit placeholder="例如：订单服务 nightly 构建" />
+        <el-form-item
+          label="名称"
+          prop="name"
+        >
+          <el-input
+            v-model="form.name"
+            maxlength="255"
+            show-word-limit
+            placeholder="例如：订单服务 nightly 构建"
+          />
         </el-form-item>
-        <el-form-item label="代码仓库" prop="repo_url">
+        <el-form-item
+          label="代码仓库"
+          prop="repo_url"
+        >
           <el-input
             v-model="form.repo_url"
             clearable
             placeholder="可选，https://…（后续可与克隆步骤结合）"
           />
         </el-form-item>
-        <el-form-item label="构建脚本" prop="build_definition">
+        <el-form-item
+          label="构建脚本"
+          prop="build_definition"
+        >
           <div class="script-toolbar">
-            <el-button size="small" @click="fillTemplate">填入示例脚本</el-button>
+            <el-button
+              size="small"
+              @click="fillTemplate"
+            >
+              填入示例脚本
+            </el-button>
           </div>
           <el-input
             v-model="form.build_definition"
@@ -48,8 +91,16 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="submit">创建并进入配置</el-button>
-          <el-button @click="router.push('/pipelines')">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="submitting"
+            @click="submit"
+          >
+            创建并进入配置
+          </el-button>
+          <el-button @click="router.push('/pipelines')">
+            取消
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>

@@ -16,7 +16,10 @@
     <template #header />
 
     <div class="cp">
-      <div class="cp-glow" aria-hidden="true" />
+      <div
+        class="cp-glow"
+        aria-hidden="true"
+      />
 
       <el-input
         ref="searchInputRef"
@@ -27,8 +30,15 @@
         @keydown="onSearchKeydown"
       >
         <template #prefix>
-          <span class="cp-search__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22">
+          <span
+            class="cp-search__icon"
+            aria-hidden="true"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="22"
+              height="22"
+            >
               <path
                 fill="none"
                 stroke="currentColor"
@@ -43,7 +53,12 @@
         </template>
       </el-input>
 
-      <p v-if="hintLine" class="cp-hint">{{ hintLine }}</p>
+      <p
+        v-if="hintLine"
+        class="cp-hint"
+      >
+        {{ hintLine }}
+      </p>
 
       <ul
         ref="listRef"
@@ -63,9 +78,17 @@
           @mouseenter="activeIndex = idx"
         >
           <span class="cp-item__label">{{ cmd.label }}</span>
-          <span v-if="cmd.badge" class="cp-item__badge">{{ cmd.badge }}</span>
+          <span
+            v-if="cmd.badge"
+            class="cp-item__badge"
+          >{{ cmd.badge }}</span>
         </li>
-        <li v-if="filteredCommands.length === 0" class="cp-empty">没有匹配的指令</li>
+        <li
+          v-if="filteredCommands.length === 0"
+          class="cp-empty"
+        >
+          没有匹配的指令
+        </li>
       </ul>
     </div>
   </el-dialog>

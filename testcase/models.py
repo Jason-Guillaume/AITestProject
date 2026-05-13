@@ -137,6 +137,10 @@ class TestModule(BaseModel):
 
     class Meta:
         db_table = "test_module"
+        indexes = [
+            models.Index(fields=['project_id', 'test_type', 'is_deleted'], name='idx_module_proj_type_del'),
+            models.Index(fields=['parent_id', 'is_deleted'], name='idx_module_parent_del'),
+        ]
 
 
 class TestEnvironment(BaseModel):
@@ -398,6 +402,11 @@ class TestCase(BaseModel):
 
     class Meta:
         db_table = "test_case"
+        indexes = [
+            models.Index(fields=['case_name'], name='idx_testcase_case_name'),
+            models.Index(fields=['module_id', 'is_deleted'], name='idx_testcase_module_del'),
+            models.Index(fields=['test_type', 'is_deleted'], name='idx_testcase_type_del'),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["test_type", "case_number"],
@@ -861,6 +870,8 @@ class ExecutionLog(BaseModel):
         ordering = ["-create_time"]
         indexes = [
             models.Index(fields=["test_case", "-create_time"]),
+            models.Index(fields=['test_case_id', 'is_deleted'], name='idx_execlog_case_del'),
+            models.Index(fields=['create_time'], name='idx_execlog_ctime'),
         ]
 
 

@@ -1,50 +1,122 @@
 <template>
-  <div v-if="!pipelineId" class="cyber-page pipeline-detail-page">
+  <div
+    v-if="!pipelineId"
+    class="cyber-page pipeline-detail-page"
+  >
     <el-empty description="无效的流水线 ID" />
-    <el-button type="primary" @click="router.push('/pipelines')">返回列表</el-button>
+    <el-button
+      type="primary"
+      @click="router.push('/pipelines')"
+    >
+      返回列表
+    </el-button>
   </div>
-  <div v-else class="cyber-page pipeline-detail-page">
+  <div
+    v-else
+    class="cyber-page pipeline-detail-page"
+  >
     <div class="detail-top">
-      <el-button text type="primary" @click="router.push('/pipelines')">
+      <el-button
+        text
+        type="primary"
+        @click="router.push('/pipelines')"
+      >
         <el-icon><ArrowLeft /></el-icon>
         返回列表
       </el-button>
-      <el-tag v-if="loaded" type="info">{{ kindLabel(form.kind) }}</el-tag>
-      <el-tag v-if="loaded" :type="statusTagType(detail?.status)">{{ statusLabel(detail?.status) }}</el-tag>
+      <el-tag
+        v-if="loaded"
+        type="info"
+      >
+        {{ kindLabel(form.kind) }}
+      </el-tag>
+      <el-tag
+        v-if="loaded"
+        :type="statusTagType(detail?.status)"
+      >
+        {{ statusLabel(detail?.status) }}
+      </el-tag>
     </div>
 
-    <el-row :gutter="16" class="detail-grid">
-      <el-col :xs="24" :lg="11">
-        <el-card shadow="never" class="panel-card" v-loading="loading">
-          <template #header>项目配置</template>
-          <el-form :model="form" label-position="top" class="config-form">
+    <el-row
+      :gutter="16"
+      class="detail-grid"
+    >
+      <el-col
+        :xs="24"
+        :lg="11"
+      >
+        <el-card
+          v-loading="loading"
+          shadow="never"
+          class="panel-card"
+        >
+          <template #header>
+            项目配置
+          </template>
+          <el-form
+            :model="form"
+            label-position="top"
+            class="config-form"
+          >
             <el-form-item label="名称">
-              <el-input v-model="form.name" maxlength="255" show-word-limit />
+              <el-input
+                v-model="form.name"
+                maxlength="255"
+                show-word-limit
+              />
             </el-form-item>
             <el-form-item label="项目类型">
               <el-radio-group v-model="form.kind">
-                <el-radio-button :value="0">自由风格</el-radio-button>
-                <el-radio-button :value="1">流水线脚本</el-radio-button>
+                <el-radio-button :value="0">
+                  自由风格
+                </el-radio-button>
+                <el-radio-button :value="1">
+                  流水线脚本
+                </el-radio-button>
               </el-radio-group>
               <p class="mini-hint">
                 流水线脚本支持用「<code># stage: 阶段名</code>」拆段执行；自由风格为整段 Shell 一次执行。
               </p>
             </el-form-item>
             <el-form-item label="代码仓库（可选）">
-              <el-input v-model="form.repo_url" clearable placeholder="https://…" />
+              <el-input
+                v-model="form.repo_url"
+                clearable
+                placeholder="https://…"
+              />
             </el-form-item>
             <el-form-item label="构建脚本（Shell）">
-              <el-input v-model="form.build_definition" type="textarea" :rows="12" class="mono-input" />
+              <el-input
+                v-model="form.build_definition"
+                type="textarea"
+                :rows="12"
+                class="mono-input"
+              />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="saving" :disabled="!loaded" @click="save">保存配置</el-button>
+              <el-button
+                type="primary"
+                :loading="saving"
+                :disabled="!loaded"
+                @click="save"
+              >
+                保存配置
+              </el-button>
             </el-form-item>
           </el-form>
         </el-card>
 
-        <el-card shadow="never" class="panel-card run-card">
-          <template #header>触发构建</template>
-          <p class="mini-hint">留空则使用上方已保存的构建脚本；填写则仅本次构建覆盖（不写入配置）。</p>
+        <el-card
+          shadow="never"
+          class="panel-card run-card"
+        >
+          <template #header>
+            触发构建
+          </template>
+          <p class="mini-hint">
+            留空则使用上方已保存的构建脚本；填写则仅本次构建覆盖（不写入配置）。
+          </p>
           <el-input
             v-model="runOverride"
             type="textarea"
@@ -52,15 +124,33 @@
             placeholder="可选：本次临时 Shell（覆盖已保存脚本）"
             class="mono-input"
           />
-          <el-checkbox v-model="clearLogsBeforeRun" class="chk">执行前清空控制台历史日志</el-checkbox>
+          <el-checkbox
+            v-model="clearLogsBeforeRun"
+            class="chk"
+          >
+            执行前清空控制台历史日志
+          </el-checkbox>
           <div class="run-actions">
-            <el-button type="success" :loading="running" :disabled="!loaded" @click="runBuild">立即构建</el-button>
+            <el-button
+              type="success"
+              :loading="running"
+              :disabled="!loaded"
+              @click="runBuild"
+            >
+              立即构建
+            </el-button>
           </div>
         </el-card>
       </el-col>
-      <el-col :xs="24" :lg="13">
+      <el-col
+        :xs="24"
+        :lg="13"
+      >
         <div class="console-host">
-          <PipelineConsole :pipeline-id="pipelineId" :reset-nonce="consoleNonce" />
+          <PipelineConsole
+            :pipeline-id="pipelineId"
+            :reset-nonce="consoleNonce"
+          />
         </div>
       </el-col>
     </el-row>

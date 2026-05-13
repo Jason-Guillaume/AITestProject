@@ -878,7 +878,9 @@ async function onFolderMenuCommand(cmd: string, data: ModuleNode) {
     <header class="asset-hub__header">
       <div class="asset-hub__brand">
         <h1>资产中心 <span class="asset-hub__en">Asset Hub</span></h1>
-        <p class="asset-hub__subtitle">数据与执行中心同源（UIScriptUpload + 工作区扫描）· 总览展示当前平台全部脚本</p>
+        <p class="asset-hub__subtitle">
+          数据与执行中心同源（UIScriptUpload + 工作区扫描）· 总览展示当前平台全部脚本
+        </p>
       </div>
 
       <div class="asset-hub__toolbar-row">
@@ -890,11 +892,27 @@ async function onFolderMenuCommand(cmd: string, data: ModuleNode) {
             placeholder="关键字：名称 / 负责人 / 环境 / 模块"
             :prefix-icon="Search"
           />
-          <el-select v-model="resultFilter" class="asset-hub__select" placeholder="上次执行结果">
-            <el-option label="全部结果" value="all" />
-            <el-option label="成功" value="success" />
-            <el-option label="失败" value="failed" />
-            <el-option label="未知 / 未跑" value="unknown" />
+          <el-select
+            v-model="resultFilter"
+            class="asset-hub__select"
+            placeholder="上次执行结果"
+          >
+            <el-option
+              label="全部结果"
+              value="all"
+            />
+            <el-option
+              label="成功"
+              value="success"
+            />
+            <el-option
+              label="失败"
+              value="failed"
+            />
+            <el-option
+              label="未知 / 未跑"
+              value="unknown"
+            />
           </el-select>
         </div>
 
@@ -902,10 +920,19 @@ async function onFolderMenuCommand(cmd: string, data: ModuleNode) {
 
         <div class="asset-hub__group asset-hub__group--platform">
           <span class="asset-hub__group-label">平台</span>
-          <el-radio-group v-model="assetPlatform" size="small">
-            <el-radio-button value="web">Web</el-radio-button>
-            <el-radio-button value="mobile">Mobile</el-radio-button>
-            <el-radio-button value="api">API</el-radio-button>
+          <el-radio-group
+            v-model="assetPlatform"
+            size="small"
+          >
+            <el-radio-button value="web">
+              Web
+            </el-radio-button>
+            <el-radio-button value="mobile">
+              Mobile
+            </el-radio-button>
+            <el-radio-button value="api">
+              API
+            </el-radio-button>
           </el-radio-group>
         </div>
 
@@ -913,14 +940,28 @@ async function onFolderMenuCommand(cmd: string, data: ModuleNode) {
 
         <div class="asset-hub__group asset-hub__group--upload">
           <span class="asset-hub__group-label">上传</span>
-          <el-button type="primary" size="small" :icon="Upload" @click="openInitDialog('create')">智能上传</el-button>
+          <el-button
+            type="primary"
+            size="small"
+            :icon="Upload"
+            @click="openInitDialog('create')"
+          >
+            智能上传
+          </el-button>
         </div>
 
         <div class="asset-hub__sep" />
 
         <div class="asset-hub__group asset-hub__group--sync">
           <span class="asset-hub__group-label">同步</span>
-          <el-button size="small" type="success" plain :icon="Refresh" :loading="syncLoading" @click="onOneClickSync">
+          <el-button
+            size="small"
+            type="success"
+            plain
+            :icon="Refresh"
+            :loading="syncLoading"
+            @click="onOneClickSync"
+          >
             一键同步
           </el-button>
         </div>
@@ -929,9 +970,30 @@ async function onFolderMenuCommand(cmd: string, data: ModuleNode) {
 
         <div class="asset-hub__group asset-hub__group--batch">
           <span class="asset-hub__group-label">批量</span>
-          <el-button :icon="Rank" size="small" :disabled="!hasSelection" @click="batchMoveDirectory">移动目录</el-button>
-          <el-button :icon="Switch" size="small" :disabled="!hasSelection" @click="batchToggleScriptStatus">批量启用</el-button>
-          <el-button :icon="Download" type="primary" size="small" plain :disabled="!hasSelection" @click="batchExportPy">
+          <el-button
+            :icon="Rank"
+            size="small"
+            :disabled="!hasSelection"
+            @click="batchMoveDirectory"
+          >
+            移动目录
+          </el-button>
+          <el-button
+            :icon="Switch"
+            size="small"
+            :disabled="!hasSelection"
+            @click="batchToggleScriptStatus"
+          >
+            批量启用
+          </el-button>
+          <el-button
+            :icon="Download"
+            type="primary"
+            size="small"
+            plain
+            :disabled="!hasSelection"
+            @click="batchExportPy"
+          >
             导出 .py
           </el-button>
           <el-button
@@ -947,14 +1009,32 @@ async function onFolderMenuCommand(cmd: string, data: ModuleNode) {
       </div>
     </header>
 
-    <div v-loading="pageLoading" class="asset-hub__wide">
-      <aside class="asset-hub__modules" aria-label="Module 树">
+    <div
+      v-loading="pageLoading"
+      class="asset-hub__wide"
+    >
+      <aside
+        class="asset-hub__modules"
+        aria-label="Module 树"
+      >
         <div class="asset-hub__modules-head">
-          <el-icon class="asset-hub__plat-ico"><component :is="platformHeadIcon" /></el-icon>
+          <el-icon class="asset-hub__plat-ico">
+            <component :is="platformHeadIcon" />
+          </el-icon>
           <span>Module</span>
-          <el-tag size="small" type="info">{{ platformLabel(assetPlatform) }}</el-tag>
+          <el-tag
+            size="small"
+            type="info"
+          >
+            {{ platformLabel(assetPlatform) }}
+          </el-tag>
         </div>
-        <el-button text type="primary" class="asset-hub__all-modules" @click="onSelectAllModules">
+        <el-button
+          text
+          type="primary"
+          class="asset-hub__all-modules"
+          @click="onSelectAllModules"
+        >
           全部脚本 (总览)
         </el-button>
         <el-tree
@@ -982,12 +1062,24 @@ async function onFolderMenuCommand(cmd: string, data: ModuleNode) {
       </aside>
 
       <section class="asset-hub__detail">
-        <el-breadcrumb separator=">" class="asset-hub__breadcrumb">
+        <el-breadcrumb
+          separator=">"
+          class="asset-hub__breadcrumb"
+        >
           <el-breadcrumb-item>
-            <a href="javascript:;" @click.prevent="onSelectAllModules">根</a>
+            <a
+              href="javascript:;"
+              @click.prevent="onSelectAllModules"
+            >根</a>
           </el-breadcrumb-item>
-          <el-breadcrumb-item v-for="(c, i) in crumbTrail" :key="c.id">
-            <a href="javascript:;" @click.prevent="onCrumbClick(i)">{{ c.label }}</a>
+          <el-breadcrumb-item
+            v-for="(c, i) in crumbTrail"
+            :key="c.id"
+          >
+            <a
+              href="javascript:;"
+              @click.prevent="onCrumbClick(i)"
+            >{{ c.label }}</a>
           </el-breadcrumb-item>
         </el-breadcrumb>
 
@@ -1004,15 +1096,31 @@ async function onFolderMenuCommand(cmd: string, data: ModuleNode) {
             >
               一键同步物理文件
             </el-button>
-            <el-button size="small" :icon="Rank" :disabled="!hasSelection" @click="batchMoveDirectory">批量移动目录</el-button>
-            <el-button type="danger" size="small" plain :disabled="!hasSelection" @click="batchSoftDelete">
+            <el-button
+              size="small"
+              :icon="Rank"
+              :disabled="!hasSelection"
+              @click="batchMoveDirectory"
+            >
+              批量移动目录
+            </el-button>
+            <el-button
+              type="danger"
+              size="small"
+              plain
+              :disabled="!hasSelection"
+              @click="batchSoftDelete"
+            >
               批量删除
             </el-button>
           </div>
         </div>
 
         <div class="asset-hub__table-shell">
-          <el-auto-resizer v-if="useVirtualTable" class="asset-hub__table-v2-wrap">
+          <el-auto-resizer
+            v-if="useVirtualTable"
+            class="asset-hub__table-v2-wrap"
+          >
             <template #default="{ height, width }">
               <el-table-v2
                 v-if="width > 8"
@@ -1030,99 +1138,133 @@ async function onFolderMenuCommand(cmd: string, data: ModuleNode) {
               />
             </template>
           </el-auto-resizer>
-        <el-table
-          v-else
-          ref="tableRef"
-          :data="tableDisplayNodes"
-          row-key="id"
-          height="100%"
-          style="width: 100%"
-          class="asset-hub__table asset-hub__table--cyber"
-          :row-class-name="rowClassName"
-          @selection-change="onSelectionChange"
-        >
-          <el-table-column type="selection" width="48" fixed />
-          <el-table-column label="Node / 脚本" min-width="200" show-overflow-tooltip>
-            <template #default="{ row }">
-              <div class="asset-hub__node-cell">
-                <span class="asset-hub__node-name">{{ row.name }}</span>
-                <span class="asset-hub__node-path">{{ row.relPath || '—' }}</span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="同步状态" width="128" align="left">
-            <template #default="{ row }">
-              <CyberStatusChip
-                :variant="row.syncState === 'pending_init' ? 'sync-pending' : 'sync-ready'"
-                :label="syncStateLabel(row.syncState)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column prop="owner" label="负责人" width="100" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span class="asset-hub__cell-mono">{{ row.owner }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="上次成功率" width="120">
-            <template #default="{ row }">
-              <el-progress
-                :percentage="row.lastSuccessRate"
-                :stroke-width="10"
-                :status="row.lastSuccessRate >= 90 ? 'success' : undefined"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="最近执行" width="118" align="left">
-            <template #default="{ row }">
-              <CyberStatusChip
-                :variant="
-                  row.lastResult === 'success'
-                    ? 'exec-success'
-                    : row.lastResult === 'failed'
-                      ? 'exec-failed'
-                      : 'exec-unknown'
-                "
-                :label="resultLabel(row.lastResult)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="运行状态" width="96" align="left">
-            <template #default="{ row }">
-              <CyberStatusChip
-                :variant="row.isActive ? 'run-on' : 'run-off'"
-                :label="row.isActive ? '启用' : '停用'"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="168" fixed="right" align="left">
-            <template #default="{ row }">
-              <span class="asset-hub__ops">
-                <el-button
-                  v-if="row.syncState === 'pending_init'"
-                  link
-                  type="warning"
-                  size="small"
-                  @click="openInitDialog('edit', row)"
-                >
-                  初始化
-                </el-button>
-                <el-button
-                  v-if="isGhostRunnerRow(row)"
-                  link
-                  type="primary"
-                  size="small"
-                  class="asset-hub__quick-debug-btn"
-                  @click="quickDebugWorkbench(row)"
-                >
-                  ⚡ 快速调试
-                </el-button>
-                <span v-if="row.syncState !== 'pending_init' && !isGhostRunnerRow(row)" class="asset-hub__op-placeholder"
-                  >—</span
-                >
-              </span>
-            </template>
-          </el-table-column>
-        </el-table>
+          <el-table
+            v-else
+            ref="tableRef"
+            :data="tableDisplayNodes"
+            row-key="id"
+            height="100%"
+            style="width: 100%"
+            class="asset-hub__table asset-hub__table--cyber"
+            :row-class-name="rowClassName"
+            @selection-change="onSelectionChange"
+          >
+            <el-table-column
+              type="selection"
+              width="48"
+              fixed
+            />
+            <el-table-column
+              label="Node / 脚本"
+              min-width="200"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                <div class="asset-hub__node-cell">
+                  <span class="asset-hub__node-name">{{ row.name }}</span>
+                  <span class="asset-hub__node-path">{{ row.relPath || '—' }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="同步状态"
+              width="128"
+              align="left"
+            >
+              <template #default="{ row }">
+                <CyberStatusChip
+                  :variant="row.syncState === 'pending_init' ? 'sync-pending' : 'sync-ready'"
+                  :label="syncStateLabel(row.syncState)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="owner"
+              label="负责人"
+              width="100"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                <span class="asset-hub__cell-mono">{{ row.owner }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="上次成功率"
+              width="120"
+            >
+              <template #default="{ row }">
+                <el-progress
+                  :percentage="row.lastSuccessRate"
+                  :stroke-width="10"
+                  :status="row.lastSuccessRate >= 90 ? 'success' : undefined"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="最近执行"
+              width="118"
+              align="left"
+            >
+              <template #default="{ row }">
+                <CyberStatusChip
+                  :variant="
+                    row.lastResult === 'success'
+                      ? 'exec-success'
+                      : row.lastResult === 'failed'
+                        ? 'exec-failed'
+                        : 'exec-unknown'
+                  "
+                  :label="resultLabel(row.lastResult)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="运行状态"
+              width="96"
+              align="left"
+            >
+              <template #default="{ row }">
+                <CyberStatusChip
+                  :variant="row.isActive ? 'run-on' : 'run-off'"
+                  :label="row.isActive ? '启用' : '停用'"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="操作"
+              width="168"
+              fixed="right"
+              align="left"
+            >
+              <template #default="{ row }">
+                <span class="asset-hub__ops">
+                  <el-button
+                    v-if="row.syncState === 'pending_init'"
+                    link
+                    type="warning"
+                    size="small"
+                    @click="openInitDialog('edit', row)"
+                  >
+                    初始化
+                  </el-button>
+                  <el-button
+                    v-if="isGhostRunnerRow(row)"
+                    link
+                    type="primary"
+                    size="small"
+                    class="asset-hub__quick-debug-btn"
+                    @click="quickDebugWorkbench(row)"
+                  >
+                    ⚡ 快速调试
+                  </el-button>
+                  <span
+                    v-if="row.syncState !== 'pending_init' && !isGhostRunnerRow(row)"
+                    class="asset-hub__op-placeholder"
+                  >—</span>
+                </span>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
       </section>
     </div>

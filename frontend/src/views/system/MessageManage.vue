@@ -1,22 +1,53 @@
 <template>
   <div class="message-manage cyber-page sys-admin-page">
-    <el-card class="mm-top-card" shadow="never">
+    <el-card
+      class="mm-top-card"
+      shadow="never"
+    >
       <div class="mm-top">
         <div class="mm-top__text">
-          <h1 class="mm-title">消息中心</h1>
-          <p class="mm-sub">站内系统消息与敏感信息变更审批（用户名 / 密码）。</p>
+          <h1 class="mm-title">
+            消息中心
+          </h1>
+          <p class="mm-sub">
+            站内系统消息与敏感信息变更审批（用户名 / 密码）。
+          </p>
         </div>
         <div class="mm-top__actions">
-          <el-radio-group v-model="filterRead" size="default" class="mm-filter">
-            <el-radio-button label="all">全部</el-radio-button>
-            <el-radio-button label="unread">未读</el-radio-button>
-            <el-radio-button label="read">已读</el-radio-button>
+          <el-radio-group
+            v-model="filterRead"
+            size="default"
+            class="mm-filter"
+          >
+            <el-radio-button label="all">
+              全部
+            </el-radio-button>
+            <el-radio-button label="unread">
+              未读
+            </el-radio-button>
+            <el-radio-button label="read">
+              已读
+            </el-radio-button>
           </el-radio-group>
-          <el-badge v-if="totalUnread" :value="totalUnread" class="mm-unread-pill" type="danger" />
-          <el-button size="default" :disabled="!unreadIds.length" :loading="markAllLoading" @click="markAllAsRead">
+          <el-badge
+            v-if="totalUnread"
+            :value="totalUnread"
+            class="mm-unread-pill"
+            type="danger"
+          />
+          <el-button
+            size="default"
+            :disabled="!unreadIds.length"
+            :loading="markAllLoading"
+            @click="markAllAsRead"
+          >
             全部标为已读
           </el-button>
-          <el-button size="default" :loading="loading" @click="loadAll">
+          <el-button
+            size="default"
+            :loading="loading"
+            @click="loadAll"
+          >
             <el-icon><Refresh /></el-icon>
             刷新
           </el-button>
@@ -24,8 +55,14 @@
       </div>
     </el-card>
 
-    <el-card class="mm-body-card" shadow="never">
-      <div v-loading="loading" class="mm-master-detail">
+    <el-card
+      class="mm-body-card"
+      shadow="never"
+    >
+      <div
+        v-loading="loading"
+        class="mm-master-detail"
+      >
         <aside class="mm-list-pane">
           <el-scrollbar max-height="calc(100vh - 220px)">
             <template v-if="filteredMessages.length">
@@ -37,18 +74,35 @@
                 :class="{ 'mm-list-item--active': selectedId === msg.id, 'mm-list-item--unread': !msg.is_read }"
                 @click="onSelectMessage(msg)"
               >
-                <span v-if="!msg.is_read" class="mm-unread-dot" aria-hidden="true" />
+                <span
+                  v-if="!msg.is_read"
+                  class="mm-unread-dot"
+                  aria-hidden="true"
+                />
                 <div class="mm-list-item__body">
                   <div class="mm-list-item__title-row">
                     <span class="mm-list-item__title">{{ msg.title }}</span>
-                    <el-tag v-if="!msg.is_read" size="small" type="danger" effect="plain">未读</el-tag>
+                    <el-tag
+                      v-if="!msg.is_read"
+                      size="small"
+                      type="danger"
+                      effect="plain"
+                    >
+                      未读
+                    </el-tag>
                   </div>
                   <time class="mm-list-item__time">{{ formatTime(msg.created_at) }}</time>
                 </div>
               </button>
             </template>
-            <div v-else class="mm-list-empty">
-              <el-empty description="暂无消息" :image-size="72" />
+            <div
+              v-else
+              class="mm-list-empty"
+            >
+              <el-empty
+                description="暂无消息"
+                :image-size="72"
+              />
             </div>
           </el-scrollbar>
         </aside>
@@ -56,18 +110,30 @@
         <main class="mm-detail-pane">
           <template v-if="selectedMessage">
             <div class="mm-detail__meta">
-              <h2 class="mm-detail__title">{{ selectedMessage.title }}</h2>
+              <h2 class="mm-detail__title">
+                {{ selectedMessage.title }}
+              </h2>
               <div class="mm-detail__tags">
-                <el-tag size="small" :type="selectedMessage.is_read ? 'info' : 'warning'">
+                <el-tag
+                  size="small"
+                  :type="selectedMessage.is_read ? 'info' : 'warning'"
+                >
                   {{ selectedMessage.is_read ? "已读" : "未读" }}
                 </el-tag>
                 <span class="mm-detail__time">{{ formatTime(selectedMessage.created_at) }}</span>
               </div>
             </div>
-            <div class="mm-detail__content">{{ selectedMessage.content }}</div>
+            <div class="mm-detail__content">
+              {{ selectedMessage.content }}
+            </div>
 
-            <div v-if="showApprovalActions(selectedMessage)" class="mm-approval">
-              <div class="mm-approval__label">审批申请</div>
+            <div
+              v-if="showApprovalActions(selectedMessage)"
+              class="mm-approval"
+            >
+              <div class="mm-approval__label">
+                审批申请
+              </div>
               <p class="mm-approval__line">
                 用户 <strong>{{ approvalDetail(selectedMessage)?.applicant_username || "—" }}</strong>
                 请求修改 <strong>{{ requestTypeLabel(approvalDetail(selectedMessage)?.request_type) }}</strong>
@@ -99,7 +165,12 @@
               已处理
             </div>
           </template>
-          <el-empty v-else description="请从左侧选择一条消息" :image-size="88" class="mm-detail-empty" />
+          <el-empty
+            v-else
+            description="请从左侧选择一条消息"
+            :image-size="88"
+            class="mm-detail-empty"
+          />
         </main>
       </div>
     </el-card>

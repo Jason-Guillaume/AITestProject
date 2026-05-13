@@ -1,17 +1,34 @@
 <template>
   <div class="page-wrap cyber-page admin-list-page">
-    <el-card class="admin-list-card" shadow="never">
+    <el-card
+      class="admin-list-card"
+      shadow="never"
+    >
       <div class="admin-toolbar-row">
         <div class="admin-toolbar-row__left">
-          <el-button type="primary" @click="openCreate">
+          <el-button
+            type="primary"
+            @click="openCreate"
+          >
             <el-icon><Plus /></el-icon> 新增测试报告
           </el-button>
-          <el-button class="filter-btn" :type="isRecycleMode ? 'warning' : ''" @click="toggleRecycleMode">
+          <el-button
+            class="filter-btn"
+            :type="isRecycleMode ? 'warning' : ''"
+            @click="toggleRecycleMode"
+          >
             {{ isRecycleMode ? '返回列表' : '回收站' }}
           </el-button>
-          <el-button class="filter-btn" :type="isSelectMode ? 'info' : ''" @click="toggleSelectMode">
+          <el-button
+            class="filter-btn"
+            :type="isSelectMode ? 'info' : ''"
+            @click="toggleSelectMode"
+          >
             {{ isSelectMode ? '取消选择' : '选择' }}
-            <span v-if="isSelectMode && selectedIds.length" style="margin-left: 6px">（{{ selectedIds.length }}）</span>
+            <span
+              v-if="isSelectMode && selectedIds.length"
+              style="margin-left: 6px"
+            >（{{ selectedIds.length }}）</span>
           </el-button>
           <el-button
             v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0"
@@ -69,53 +86,169 @@
           </el-button>
         </div>
         <div class="admin-toolbar-row__right">
-          <el-input v-model="searchKw" placeholder="请输入测试报告名称" clearable class="search-input">
-            <template #suffix><el-icon><Search /></el-icon></template>
+          <el-input
+            v-model="searchKw"
+            placeholder="请输入测试报告名称"
+            clearable
+            class="search-input"
+          >
+            <template #suffix>
+              <el-icon><Search /></el-icon>
+            </template>
           </el-input>
         </div>
       </div>
 
       <div class="admin-table-panel">
         <el-table
-          :data="filteredList"
           v-loading="loading"
+          :data="filteredList"
           stripe
           border
           class="admin-data-table"
           size="default"
           @selection-change="onSelectionChange"
         >
-          <el-table-column v-if="isSelectMode" type="selection" width="44" fixed="left" />
-          <el-table-column prop="report_name" label="测试报告名称" min-width="160" align="left">
+          <el-table-column
+            v-if="isSelectMode"
+            type="selection"
+            width="44"
+            fixed="left"
+          />
+          <el-table-column
+            prop="report_name"
+            label="测试报告名称"
+            min-width="160"
+            align="left"
+          >
             <template #default="{ row }">
-              <el-button link type="primary" @click="router.push(`/test-report/${row.id}`)">{{ row.report_name }}</el-button>
+              <el-button
+                link
+                type="primary"
+                @click="router.push(`/test-report/${row.id}`)"
+              >
+                {{ row.report_name }}
+              </el-button>
             </template>
           </el-table-column>
-          <el-table-column prop="id" label="ID" min-width="88" width="88" align="left" />
-          <el-table-column label="创建方式" min-width="120" width="120" align="center">
+          <el-table-column
+            prop="id"
+            label="ID"
+            min-width="88"
+            width="88"
+            align="left"
+          />
+          <el-table-column
+            label="创建方式"
+            min-width="120"
+            width="120"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag :type="methodTagType(row.create_method)" size="small">{{ methodLabel(row.create_method) }}</el-tag>
+              <el-tag
+                :type="methodTagType(row.create_method)"
+                size="small"
+              >
+                {{ methodLabel(row.create_method) }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="创建时间" min-width="184" width="184" align="center" class-name="col-datetime">
-            <template #default="{ row }">{{ formatDate(row.create_time) }}</template>
-          </el-table-column>
-          <el-table-column prop="environment" label="测试环境" min-width="112" width="112" align="center" />
-          <el-table-column prop="req_count" label="需求数" min-width="104" width="104" align="center" />
-          <el-table-column prop="case_count" label="用例数" min-width="104" width="104" align="center" />
-          <el-table-column label="用例覆盖率" min-width="120" width="120" align="center">
-            <template #default="{ row }">{{ row.coverage_rate }}%</template>
-          </el-table-column>
-          <el-table-column label="通过率" min-width="104" width="104" align="center">
-            <template #default="{ row }">{{ row.pass_rate }}%</template>
-          </el-table-column>
-          <el-table-column prop="defect_count" label="缺陷数" min-width="104" width="104" align="center" />
-          <el-table-column prop="creator_name" label="测试人员" min-width="120" align="center" show-overflow-tooltip />
-          <el-table-column label="操作" min-width="240" width="240" fixed="right" align="center">
+          <el-table-column
+            label="创建时间"
+            min-width="184"
+            width="184"
+            align="center"
+            class-name="col-datetime"
+          >
             <template #default="{ row }">
-              <div v-if="isRecycleMode" class="recycle-row-actions">
-                <el-button link type="success" size="small" :disabled="isSelectMode" @click="restoreRow(row)">恢复</el-button>
-                <el-button link type="danger" size="small" :disabled="isSelectMode" @click="hardDeleteRow(row)">彻底删除</el-button>
+              {{ formatDate(row.create_time) }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="environment"
+            label="测试环境"
+            min-width="112"
+            width="112"
+            align="center"
+          />
+          <el-table-column
+            prop="req_count"
+            label="需求数"
+            min-width="104"
+            width="104"
+            align="center"
+          />
+          <el-table-column
+            prop="case_count"
+            label="用例数"
+            min-width="104"
+            width="104"
+            align="center"
+          />
+          <el-table-column
+            label="用例覆盖率"
+            min-width="120"
+            width="120"
+            align="center"
+          >
+            <template #default="{ row }">
+              {{ row.coverage_rate }}%
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="通过率"
+            min-width="104"
+            width="104"
+            align="center"
+          >
+            <template #default="{ row }">
+              {{ row.pass_rate }}%
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="defect_count"
+            label="缺陷数"
+            min-width="104"
+            width="104"
+            align="center"
+          />
+          <el-table-column
+            prop="creator_name"
+            label="测试人员"
+            min-width="120"
+            align="center"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            label="操作"
+            min-width="240"
+            width="240"
+            fixed="right"
+            align="center"
+          >
+            <template #default="{ row }">
+              <div
+                v-if="isRecycleMode"
+                class="recycle-row-actions"
+              >
+                <el-button
+                  link
+                  type="success"
+                  size="small"
+                  :disabled="isSelectMode"
+                  @click="restoreRow(row)"
+                >
+                  恢复
+                </el-button>
+                <el-button
+                  link
+                  type="danger"
+                  size="small"
+                  :disabled="isSelectMode"
+                  @click="hardDeleteRow(row)"
+                >
+                  彻底删除
+                </el-button>
               </div>
               <TableActionGroup
                 v-else
@@ -140,26 +273,70 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="showDialog" :title="editingId ? '编辑测试报告' : '新增测试报告'" width="480px" class="cyber-dialog-dark">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
-        <el-form-item label="报告名称" prop="report_name">
-          <el-input v-model="form.report_name" placeholder="请输入报告名称" />
+    <el-dialog
+      v-model="showDialog"
+      :title="editingId ? '编辑测试报告' : '新增测试报告'"
+      width="480px"
+      class="cyber-dialog-dark"
+    >
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="90px"
+      >
+        <el-form-item
+          label="报告名称"
+          prop="report_name"
+        >
+          <el-input
+            v-model="form.report_name"
+            placeholder="请输入报告名称"
+          />
         </el-form-item>
-        <el-form-item label="关联计划" prop="plan">
-          <el-select v-model="form.plan" placeholder="请选择测试计划">
-            <el-option v-for="p in plans" :key="p.id" :label="p.plan_name" :value="p.id" />
+        <el-form-item
+          label="关联计划"
+          prop="plan"
+        >
+          <el-select
+            v-model="form.plan"
+            placeholder="请选择测试计划"
+          >
+            <el-option
+              v-for="p in plans"
+              :key="p.id"
+              :label="p.plan_name"
+              :value="p.id"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="测试环境" prop="environment">
+        <el-form-item
+          label="测试环境"
+          prop="environment"
+        >
           <el-select v-model="form.environment">
-            <el-option label="TEST" value="TEST" />
-            <el-option label="PROD" value="PROD" />
+            <el-option
+              label="TEST"
+              value="TEST"
+            />
+            <el-option
+              label="PROD"
+              value="PROD"
+            />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submit">确定</el-button>
+        <el-button @click="showDialog = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="submit"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>

@@ -1,4 +1,9 @@
 import { ref, computed, watch, type Ref } from 'vue'
+// OPTIMIZE: prismjs (~7KB core + ~2KB per language) is only used for JSON/HTML/PHP syntax highlighting
+// in the API execute console. Consider replacing with a lighter alternative such as:
+// - highlight.js (tree-shakeable, ~5KB for selected languages)
+// - Shiki (uses VSCode themes, on-demand loading)
+// - Or simply use a <pre> with CSS for JSON formatting if full syntax highlighting is not critical.
 import Prism from 'prismjs'
 import 'prismjs/components/prism-json'
 import 'prismjs/components/prism-markup'

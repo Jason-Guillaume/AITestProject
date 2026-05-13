@@ -36,11 +36,14 @@ class BaseRepository(Generic[T]):
         """
         self.model = model
         self.cache_prefix = model._meta.db_table
-        self.cache_ttl = 300  # 默认 5 分钟
+        self.cache_ttl = 300
 
     def get_by_id(self, obj_id: int) -> Optional[T]:
         """
         根据 ID 获取对象（带缓存）
+
+        缓存存储完整的 Model 实例，命中时直接返回，避免重复查询数据库。
+        Django 的 cache 框架支持 pickle 序列化 Model 实例。
 
         Args:
             obj_id: 对象 ID
@@ -48,17 +51,19 @@ class BaseRepository(Generic[T]):
         Returns:
             对象实例，如果不存在返回 None
         """
-        cache_key = f"{self.cache_prefix}:{obj_id}"
-        obj = cache.get(cache_key)
+        cache_key = self._get_cache_key(obj_id)
+        cached = cache.get(cache_key)
 
-        if obj is None:
-            obj = self.model.objects.filter(
-                id=obj_id,
-                is_deleted=False
-            ).first()
+        if cached is not None:
+            return cached
 
-            if obj:
-                cache.set(cache_key, obj, self.cache_ttl)
+        obj = self.model.objects.filter(
+            id=obj_id,
+            is_deleted=False
+        ).first()
+
+        if obj:
+            cache.set(cache_key, obj, self.cache_ttl)
 
         return obj
 
@@ -137,7 +142,7 @@ class BaseRepository(Generic[T]):
             创建的对象实例
         """
         obj = self.model.objects.create(**data, **kwargs)
-        self._invalidate_cache()
+        self._invalidate_cache(obj.id)
         return obj
 
     @transaction.atomic
@@ -154,8 +159,20 @@ class BaseRepository(Generic[T]):
         """
         objects = [self.model(**data, **kwargs) for data in data_list]
         created_objects = self.model.objects.bulk_create(objects)
-        self._invalidate_cache()
+        self._invalidate_all()
         return created_objects
+
+    def _get_updatable_fields(self):
+        if hasattr(self.model, '_updatable_fields'):
+            return self.model._updatable_fields
+        excluded = {
+            'id', 'pk', 'is_deleted', 'deleted_at', 'create_time', 'update_time',
+            'is_superuser', 'is_staff', 'is_system_admin', 'password',
+        }
+        return [
+            f.name for f in self.model._meta.concrete_fields
+            if f.name not in excluded
+        ]
 
     @transaction.atomic
     def update(self, obj_id: int, data: Dict[str, Any]) -> Optional[T]:
@@ -169,12 +186,14 @@ class BaseRepository(Generic[T]):
         Returns:
             更新后的对象实例，如果不存在返回 None
         """
-        obj = self.get_by_id(obj_id)
+        obj = self.model.objects.filter(id=obj_id, is_deleted=False).first()
         if not obj:
             return None
 
+        updatable = set(self._get_updatable_fields())
         for key, value in data.items():
-            setattr(obj, key, value)
+            if key in updatable:
+                setattr(obj, key, value)
         obj.save()
 
         self._invalidate_cache(obj_id)
@@ -197,7 +216,7 @@ class BaseRepository(Generic[T]):
             **filters
         ).update(**data)
 
-        self._invalidate_cache()
+        self._invalidate_all()
         return count
 
     @transaction.atomic
@@ -212,7 +231,7 @@ class BaseRepository(Generic[T]):
         Returns:
             是否删除成功
         """
-        obj = self.get_by_id(obj_id)
+        obj = self.model.objects.filter(id=obj_id, is_deleted=False).first()
         if not obj:
             return False
 
@@ -224,6 +243,22 @@ class BaseRepository(Generic[T]):
 
         self._invalidate_cache(obj_id)
         return True
+
+    @transaction.atomic
+    def batch_soft_delete(self, obj_ids: List[int]) -> int:
+        count = self.model.objects.filter(id__in=obj_ids, is_deleted=False).update(is_deleted=True)
+        for obj_id in obj_ids:
+            self._invalidate_cache(obj_id)
+        return count
+
+    @transaction.atomic
+    def batch_hard_delete(self, obj_ids: List[int]) -> int:
+        qs = self.model.objects.filter(id__in=obj_ids)
+        count = qs.count()
+        qs.delete()
+        for obj_id in obj_ids:
+            self._invalidate_cache(obj_id)
+        return count
 
     @transaction.atomic
     def delete_by_filter(self, filters: Dict[str, Any], soft: bool = True) -> int:
@@ -245,25 +280,33 @@ class BaseRepository(Generic[T]):
             count = qs.count()
             qs.delete()
 
-        self._invalidate_cache()
+        self._invalidate_all()
         return count
 
-    def _invalidate_cache(self, obj_id: Optional[int] = None):
-        """
-        清除缓存
-
-        Args:
-            obj_id: 对象 ID，如果为 None 则清除所有相关缓存
-        """
-        if obj_id:
-            cache_key = f"{self.cache_prefix}:{obj_id}"
-            cache.delete(cache_key)
+    def _invalidate_cache(self, obj_id=None):
+        if obj_id is not None:
+            cache_key = self._get_cache_key(obj_id)
+            try:
+                cache.delete(cache_key)
+            except Exception:
+                pass
         else:
-            # 清除所有相关缓存
-            # 使用 delete_pattern 如果可用，否则跳过（测试环境）
-            if hasattr(cache, 'delete_pattern'):
-                cache.delete_pattern(f"{self.cache_prefix}:*")
-            # 在测试环境中，LocMemCache 不支持 delete_pattern，可以忽略
+            self._invalidate_all()
+
+    def _invalidate_all(self):
+        try:
+            version_key = f"{self.cache_prefix}:version"
+            version = cache.get(version_key, 0)
+            cache.set(version_key, version + 1, timeout=None)
+        except Exception:
+            pass
+
+    def _get_cache_key(self, obj_id: int) -> str:
+        try:
+            version = cache.get(f"{self.cache_prefix}:version", 0)
+        except Exception:
+            version = 0
+        return f"{self.cache_prefix}:obj:{version}:{obj_id}"
 
     def _build_cache_key(self, *args) -> str:
         """

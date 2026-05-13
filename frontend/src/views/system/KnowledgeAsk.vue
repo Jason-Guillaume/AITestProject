@@ -1,77 +1,207 @@
 <template>
   <div class="page-wrap cyber-page knowledge-ask-page">
-    <el-card class="sys-page-head" shadow="never">
+    <el-card
+      class="sys-page-head"
+      shadow="never"
+    >
       <div class="sys-page-head__row">
         <div>
-          <h2 class="sys-page-head__title">知识库问答（可追溯）</h2>
-          <p class="sys-page-head__sub">回答会返回 citations 引用来源，便于审计与追溯。</p>
+          <h2 class="sys-page-head__title">
+            知识库问答（可追溯）
+          </h2>
+          <p class="sys-page-head__sub">
+            回答会返回 citations 引用来源，便于审计与追溯。
+          </p>
         </div>
         <div class="sys-page-head__actions">
-          <el-button type="primary" :loading="asking" :disabled="!question.trim()" @click="ask">提问</el-button>
-          <el-button :disabled="!answer" @click="saveAsArtifact">保存为测试资产</el-button>
+          <el-button
+            type="primary"
+            :loading="asking"
+            :disabled="!question.trim()"
+            @click="ask"
+          >
+            提问
+          </el-button>
+          <el-button
+            :disabled="!answer"
+            @click="saveAsArtifact"
+          >
+            保存为测试资产
+          </el-button>
         </div>
       </div>
     </el-card>
 
-    <el-card class="sys-filter-card" shadow="never">
+    <el-card
+      class="sys-filter-card"
+      shadow="never"
+    >
       <div class="ask-grid">
         <div class="field field--wide">
-          <div class="label">问题</div>
-          <el-input v-model="question" type="textarea" :autosize="{ minRows: 3, maxRows: 6 }" placeholder="例如：如何设计登录接口的越权测试？" />
+          <div class="label">
+            问题
+          </div>
+          <el-input
+            v-model="question"
+            type="textarea"
+            :autosize="{ minRows: 3, maxRows: 6 }"
+            placeholder="例如：如何设计登录接口的越权测试？"
+          />
         </div>
         <div class="field">
-          <div class="label">top_k</div>
-          <el-input-number v-model="topK" :min="1" :max="10" />
+          <div class="label">
+            top_k
+          </div>
+          <el-input-number
+            v-model="topK"
+            :min="1"
+            :max="10"
+          />
         </div>
         <div class="field">
-          <div class="label">category（可选）</div>
-          <el-input v-model="category" placeholder="如 template/standard" />
+          <div class="label">
+            category（可选）
+          </div>
+          <el-input
+            v-model="category"
+            placeholder="如 template/standard"
+          />
         </div>
         <div class="field">
-          <div class="label">tag（可选）</div>
-          <el-input v-model="tag" placeholder="如 登录" />
+          <div class="label">
+            tag（可选）
+          </div>
+          <el-input
+            v-model="tag"
+            placeholder="如 登录"
+          />
         </div>
       </div>
     </el-card>
 
-    <el-card class="sys-table-card" shadow="never">
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
       <div class="result-head">
-        <div class="result-head__title">回答</div>
-        <div class="result-head__sub">{{ modelLabel }}</div>
+        <div class="result-head__title">
+          回答
+        </div>
+        <div class="result-head__sub">
+          {{ modelLabel }}
+        </div>
       </div>
-      <div class="answer-markdown" v-loading="asking" v-html="renderedAnswer"></div>
+      <div
+        v-loading="asking"
+        class="answer-markdown"
+        v-html="renderedAnswer"
+      />
     </el-card>
 
-    <el-card class="sys-table-card" shadow="never">
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
       <div class="result-head">
-        <div class="result-head__title">引用来源（citations）</div>
-        <div class="result-head__sub">共 {{ citations.length }} 条</div>
+        <div class="result-head__title">
+          引用来源（citations）
+        </div>
+        <div class="result-head__sub">
+          共 {{ citations.length }} 条
+        </div>
       </div>
-      <el-table :data="citations" border class="admin-data-table sys-enterprise-table">
+      <el-table
+        :data="citations"
+        border
+        class="admin-data-table sys-enterprise-table"
+      >
         <template #empty>
-          <el-empty description="暂无引用" :image-size="78" />
+          <el-empty
+            description="暂无引用"
+            :image-size="78"
+          />
         </template>
-        <el-table-column prop="idx" label="#" width="60" align="center" />
-        <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="type" label="类型" width="100" align="center" />
-        <el-table-column prop="id" label="ID" width="110" align="center" />
-        <el-table-column prop="retrieve_mode" label="检索方式" width="140" align="center" />
-        <el-table-column prop="score" label="score" width="110" align="center" />
-        <el-table-column label="打开" width="100" align="center">
+        <el-table-column
+          prop="idx"
+          label="#"
+          width="60"
+          align="center"
+        />
+        <el-table-column
+          prop="title"
+          label="标题"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="type"
+          label="类型"
+          width="100"
+          align="center"
+        />
+        <el-table-column
+          prop="id"
+          label="ID"
+          width="110"
+          align="center"
+        />
+        <el-table-column
+          prop="retrieve_mode"
+          label="检索方式"
+          width="140"
+          align="center"
+        />
+        <el-table-column
+          prop="score"
+          label="score"
+          width="110"
+          align="center"
+        />
+        <el-table-column
+          label="打开"
+          width="100"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click="open(row.url)">打开</el-button>
+            <el-button
+              link
+              type="primary"
+              @click="open(row.url)"
+            >
+              打开
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <el-dialog v-model="importPreviewDialogVisible" title="进一步落地：导入预览" width="860px">
-      <div v-if="!importPreviewData" style="color: rgba(226,232,240,.75)">暂无预览数据</div>
-      <div v-else class="import-preview">
-        <div class="import-preview__section-title">发布计划（可编辑）</div>
+    <el-dialog
+      v-model="importPreviewDialogVisible"
+      title="进一步落地：导入预览"
+      width="860px"
+    >
+      <div
+        v-if="!importPreviewData"
+        style="color: rgba(226,232,240,.75)"
+      >
+        暂无预览数据
+      </div>
+      <div
+        v-else
+        class="import-preview"
+      >
+        <div class="import-preview__section-title">
+          发布计划（可编辑）
+        </div>
         <div class="release-plan-form">
-          <el-input v-model="releasePlanForm.release_name" placeholder="发布名称" />
-          <el-input v-model="releasePlanForm.version_no" placeholder="版本号（唯一）" />
+          <el-input
+            v-model="releasePlanForm.release_name"
+            placeholder="发布名称"
+          />
+          <el-input
+            v-model="releasePlanForm.version_no"
+            placeholder="版本号（唯一）"
+          />
           <el-date-picker
             v-model="releasePlanForm.release_date"
             type="datetime"
@@ -82,22 +212,63 @@
           />
         </div>
 
-        <div class="import-preview__section-title">将要导入/更新的用例（去重合并）</div>
-        <el-table :data="importPreviewData.draft_cases || []" border size="small" style="margin-bottom: 12px">
-          <el-table-column label="导入" width="72" align="center">
+        <div class="import-preview__section-title">
+          将要导入/更新的用例（去重合并）
+        </div>
+        <el-table
+          :data="importPreviewData.draft_cases || []"
+          border
+          size="small"
+          style="margin-bottom: 12px"
+        >
+          <el-table-column
+            label="导入"
+            width="72"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-checkbox :model-value="selectedDraftIdxs.includes(row.idx)" @change="(v)=>toggleDraftIdx(row.idx, v)" />
+              <el-checkbox
+                :model-value="selectedDraftIdxs.includes(row.idx)"
+                @change="(v)=>toggleDraftIdx(row.idx, v)"
+              />
             </template>
           </el-table-column>
-          <el-table-column prop="idx" label="#" width="60" />
-          <el-table-column prop="case_name" label="用例名称" min-width="260" show-overflow-tooltip />
-          <el-table-column prop="action" label="动作" width="100" />
-          <el-table-column prop="step_desc_preview" label="步骤预览" min-width="260" show-overflow-tooltip />
+          <el-table-column
+            prop="idx"
+            label="#"
+            width="60"
+          />
+          <el-table-column
+            prop="case_name"
+            label="用例名称"
+            min-width="260"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="action"
+            label="动作"
+            width="100"
+          />
+          <el-table-column
+            prop="step_desc_preview"
+            label="步骤预览"
+            min-width="260"
+            show-overflow-tooltip
+          />
         </el-table>
 
-        <div class="import-preview__section-title">推荐关联的“模块内已有用例”（将绑定到发布计划）</div>
-        <el-checkbox-group v-model="selectedExistingCaseIds" class="existing-case-group">
-          <div v-for="row in importPreviewData.suggest_existing_cases || []" :key="row.id" class="existing-case-item">
+        <div class="import-preview__section-title">
+          推荐关联的“模块内已有用例”（将绑定到发布计划）
+        </div>
+        <el-checkbox-group
+          v-model="selectedExistingCaseIds"
+          class="existing-case-group"
+        >
+          <div
+            v-for="row in importPreviewData.suggest_existing_cases || []"
+            :key="row.id"
+            class="existing-case-item"
+          >
             <el-checkbox :label="row.id">
               <span class="existing-case-name">{{ row.case_name }}</span>
               <span class="existing-case-meta">({{ row.test_type }})</span>
@@ -106,8 +277,16 @@
         </el-checkbox-group>
       </div>
       <template #footer>
-        <el-button @click="importPreviewDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="importingFromPreview" @click="confirmImportFromPreview">确认导入</el-button>
+        <el-button @click="importPreviewDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="importingFromPreview"
+          @click="confirmImportFromPreview"
+        >
+          确认导入
+        </el-button>
       </template>
     </el-dialog>
   </div>

@@ -1,14 +1,22 @@
 <template>
   <div class="pom-report-page">
     <div class="page-header">
-      <h1 class="title">UI / POM 测试报告</h1>
+      <h1 class="title">
+        UI / POM 测试报告
+      </h1>
       <p class="subtitle">
         Web UI 脚本每次执行结束后，系统会在工作空间内扫描 HTML 报告并归档到此；支持预览与下载。
       </p>
     </div>
 
-    <el-card shadow="never" class="filter-card">
-      <el-form :inline="true" @submit.prevent="loadReports">
+    <el-card
+      shadow="never"
+      class="filter-card"
+    >
+      <el-form
+        :inline="true"
+        @submit.prevent="loadReports"
+      >
         <el-form-item label="关键词">
           <el-input
             v-model="filters.search"
@@ -28,34 +36,114 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="loadReports">查询</el-button>
+          <el-button
+            type="primary"
+            @click="loadReports"
+          >
+            查询
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <el-card shadow="never" class="table-card">
-      <el-table v-loading="loading" :data="rows" stripe empty-text="暂无报告">
-        <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="script_name" label="脚本" width="160" show-overflow-tooltip />
-        <el-table-column prop="execution_id_str" label="执行标识" width="180" show-overflow-tooltip />
-        <el-table-column prop="execution_status" label="执行状态" width="100" />
-        <el-table-column prop="source_relative_path" label="来源路径" min-width="200" show-overflow-tooltip />
-        <el-table-column label="大小" width="100">
-          <template #default="{ row }">{{ formatSize(row.file_size) }}</template>
-        </el-table-column>
-        <el-table-column prop="created_at" label="归档时间" width="180" />
-        <el-table-column label="操作" width="200" fixed="right">
+    <el-card
+      shadow="never"
+      class="table-card"
+    >
+      <el-table
+        v-loading="loading"
+        :data="rows"
+        stripe
+        empty-text="暂无报告"
+      >
+        <el-table-column
+          prop="title"
+          label="标题"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="script_name"
+          label="脚本"
+          width="160"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="execution_id_str"
+          label="执行标识"
+          width="180"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="execution_status"
+          label="执行状态"
+          width="100"
+        />
+        <el-table-column
+          prop="source_relative_path"
+          label="来源路径"
+          min-width="200"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="大小"
+          width="100"
+        >
           <template #default="{ row }">
-            <el-button type="primary" link @click="openPreview(row)">预览</el-button>
-            <el-button type="primary" link @click="downloadReport(row)">下载</el-button>
-            <el-button type="danger" link @click="removeReport(row)">删除</el-button>
+            {{ formatSize(row.file_size) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="created_at"
+          label="归档时间"
+          width="180"
+        />
+        <el-table-column
+          label="操作"
+          width="200"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <el-button
+              type="primary"
+              link
+              @click="openPreview(row)"
+            >
+              预览
+            </el-button>
+            <el-button
+              type="primary"
+              link
+              @click="downloadReport(row)"
+            >
+              下载
+            </el-button>
+            <el-button
+              type="danger"
+              link
+              @click="removeReport(row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <el-dialog v-model="previewVisible" title="报告预览" width="90%" top="4vh" destroy-on-close @closed="revokePreview">
-      <iframe v-if="previewUrl" class="preview-frame" :src="previewUrl" title="preview" />
+    <el-dialog
+      v-model="previewVisible"
+      title="报告预览"
+      width="90%"
+      top="4vh"
+      destroy-on-close
+      @closed="revokePreview"
+    >
+      <iframe
+        v-if="previewUrl"
+        class="preview-frame"
+        :src="previewUrl"
+        title="preview"
+      />
     </el-dialog>
   </div>
 </template>

@@ -1,114 +1,78 @@
 <template>
-  <div class="main-layout main-layout--cyber main-layout--theme">
-    <div class="main-layout__glow main-layout__glow--a" aria-hidden="true" />
-    <div class="main-layout__glow main-layout__glow--b" aria-hidden="true" />
-    <div class="main-layout__grid" aria-hidden="true" />
+  <div
+    class="main-layout main-layout--cyber main-layout--theme"
+    :class="{ 'main-layout--animations-off': !animationsEnabled }"
+  >
+    <div
+      class="main-layout__glow main-layout__glow--a"
+      aria-hidden="true"
+    />
+    <div
+      class="main-layout__glow main-layout__glow--b"
+      aria-hidden="true"
+    />
+    <div
+      class="main-layout__grid"
+      aria-hidden="true"
+    />
 
-    <!-- 顶部导航栏 -->
     <header class="top-nav">
       <div class="top-nav__left">
         <div class="brand-logo">
-          <svg viewBox="0 0 36 36" class="brand-logo__icon" xmlns="http://www.w3.org/2000/svg">
+          <svg
+            viewBox="0 0 36 36"
+            class="brand-logo__icon"
+            xmlns="http://www.w3.org/2000/svg"
+          >
             <defs>
-              <linearGradient id="navLogoGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color="#00d8ff" />
-                <stop offset="100%" stop-color="#1e5a8e" />
+              <linearGradient
+                id="navLogoGrad"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="0%"
+              >
+                <stop
+                  offset="0%"
+                  stop-color="#00d8ff"
+                />
+                <stop
+                  offset="100%"
+                  stop-color="#1e5a8e"
+                />
               </linearGradient>
             </defs>
-            <rect x="2" y="6" width="6" height="24" rx="1.5" fill="url(#navLogoGrad)" />
-            <rect x="12" y="14" width="6" height="16" rx="1.5" fill="url(#navLogoGrad)" opacity="0.85" />
-            <rect x="22" y="10" width="6" height="20" rx="1.5" fill="url(#navLogoGrad)" opacity="0.7" />
+            <rect
+              x="2"
+              y="6"
+              width="6"
+              height="24"
+              rx="1.5"
+              fill="url(#navLogoGrad)"
+            />
+            <rect
+              x="12"
+              y="14"
+              width="6"
+              height="16"
+              rx="1.5"
+              fill="url(#navLogoGrad)"
+              opacity="0.85"
+            />
+            <rect
+              x="22"
+              y="10"
+              width="6"
+              height="20"
+              rx="1.5"
+              fill="url(#navLogoGrad)"
+              opacity="0.7"
+            />
           </svg>
           <span class="brand-logo__text">AITesta</span>
         </div>
-        <nav class="top-nav__menu" aria-label="Top section navigation">
-          <router-link
-            class="top-nav__menu-item"
-            :class="{ active: topNavActive === 'project' }"
-            to="/projects"
-          >
-            项目管理
-          </router-link>
-          <router-link
-            class="top-nav__menu-item"
-            :class="{ active: topNavActive === 'knowledge' }"
-            to="/knowledge"
-          >
-            知识中心
-          </router-link>
-          <router-link
-            class="top-nav__menu-item"
-            :class="{ active: topNavActive === 'help' }"
-            to="/help"
-          >
-            帮助中心
-          </router-link>
-          <router-link
-            class="top-nav__menu-item"
-            :class="{ active: topNavActive === 'analysis-lab' }"
-            to="/analysis-lab"
-          >
-            分析实验室 (Analysis Lab)
-          </router-link>
-        </nav>
       </div>
       <div class="top-nav__center">
-        <div class="nav-context-selectors" role="group" aria-label="项目与环境选择">
-          <el-dropdown trigger="click" popper-class="dark-tech-dropdown nav-context-dropdown" @command="handleProjectCommand">
-            <button class="nav-context-selector" type="button" aria-label="项目选择">
-              <span class="nav-context-selector__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="14" height="14">
-                  <rect x="3" y="5" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" />
-                  <path d="M9 20h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                </svg>
-              </span>
-              <span class="nav-context-selector__label">Project:</span>
-              <span class="nav-context-selector__value">{{ currentProjectLabel }}</span>
-              <el-icon class="nav-context-selector__arrow"><ArrowDown /></el-icon>
-            </button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item
-                  v-for="item in projectOptions"
-                  :key="item.id"
-                  :command="item.id"
-                  :class="{ 'nav-context-dropdown__item--current': String(item.id) === String(selectedProject) }"
-                >
-                  {{ item.project_name }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-
-          <el-dropdown trigger="click" popper-class="dark-tech-dropdown nav-context-dropdown" @command="handleEnvCommand">
-            <button class="nav-context-selector" type="button" aria-label="环境选择">
-              <span class="nav-context-selector__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="14" height="14">
-                  <rect x="4" y="5" width="16" height="4" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4" />
-                  <rect x="4" y="10" width="16" height="4" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4" />
-                  <rect x="4" y="15" width="16" height="4" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4" />
-                </svg>
-              </span>
-              <span class="nav-context-selector__label">Env:</span>
-              <span class="nav-context-selector__value">{{ currentEnvLabel }}</span>
-              <el-icon class="nav-context-selector__arrow"><ArrowDown /></el-icon>
-            </button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item
-                  v-for="item in envOptions"
-                  :key="item.id"
-                  :command="item.id"
-                  :class="{ 'nav-context-dropdown__item--current': String(item.id) === String(selectedEnv) }"
-                >
-                  {{ item.name }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </div>
-      <div class="top-nav__right">
         <el-input
           v-model="searchKw"
           placeholder="请输入搜索内容"
@@ -116,12 +80,32 @@
           clearable
         >
           <template #prefix>
-            <span class="top-search__holo" aria-hidden="true">
-              <svg class="top-search__holo-svg" viewBox="0 0 24 24" width="20" height="20">
+            <span
+              class="top-search__holo"
+              aria-hidden="true"
+            >
+              <svg
+                class="top-search__holo-svg"
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+              >
                 <defs>
-                  <linearGradient id="cyberNavHoloGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#00d8ff" />
-                    <stop offset="100%" stop-color="#a78bfa" />
+                  <linearGradient
+                    id="cyberNavHoloGrad"
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                  >
+                    <stop
+                      offset="0%"
+                      stop-color="#00d8ff"
+                    />
+                    <stop
+                      offset="100%"
+                      stop-color="#a78bfa"
+                    />
                   </linearGradient>
                 </defs>
                 <path
@@ -130,7 +114,13 @@
                   stroke="url(#cyberNavHoloGrad)"
                   stroke-width="1.35"
                 />
-                <circle cx="10" cy="10" r="2" fill="url(#cyberNavHoloGrad)" opacity="0.35" />
+                <circle
+                  cx="10"
+                  cy="10"
+                  r="2"
+                  fill="url(#cyberNavHoloGrad)"
+                  opacity="0.35"
+                />
                 <path
                   d="M4 18 L8 14 M6 20 L10 16"
                   stroke="url(#cyberNavHoloGrad)"
@@ -142,6 +132,8 @@
             </span>
           </template>
         </el-input>
+      </div>
+      <div class="top-nav__right">
         <el-badge
           :value="unreadMessageCount > 0 ? unreadMessageCount : ''"
           class="notice-badge notice-badge--cyber"
@@ -157,12 +149,32 @@
             <span class="notice-bell-cyber__ring notice-bell-cyber__ring--1" />
             <span class="notice-bell-cyber__ring notice-bell-cyber__ring--2" />
             <span class="notice-bell-cyber__ring notice-bell-cyber__ring--3" />
-            <svg class="notice-bell-cyber__svg" viewBox="0 0 24 24" width="22" height="22">
+            <svg
+              class="notice-bell-cyber__svg"
+              viewBox="0 0 24 24"
+              width="22"
+              height="22"
+            >
               <defs>
-                <linearGradient id="cyberNavBellGrad" x1="0%" y1="100%" x2="100%" y2="0%">
-                  <stop offset="0%" stop-color="#7c3aed" />
-                  <stop offset="50%" stop-color="#c084fc" />
-                  <stop offset="100%" stop-color="#e9d5ff" />
+                <linearGradient
+                  id="cyberNavBellGrad"
+                  x1="0%"
+                  y1="100%"
+                  x2="100%"
+                  y2="0%"
+                >
+                  <stop
+                    offset="0%"
+                    stop-color="#a78bfa"
+                  />
+                  <stop
+                    offset="50%"
+                    stop-color="#c084fc"
+                  />
+                  <stop
+                    offset="100%"
+                    stop-color="#e9d5ff"
+                  />
                 </linearGradient>
               </defs>
               <path
@@ -189,28 +201,75 @@
             </svg>
           </div>
         </el-badge>
-        <el-icon class="nav-icon-btn" @click="router.go(0)"><Refresh /></el-icon>
+        <el-tooltip
+          :content="animationsEnabled ? '关闭界面动效（省电模式）' : '开启界面动效'"
+          placement="bottom"
+          :show-after="300"
+          effect="dark"
+        >
+          <button
+            type="button"
+            class="animation-toggle"
+            :class="{ 'animation-toggle--on': animationsEnabled }"
+            aria-label="切换界面动效"
+            @click="toggleAnimations"
+          >
+            <el-icon :size="20">
+              <MagicStick />
+            </el-icon>
+            <span class="animation-toggle__label">{{ animationsEnabled ? 'ON' : 'OFF' }}</span>
+            <span
+              v-if="animationsEnabled"
+              class="animation-toggle__pulse"
+              aria-hidden="true"
+            />
+          </button>
+        </el-tooltip>
         <el-dropdown @command="handleUserCmd">
           <div class="user-info user-info--cyber">
             <div class="user-avatar-shell">
-              <span class="user-avatar-shell__orbit user-avatar-shell__orbit--a" aria-hidden="true" />
-              <span class="user-avatar-shell__orbit user-avatar-shell__orbit--b" aria-hidden="true" />
-              <el-avatar :size="40" :src="avatarSrc" class="user-avatar user-avatar--cyber">
+              <span
+                class="user-avatar-shell__orbit user-avatar-shell__orbit--a"
+                aria-hidden="true"
+              />
+              <span
+                class="user-avatar-shell__orbit user-avatar-shell__orbit--b"
+                aria-hidden="true"
+              />
+              <el-avatar
+                :size="40"
+                :src="avatarSrc"
+                class="user-avatar user-avatar--cyber"
+              >
                 {{ userInitial }}
               </el-avatar>
-              <div class="user-hud" aria-hidden="true">
+              <div
+                class="user-hud"
+                aria-hidden="true"
+              >
                 <span class="user-hud__line">USER ID: {{ userHudId }}</span>
                 <span class="user-hud__line">LEVEL: [{{ userLevelTag }}]</span>
               </div>
             </div>
             <span class="user-name user-name--cyber">{{ username }}</span>
-            <el-icon class="user-arrow"><ArrowDown /></el-icon>
+            <el-icon class="user-arrow">
+              <ArrowDown />
+            </el-icon>
           </div>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="profile">个人中心</el-dropdown-item>
-              <el-dropdown-item command="password">修改密码</el-dropdown-item>
-              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+              <el-dropdown-item command="profile">
+                个人中心
+              </el-dropdown-item>
+              <el-dropdown-item command="password">
+                修改密码
+              </el-dropdown-item>
+              <el-dropdown-item
+                command="logout"
+                divided
+              >
+                退出登录
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -222,15 +281,33 @@
           @click="goUserCenter"
           @keydown.enter.prevent="goUserCenter"
         >
-          <svg class="settings-cyber__svg" viewBox="0 0 24 24" width="22" height="22">
+          <svg
+            class="settings-cyber__svg"
+            viewBox="0 0 24 24"
+            width="22"
+            height="22"
+          >
             <defs>
-              <linearGradient id="cyberNavSettingsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#00d8ff" />
-                <stop offset="100%" stop-color="#a855f7" />
+              <linearGradient
+                id="cyberNavSettingsGrad"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="100%"
+              >
+                <stop
+                  offset="0%"
+                  stop-color="#00d8ff"
+                />
+                <stop
+                  offset="100%"
+                  stop-color="#a855f7"
+                />
               </linearGradient>
             </defs>
             <g>
               <animateTransform
+                v-if="animationsEnabled"
                 attributeName="transform"
                 type="rotate"
                 from="0 12 12"
@@ -260,6 +337,7 @@
             </g>
             <g>
               <animateTransform
+                v-if="animationsEnabled"
                 attributeName="transform"
                 type="rotate"
                 from="360 12 12"
@@ -275,85 +353,111 @@
                 stroke-linejoin="round"
               />
             </g>
-            <circle cx="12" cy="12" r="2.2" fill="#0a1528" stroke="url(#cyberNavSettingsGrad)" stroke-width="0.95" />
+            <circle
+              cx="12"
+              cy="12"
+              r="2.2"
+              fill="#0a1528"
+              stroke="url(#cyberNavSettingsGrad)"
+              stroke-width="0.95"
+            />
           </svg>
         </div>
       </div>
     </header>
 
     <div class="layout-body">
-      <!-- VS Code 风格：极窄 Activity Bar + 可折叠上下文侧栏 -->
-      <div class="nav-rail" :class="{ 'nav-rail--secondary-collapsed': secondarySidebarCollapsed }">
-        <aside class="activity-bar" aria-label="主导航">
-          <el-tooltip
-            v-for="act in activityBarItems"
-            :key="act.id"
-            :content="act.tooltip"
-            placement="right"
-            :show-after="200"
-            effect="dark"
+      <aside
+        class="activity-bar"
+        aria-label="主导航"
+      >
+        <el-tooltip
+          v-for="act in activityBarItems"
+          :key="act.id"
+          :content="act.tooltip"
+          placement="right"
+          :show-after="200"
+          effect="dark"
+        >
+          <button
+            type="button"
+            class="activity-bar__btn"
+            :class="{ 'activity-bar__btn--active': activeActivityId === act.id }"
+            :aria-current="activeActivityId === act.id ? 'true' : undefined"
+            @click="onActivityBarClick(act)"
           >
+            <el-icon :size="22">
+              <component :is="act.icon" />
+            </el-icon>
+          </button>
+        </el-tooltip>
+      </aside>
+
+      <Transition name="flyout">
+        <div
+          v-if="flyoutOpen"
+          class="flyout-panel"
+          :style="{ width: flyoutWidth + 'px' }"
+        >
+          <div class="flyout-panel__head">
+            <span class="flyout-panel__title">{{ secondaryPanelTitle }}</span>
             <button
               type="button"
-              class="activity-bar__btn"
-              :class="{ 'activity-bar__btn--active': activeActivityId === act.id }"
-              :aria-current="activeActivityId === act.id ? 'true' : undefined"
-              @click="onActivityBarClick(act)"
+              class="flyout-panel__close"
+              aria-label="关闭面板"
+              @click="flyoutOpen = false"
             >
-              <el-icon :size="22"><component :is="act.icon" /></el-icon>
+              <el-icon><ArrowLeft /></el-icon>
             </button>
-          </el-tooltip>
-        </aside>
-
-        <aside
-          v-show="showSecondarySidebar"
-          class="secondary-sidebar"
-          :class="{ 'secondary-sidebar--collapsed': secondarySidebarCollapsed }"
-          aria-label="上下文导航"
-        >
-          <div class="secondary-sidebar__head">
-            <span class="secondary-sidebar__title">{{ secondaryPanelTitle }}</span>
-            <el-tooltip content="收起侧栏（扩大编辑区）" placement="bottom">
-              <button
-                type="button"
-                class="secondary-sidebar__collapse"
-                aria-label="收起上下文导航"
-                @click="secondarySidebarCollapsed = true"
-              >
-                <el-icon><ArrowLeft /></el-icon>
-              </button>
-            </el-tooltip>
           </div>
           <el-menu
             :key="`${activeActivityId}-${secondaryMenuActiveIndex}-${isSystemAdmin ? '1' : '0'}`"
-            class="secondary-menu"
+            class="flyout-menu"
             :default-active="secondaryMenuActiveIndex"
+            :default-openeds="defaultOpenedGroups"
             @select="onSideMenuSelect"
           >
-            <el-menu-item
-              v-for="item in secondaryMenuItems"
-              :key="item.index"
-              :index="item.index"
+            <template
+              v-for="group in secondaryMenuGroups"
+              :key="group.title"
             >
-              <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
-              <span>{{ item.label }}</span>
-            </el-menu-item>
+              <el-sub-menu
+                v-if="group.items.length > 1"
+                :index="group.title"
+              >
+                <template #title>
+                  <span class="flyout-group-title">{{ group.title }}</span>
+                </template>
+                <el-menu-item
+                  v-for="item in group.items"
+                  :key="item.index"
+                  :index="item.index"
+                >
+                  <el-icon v-if="item.icon">
+                    <component :is="item.icon" />
+                  </el-icon>
+                  <span>{{ item.label }}</span>
+                </el-menu-item>
+              </el-sub-menu>
+              <el-menu-item
+                v-else
+                :key="group.items[0].index"
+                :index="group.items[0].index"
+              >
+                <el-icon v-if="group.items[0].icon">
+                  <component :is="group.items[0].icon" />
+                </el-icon>
+                <span>{{ group.items[0].label }}</span>
+              </el-menu-item>
+            </template>
           </el-menu>
-        </aside>
+          <div
+            class="flyout-resize-handle"
+            @mousedown.prevent="onResizeStart"
+          />
+        </div>
+      </Transition>
 
-        <el-tooltip v-if="showSecondarySidebar && secondarySidebarCollapsed" content="展开上下文导航" placement="right">
-          <button
-            type="button"
-            class="activity-bar__expand-fab"
-            aria-label="展开上下文导航"
-            @click="secondarySidebarCollapsed = false"
-          >
-            <el-icon><ArrowRight /></el-icon>
-          </button>
-        </el-tooltip>
-      </div>
-
-      <!-- 主内容区 -->
       <main class="main-content">
         <el-alert
           v-if="backendHealthMessage"
@@ -364,31 +468,179 @@
           @close="backendHealthMessage = ''"
         />
         <div class="content-header">
-          <el-breadcrumb separator="/">
-            <el-breadcrumb-item v-for="item in breadcrumb" :key="item">{{ item }}</el-breadcrumb-item>
-          </el-breadcrumb>
+          <div class="content-header__left">
+            <el-breadcrumb separator="/">
+              <el-breadcrumb-item
+                v-for="item in breadcrumb"
+                :key="item"
+              >
+                {{ item }}
+              </el-breadcrumb-item>
+            </el-breadcrumb>
+            <div
+              class="nav-context-selectors"
+              role="group"
+              aria-label="项目与环境选择"
+            >
+              <el-dropdown
+                trigger="click"
+                popper-class="dark-tech-dropdown nav-context-dropdown"
+                @command="handleProjectCommand"
+              >
+                <button
+                  class="nav-context-selector"
+                  type="button"
+                  aria-label="项目选择"
+                >
+                  <span
+                    class="nav-context-selector__icon"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                    >
+                      <rect
+                        x="3"
+                        y="5"
+                        width="18"
+                        height="12"
+                        rx="2"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      />
+                      <path
+                        d="M9 20h6"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  </span>
+                  <span class="nav-context-selector__label">Project:</span>
+                  <span class="nav-context-selector__value">{{ currentProjectLabel }}</span>
+                  <el-icon class="nav-context-selector__arrow">
+                    <ArrowDown />
+                  </el-icon>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item
+                      v-for="item in projectOptions"
+                      :key="item.id"
+                      :command="item.id"
+                      :class="{ 'nav-context-dropdown__item--current': String(item.id) === String(selectedProject) }"
+                    >
+                      {{ item.project_name }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+
+              <el-dropdown
+                trigger="click"
+                popper-class="dark-tech-dropdown nav-context-dropdown"
+                @command="handleEnvCommand"
+              >
+                <button
+                  class="nav-context-selector"
+                  type="button"
+                  aria-label="环境选择"
+                >
+                  <span
+                    class="nav-context-selector__icon"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                    >
+                      <rect
+                        x="4"
+                        y="5"
+                        width="16"
+                        height="4"
+                        rx="1.5"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.4"
+                      />
+                      <rect
+                        x="4"
+                        y="10"
+                        width="16"
+                        height="4"
+                        rx="1.5"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.4"
+                      />
+                      <rect
+                        x="4"
+                        y="15"
+                        width="16"
+                        height="4"
+                        rx="1.5"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.4"
+                      />
+                    </svg>
+                  </span>
+                  <span class="nav-context-selector__label">Env:</span>
+                  <span class="nav-context-selector__value">{{ currentEnvLabel }}</span>
+                  <el-icon class="nav-context-selector__arrow">
+                    <ArrowDown />
+                  </el-icon>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item
+                      v-for="item in envOptions"
+                      :key="item.id"
+                      :command="item.id"
+                      :class="{ 'nav-context-dropdown__item--current': String(item.id) === String(selectedEnv) }"
+                    >
+                      {{ item.name }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
           <div class="content-header__actions">
-            <el-button link size="small" @click="router.go(0)">
+            <el-button
+              link
+              size="small"
+              @click="router.go(0)"
+            >
               <el-icon><Refresh /></el-icon> 刷新
             </el-button>
-            <el-button v-if="canGoBack" link size="small" @click="router.back()">
+            <el-button
+              v-if="canGoBack"
+              link
+              size="small"
+              @click="router.back()"
+            >
               <el-icon><Back /></el-icon> 返回
             </el-button>
           </div>
         </div>
         <div class="content-body">
-          <!-- key：切换 /test-case/:type 等路径时强制重建页面实例，避免局部状态残留 -->
           <router-view v-slot="{ Component, route: r }">
-            <keep-alive>
+            <keep-alive :max="10">
               <component
-                v-if="r?.meta?.keepAlive"
                 :is="Component"
+                v-if="r?.meta?.keepAlive"
                 :key="String(r.name || r.path)"
               />
             </keep-alive>
             <component
-              v-if="!r?.meta?.keepAlive"
               :is="Component"
+              v-if="!r?.meta?.keepAlive"
               :key="r.path"
             />
           </router-view>
@@ -396,21 +648,47 @@
       </main>
     </div>
 
-    <el-dialog v-model="passwordDialogVisible" title="修改密码" width="520px" destroy-on-close>
-      <el-form :model="passwordForm" label-width="110px">
+    <el-dialog
+      v-model="passwordDialogVisible"
+      title="修改密码"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form
+        :model="passwordForm"
+        label-width="110px"
+      >
         <el-form-item label="旧密码">
-          <el-input v-model="passwordForm.old_password" type="password" show-password />
+          <el-input
+            v-model="passwordForm.old_password"
+            type="password"
+            show-password
+          />
         </el-form-item>
         <el-form-item label="新密码">
-          <el-input v-model="passwordForm.new_password" type="password" show-password />
+          <el-input
+            v-model="passwordForm.new_password"
+            type="password"
+            show-password
+          />
         </el-form-item>
         <el-form-item label="确认新密码">
-          <el-input v-model="passwordForm.confirm_password" type="password" show-password />
+          <el-input
+            v-model="passwordForm.confirm_password"
+            type="password"
+            show-password
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="passwordDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="passwordSaving" @click="submitPassword">
+        <el-button @click="passwordDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="passwordSaving"
+          @click="submitPassword"
+        >
           确认修改
         </el-button>
       </template>
@@ -445,17 +723,29 @@ const {
   selectedEnvironmentId: selectedEnv,
 } = storeToRefs(workspaceStore)
 
-/** 不用 el-menu 的 router 模式：其内部依赖 globalProperties.$router，在部分环境下会取不到导致点击无跳转 */
 function onSideMenuSelect(index) {
   if (typeof index === 'string' && index.startsWith('/')) {
     router.push(index).catch(() => {})
-    return
   }
 }
 
 const searchKw = ref('')
 const backendHealthMessage = ref('')
 const unreadMessageCount = ref(0)
+
+const ANIM_STORAGE_KEY = 'aitesta_animations_enabled'
+const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+const animationsEnabled = ref(
+  localStorage.getItem(ANIM_STORAGE_KEY) !== null
+    ? localStorage.getItem(ANIM_STORAGE_KEY) === '1'
+    : !prefersReducedMotion
+)
+
+function toggleAnimations() {
+  animationsEnabled.value = !animationsEnabled.value
+  localStorage.setItem(ANIM_STORAGE_KEY, animationsEnabled.value ? '1' : '0')
+}
+
 const currentProjectLabel = computed(() => {
   const p = projectOptions.value.find(item => String(item.id) === String(selectedProject.value))
   return p ? `${p.project_name} (Current)` : 'No Project'
@@ -469,7 +759,6 @@ const currentEnvLabel = computed(() => {
 const username = computed(() => localStorage.getItem('username') || 'Admin')
 const userInitial = computed(() => username.value.charAt(0).toUpperCase())
 
-/** 顶栏 HUD：用户信息展示（虚构格式，与账号 id / 权限粗略对应） */
 const userHudId = computed(() => {
   const id = localStorage.getItem('user_id')
   if (id != null && String(id).trim() !== '') {
@@ -480,7 +769,6 @@ const userHudId = computed(() => {
   return `${seed}_001`
 })
 
-/** 来自 GET /user/me/profile/ 的 avatar_url（el-avatar 加载失败时自动退回插槽内首字母） */
 const userAvatarUrl = ref(null)
 
 const avatarSrc = computed(() => {
@@ -508,18 +796,14 @@ async function syncProfileFromServer() {
     localStorage.setItem('is_system_admin', d.is_system_admin ? '1' : '0')
     syncSystemAdminFlag()
     window.dispatchEvent(new Event('app:permissions'))
-  } catch {
-    /* 忽略 */
-  }
+  } catch { /* ignore */ }
   try {
     const { data: prof } = await getUserProfileApi()
     if (prof?.code === 200 && prof?.data) {
       const url = prof.data.avatar_url
       userAvatarUrl.value = url != null && String(url).trim() ? String(url).trim() : null
     }
-  } catch {
-    /* 忽略 */
-  }
+  } catch { /* ignore */ }
 }
 
 function onUserProfileUpdated(ev) {
@@ -527,7 +811,6 @@ function onUserProfileUpdated(ev) {
   if (url === undefined) return
   userAvatarUrl.value = url != null && String(url).trim() ? String(url).trim() : null
 }
-
 
 async function syncUnreadMessageCount() {
   try {
@@ -540,14 +823,9 @@ async function syncUnreadMessageCount() {
   }
 }
 
-/** 次要接口：错开首屏 burst，优先 requestIdleCallback */
 function scheduleSecondaryInit(fn, delayMs) {
   const run = () => {
-    try {
-      fn()
-    } catch {
-      /* 忽略 */
-    }
+    try { fn() } catch { /* ignore */ }
   }
   setTimeout(() => {
     if (typeof requestIdleCallback !== 'undefined') {
@@ -566,41 +844,56 @@ watch(
   },
 )
 
-/** ---------- Activity Bar + 次级上下文导航（扁平菜单，无 el-sub-menu） ---------- */
+/* ===== Flyout Panel State ===== */
+const flyoutOpen = ref(false)
+const FLYOUT_MIN = 180
+const FLYOUT_MAX = 300
+const FLYOUT_STORAGE_KEY = 'aitesta_flyout_width'
+const flyoutWidth = ref(
+  Math.min(FLYOUT_MAX, Math.max(FLYOUT_MIN, Number(localStorage.getItem(FLYOUT_STORAGE_KEY)) || 240))
+)
 
-const secondarySidebarCollapsed = ref(false)
+function onResizeStart(e) {
+  const startX = e.clientX
+  const startW = flyoutWidth.value
+  const onMove = (ev) => {
+    const delta = ev.clientX - startX
+    const next = Math.min(FLYOUT_MAX, Math.max(FLYOUT_MIN, startW + delta))
+    flyoutWidth.value = next
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    localStorage.setItem(FLYOUT_STORAGE_KEY, String(flyoutWidth.value))
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
 
+/* ===== Activity Bar ===== */
 function pathToActivityId(path) {
   if (path === '/dashboard') return 'home'
-  if (path.startsWith('/automation-center') || path.startsWith('/script-hub')) {
-    return 'scripts'
-  }
+  if (path.startsWith('/automation-center') || path.startsWith('/script-hub')) return 'scripts'
   if (
     path.startsWith('/test-approach') ||
     path.startsWith('/test-design') ||
+    path.startsWith('/test-plan') ||
     path.startsWith('/test-case') ||
     path.startsWith('/execution/api-scenario-generator')
-  ) {
-    return 'assets'
-  }
+  ) return 'assets'
   if (
-    path.startsWith('/test-plan') ||
     path.startsWith('/pipelines') ||
     path.startsWith('/cicd') ||
     path.startsWith('/performance/environments') ||
     path.startsWith('/performance/load-monitor')
-  ) {
-    return 'execution'
-  }
+  ) return 'execution'
   if (
     path.startsWith('/defect') ||
     path.startsWith('/test-report') ||
     path.startsWith('/quality-dashboard') ||
     path.startsWith('/server-logs') ||
     path.startsWith('/analysis-lab')
-  ) {
-    return 'analytics'
-  }
+  ) return 'analytics'
   if (
     path.startsWith('/agent-hub') ||
     path.startsWith('/element-library') ||
@@ -612,15 +905,9 @@ function pathToActivityId(path) {
     path.startsWith('/ai-api-script-generator') ||
     path.startsWith('/ai-test-data-generator') ||
     path.startsWith('/ai-performance-analysis')
-  ) {
-    return 'agents'
-  }
-  if (path.startsWith('/ai-assistant') || path.startsWith('/knowledge')) {
-    return 'ai'
-  }
-  if (path.startsWith('/system/') || path.startsWith('/user/audit')) {
-    return 'system'
-  }
+  ) return 'agents'
+  if (path.startsWith('/ai-assistant') || path.startsWith('/knowledge')) return 'ai'
+  if (path.startsWith('/system/') || path.startsWith('/user/audit')) return 'system'
   return null
 }
 
@@ -647,129 +934,211 @@ const secondaryPanelTitles = {
   system: '系统设置',
 }
 
-const showSecondarySidebar = computed(() => activeActivityId.value != null && activeActivityId.value !== 'home')
-
 const secondaryPanelTitle = computed(() => {
   const id = activeActivityId.value
   if (!id || id === 'home') return ''
   return secondaryPanelTitles[id] || ''
 })
 
-function buildSecondaryMenuItems(activityId) {
+/* ===== Grouped Secondary Menu ===== */
+function buildSecondaryMenuGroups(activityId) {
   if (activityId === 'assets') {
     return [
-      { index: '/test-approach', label: '测试方案', icon: Document },
-      { index: '/test-design', label: '测试设计', icon: EditPen },
-      { index: '/test-case/functional', label: '用例 · 功能测试', icon: List },
-      { index: '/test-case/api', label: '用例 · 接口测试', icon: List },
-      { index: '/test-case/performance', label: '用例 · 性能测试', icon: List },
-      { index: '/test-case/security', label: '用例 · 安全测试', icon: List },
-      { index: '/test-case/ui-automation', label: '用例 · UI 自动化', icon: List },
-      { index: '/execution/api-scenario-generator', label: '接口场景生成', icon: Document },
+      {
+        title: '测试规划',
+        items: [
+          { index: '/test-approach', label: '测试方案', icon: Document },
+          { index: '/test-design', label: '测试设计', icon: EditPen },
+          { index: '/test-plan', label: '测试计划', icon: Calendar },
+        ],
+      },
+      {
+        title: '测试用例',
+        items: [
+          { index: '/test-case/functional', label: '功能测试', icon: List },
+          { index: '/test-case/api', label: '接口测试', icon: List },
+          { index: '/test-case/performance', label: '性能测试', icon: List },
+          { index: '/test-case/security', label: '安全测试', icon: List },
+          { index: '/test-case/ui-automation', label: 'UI 自动化', icon: List },
+        ],
+      },
+      {
+        title: '辅助工具',
+        items: [
+          { index: '/execution/api-scenario-generator', label: '接口场景生成', icon: Document },
+        ],
+      },
     ]
   }
   if (activityId === 'scripts') {
     return [
-      { index: '/automation-center/web', label: 'Web', icon: Monitor },
-      { index: '/automation-center/mobile', label: 'Mobile', icon: Iphone },
-      { index: '/automation-center/api', label: 'API', icon: Link },
-      { index: '/automation-center/miniprogram', label: '小程序', icon: Cellphone },
-      { index: '/automation-center/h5', label: 'H5', icon: Postcard },
-      { index: '/automation-center/assets', label: '资产中心 · Asset Hub', icon: FolderOpened },
-      { index: '/automation-center/recycle-bin', label: '回收站 · Recycle Bin', icon: Delete },
+      {
+        title: '平台类型',
+        items: [
+          { index: '/automation-center/web', label: 'Web', icon: Monitor },
+          { index: '/automation-center/mobile', label: 'Mobile', icon: Iphone },
+          { index: '/automation-center/api', label: 'API', icon: Link },
+          { index: '/automation-center/miniprogram', label: '小程序', icon: Cellphone },
+          { index: '/automation-center/h5', label: 'H5', icon: Postcard },
+        ],
+      },
+      {
+        title: '资源管理',
+        items: [
+          { index: '/automation-center/assets', label: '资产中心', icon: FolderOpened },
+          { index: '/automation-center/recycle-bin', label: '回收站', icon: Delete },
+        ],
+      },
     ]
   }
   if (activityId === 'execution') {
     return [
-      { index: '/test-plan', label: '测试计划', icon: Calendar },
-      { index: '/pipelines', label: '流水线列表', icon: Document },
-      { index: '/cicd', label: 'CI/CD 编排（远端）', icon: Operation },
-      { index: '/performance/environments', label: '环境管理', icon: Tools },
-      { index: '/performance/load-monitor', label: 'k6 压测看板', icon: DataLine },
+      {
+        title: '流水线',
+        items: [
+          { index: '/pipelines', label: '流水线列表', icon: Document },
+          { index: '/cicd', label: 'CI/CD 编排', icon: Operation },
+        ],
+      },
+      {
+        title: '环境与性能',
+        items: [
+          { index: '/performance/environments', label: '环境管理', icon: Tools },
+          { index: '/performance/load-monitor', label: 'k6 压测看板', icon: DataLine },
+        ],
+      },
     ]
   }
   if (activityId === 'analytics') {
     return [
-      { index: '/defect/list', label: '缺陷 · 清单', icon: Warning },
-      { index: '/defect/board', label: '缺陷 · 任务看板', icon: Warning },
-      { index: '/defect/release', label: '缺陷 · 发布计划', icon: Warning },
-      { index: '/test-report', label: '测试报告', icon: DataLine },
-      { index: '/quality-dashboard', label: '质量分析', icon: TrendCharts },
-      { index: '/server-logs', label: '服务器日志', icon: Monitor },
+      {
+        title: '缺陷管理',
+        items: [
+          { index: '/defect/list', label: '缺陷清单', icon: Warning },
+          { index: '/defect/board', label: '任务看板', icon: Warning },
+          { index: '/defect/release', label: '发布计划', icon: Warning },
+        ],
+      },
+      {
+        title: '质量分析',
+        items: [
+          { index: '/test-report', label: '测试报告', icon: DataLine },
+          { index: '/quality-dashboard', label: '质量看板', icon: TrendCharts },
+          { index: '/server-logs', label: '服务器日志', icon: Monitor },
+        ],
+      },
     ]
   }
   if (activityId === 'agents') {
     return [
-      { index: '/agent-hub', label: '智能体总览', icon: MagicStick },
-      { index: '/element-library', label: '元素库', icon: Document },
-      { index: '/ui-automation/generate', label: 'AI Web UI 脚本生成', icon: MagicStick },
-      { index: '/ui-automation/workbench', label: 'AI Web UI 工作台', icon: Monitor },
+      {
+        title: '智能体',
+        items: [
+          { index: '/agent-hub', label: '智能体总览', icon: MagicStick },
+          { index: '/element-library', label: '元素库', icon: Document },
+        ],
+      },
+      {
+        title: 'AI 自动化',
+        items: [
+          { index: '/ui-automation/generate', label: 'AI Web UI 脚本生成', icon: MagicStick },
+          { index: '/ui-automation/workbench', label: 'AI Web UI 工作台', icon: Monitor },
+        ],
+      },
     ]
   }
   if (activityId === 'ai') {
-    return [{ index: '/ai-assistant', label: '智能助手', icon: MagicStick }]
+    return [
+      {
+        title: '智能助手',
+        items: [
+          { index: '/ai-assistant', label: '智能助手', icon: MagicStick },
+        ],
+      },
+    ]
   }
   if (activityId === 'system') {
     if (isSystemAdmin.value) {
       return [
-        { index: '/system/message', label: '消息设置', icon: null },
-        { index: '/system/messages', label: '消息管理', icon: null },
-        { index: '/system/ai-usage', label: 'AI 用量与审计', icon: null },
-        { index: '/system/ai-quota', label: 'AI 配额策略', icon: null },
-        { index: '/system/audit', label: '审计中心', icon: Tickets },
-        { index: '/system/org', label: '组织管理', icon: null },
-        { index: '/system/role', label: '角色管理', icon: null },
-        { index: '/system/user', label: '用户管理', icon: null },
+        {
+          title: '消息',
+          items: [
+            { index: '/system/message', label: '消息设置', icon: null },
+            { index: '/system/messages', label: '消息管理', icon: null },
+          ],
+        },
+        {
+          title: 'AI 管理',
+          items: [
+            { index: '/system/ai-usage', label: 'AI 用量与审计', icon: null },
+            { index: '/system/ai-quota', label: 'AI 配额策略', icon: null },
+          ],
+        },
+        {
+          title: '组织与权限',
+          items: [
+            { index: '/system/audit', label: '审计中心', icon: Tickets },
+            { index: '/system/org', label: '组织管理', icon: null },
+            { index: '/system/role', label: '角色管理', icon: null },
+            { index: '/system/user', label: '用户管理', icon: null },
+          ],
+        },
       ]
     }
     return [
-      { index: '/system/message', label: '消息设置', icon: null },
-      { index: '/user/audit', label: '我的审计', icon: Tickets },
+      {
+        title: '个人',
+        items: [
+          { index: '/system/message', label: '消息设置', icon: null },
+          { index: '/user/audit', label: '我的审计', icon: Tickets },
+        ],
+      },
     ]
   }
   return []
 }
 
-const secondaryMenuItems = computed(() => {
+const secondaryMenuGroups = computed(() => {
   const id = activeActivityId.value
   if (!id || id === 'home') return []
-  return buildSecondaryMenuItems(id)
+  return buildSecondaryMenuGroups(id)
 })
 
-function resolveSecondaryMenuActiveIndex(path, items) {
-  const list = items || []
-  if (list.length === 0) return path
-  const exact = list.find((x) => x.index === path)
+const defaultOpenedGroups = computed(() =>
+  secondaryMenuGroups.value.map((g) => g.title)
+)
+
+const secondaryMenuActiveIndex = computed(() => {
+  const path = route.path
+  const allItems = secondaryMenuGroups.value.flatMap((g) => g.items)
+  if (allItems.length === 0) return path
+  const exact = allItems.find((x) => x.index === path)
   if (exact) return exact.index
-  const sorted = [...list].sort((a, b) => b.index.length - a.index.length)
+  const sorted = [...allItems].sort((a, b) => b.index.length - a.index.length)
   for (const it of sorted) {
     if (it.index !== '/' && (path === it.index || path.startsWith(`${it.index}/`))) {
       return it.index
     }
   }
   return path
-}
-
-const secondaryMenuActiveIndex = computed(() =>
-  resolveSecondaryMenuActiveIndex(route.path, secondaryMenuItems.value),
-)
+})
 
 function pathBelongsToActivity(path, activityId) {
   return pathToActivityId(path) === activityId
 }
 
 function defaultPathForActivity(activityId) {
-  const items = buildSecondaryMenuItems(activityId)
-  return items[0]?.index || '/dashboard'
+  const groups = buildSecondaryMenuGroups(activityId)
+  return groups[0]?.items[0]?.index || '/dashboard'
 }
 
 function onActivityBarClick(act) {
   if (act.id === 'home') {
-    secondarySidebarCollapsed.value = false
+    flyoutOpen.value = false
     router.push('/dashboard').catch(() => {})
     return
   }
-  secondarySidebarCollapsed.value = false
+  flyoutOpen.value = true
   if (!pathBelongsToActivity(route.path, act.id)) {
     const target = defaultPathForActivity(act.id)
     router.push(target).catch(() => {})
@@ -780,21 +1149,14 @@ watch(
   () => route.path,
   () => {
     if (activeActivityId.value === 'home') {
-      secondarySidebarCollapsed.value = false
+      flyoutOpen.value = false
+    } else {
+      flyoutOpen.value = true
     }
   },
 )
 
-/** 顶栏「项目管理 / 知识中心 / 帮助中心」与当前路由对齐 */
-const topNavActive = computed(() => {
-  const p = route.path || ''
-  if (p === '/projects' || p.startsWith('/projects/')) return 'project'
-  if (p === '/knowledge' || p.startsWith('/knowledge/')) return 'knowledge'
-  if (p === '/help' || p.startsWith('/help/')) return 'help'
-  if (p === '/analysis-lab' || p.startsWith('/analysis-lab/')) return 'analysis-lab'
-  return ''
-})
-
+/* ===== Breadcrumb ===== */
 const BREADCRUMB_MAP = {
   '/dashboard': ['工作台', ''],
   '/user/center': ['个人中心', ''],
@@ -884,6 +1246,7 @@ const canGoBack = computed(() => {
   return detailRoutes.some(p => route.path.startsWith(p))
 })
 
+/* ===== User Actions ===== */
 function handleUserCmd(cmd) {
   if (cmd === 'logout') {
     ElMessageBox.confirm('确定退出登录吗？', '提示', { type: 'warning' }).then(() => {
@@ -985,6 +1348,10 @@ onMounted(async () => {
   scheduleSecondaryInit(() => {
     void syncUnreadMessageCount()
   }, 650)
+
+  if (activeActivityId.value && activeActivityId.value !== 'home') {
+    flyoutOpen.value = true
+  }
 })
 
 onUnmounted(() => {
@@ -998,9 +1365,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* ========== 布局主题变量（深色科技 / 霓虹青品牌） ========== */
 .main-layout--theme {
-  /* 全局导航基底：略深于模块树抽屉与工作区，形成分层 */
   --layout-bg-from: #0a0f1e;
   --layout-bg-to: #141c2f;
   --layout-text: #e8eaef;
@@ -1063,12 +1428,12 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* ===== 顶部导航（深色玻璃 / Tech-Noir） ===== */
+/* ===== Top Nav (simplified) ===== */
 .top-nav {
   position: relative;
-  z-index: 2;
-  height: 72px;
-  min-height: 72px;
+  z-index: 10;
+  height: 48px;
+  min-height: 48px;
   overflow: visible;
   background: var(--panel-bg-strong, rgba(255, 255, 255, 0.055));
   backdrop-filter: var(--panel-blur, blur(20px));
@@ -1080,17 +1445,16 @@ onUnmounted(() => {
     inset 0 1px 0 rgba(0, 240, 255, 0.06);
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  gap: 28px;
+  padding: 0 16px;
+  gap: 16px;
   flex-shrink: 0;
 }
 
 .top-nav__left {
   display: flex;
   align-items: center;
-  gap: 28px;
-  flex-shrink: 1;
-  min-width: 0;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .brand-logo {
@@ -1100,12 +1464,12 @@ onUnmounted(() => {
 }
 
 .brand-logo__icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
 }
 
 .brand-logo__text {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.06em;
   background: linear-gradient(
@@ -1122,562 +1486,30 @@ onUnmounted(() => {
   filter: drop-shadow(0 0 10px var(--layout-brand-glow));
 }
 
-.top-nav__menu {
-  display: flex;
-  align-items: stretch;
-  gap: 22px;
-}
-
-.top-nav__menu-item {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 6px 14px;
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  /* 默认：低调偏冷灰、略透明，背景全透明融入顶栏玻璃 */
-  color: color-mix(in srgb, var(--layout-text-muted) 78%, var(--layout-brand-primary) 6%);
-  opacity: 0.88;
-  cursor: pointer;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  text-decoration: none;
-  white-space: nowrap;
-  transition:
-    color 0.3s ease,
-    opacity 0.3s ease,
-    font-weight 0.3s ease,
-    text-shadow 0.3s ease,
-    background-color 0.3s ease;
-}
-
-.top-nav__menu-item::after {
-  content: '';
-  position: absolute;
-  left: 8%;
-  right: 8%;
-  bottom: 4px;
-  height: 2px;
-  border-radius: 2px;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--layout-brand-primary) 20%,
-    var(--layout-brand-primary) 80%,
-    transparent
-  );
-  opacity: 0;
-  transform: scaleX(0.35);
-  transform-origin: center;
-  box-shadow: 0 0 14px color-mix(in srgb, var(--layout-brand-primary) 55%, transparent);
-  transition:
-    opacity 0.3s ease,
-    transform 0.3s ease,
-    box-shadow 0.3s ease;
-}
-
-.top-nav__menu-item:hover {
-  opacity: 1;
-  color: var(--layout-brand-primary);
-  text-shadow:
-    0 0 10px color-mix(in srgb, var(--layout-brand-primary) 45%, transparent),
-    0 0 22px color-mix(in srgb, var(--layout-brand-primary) 22%, transparent);
-  background-color: color-mix(in srgb, var(--layout-brand-primary) 7%, transparent);
-}
-
-.top-nav__menu-item:hover::after {
-  opacity: 0.55;
-  transform: scaleX(0.92);
-}
-
-.top-nav__menu-item.active {
-  opacity: 1;
-  color: var(--layout-brand-primary);
-  font-weight: 700;
-  text-shadow:
-    0 0 12px color-mix(in srgb, var(--layout-brand-primary) 50%, transparent),
-    0 0 26px color-mix(in srgb, var(--layout-brand-primary) 28%, transparent);
-  background-color: transparent;
-}
-
-.top-nav__menu-item.active::after {
-  opacity: 1;
-  transform: scaleX(1);
-  box-shadow:
-    0 0 18px color-mix(in srgb, var(--layout-brand-primary) 65%, transparent),
-    0 0 36px color-mix(in srgb, var(--layout-brand-primary) 25%, transparent);
-}
-
 .top-nav__center {
   flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-width: 320px;
-}
-
-.nav-context-selectors {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  max-width: min(760px, 52vw);
-  width: 100%;
-}
-
-.nav-context-selectors :deep(.el-dropdown) {
-  flex: 1 1 0;
   min-width: 0;
-}
-
-.nav-context-selector {
-  width: 100%;
-  min-width: 0;
-  height: 38px;
-  padding: 0 10px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid color-mix(in srgb, var(--layout-brand-primary) 30%, rgba(167, 139, 250, 0.32));
-  border-radius: 12px;
-  background: linear-gradient(
-    152deg,
-    color-mix(in srgb, #0b1224 92%, transparent),
-    color-mix(in srgb, #161f38 78%, transparent)
-  );
-  color: #d2d8e3;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.045) inset,
-    0 0 20px color-mix(in srgb, var(--layout-brand-primary) 11%, transparent),
-    inset 0 1px 0 rgba(167, 139, 250, 0.07);
-  cursor: pointer;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
-}
-
-.nav-context-selector:hover {
-  border-color: color-mix(in srgb, var(--layout-brand-primary) 46%, rgba(192, 132, 252, 0.4));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--layout-brand-primary) 16%, transparent) inset,
-    0 0 28px color-mix(in srgb, var(--layout-brand-primary) 18%, transparent);
-}
-
-.nav-context-selector__icon {
-  display: inline-flex;
-  color: color-mix(in srgb, var(--layout-brand-primary) 76%, #dbeafe);
-  flex-shrink: 0;
-}
-
-.nav-context-selector__label {
-  font-size: 13px;
-  color: #d7dbe3;
-  flex-shrink: 0;
-}
-
-.nav-context-selector__value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  color: #22d3ee;
-  text-shadow: 0 0 10px color-mix(in srgb, var(--layout-brand-primary) 55%, transparent);
-}
-
-.nav-context-selector__arrow {
-  margin-left: auto;
-  color: #9fb4cf;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-/* ========== 顶栏赛博控件：下拉 / 搜索 / 铃铛 / 用户 / 设置 ========== */
-@keyframes cyberNavGearRotate {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes cyberNavStreamScroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-@keyframes cyberNavFiber {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: 200% 50%;
-  }
-}
-
-@keyframes cyberNavScanPulse {
-  0%,
-  100% {
-    opacity: 0.32;
-  }
-  50% {
-    opacity: 0.62;
-  }
-}
-
-@keyframes cyberNavHoloBeam {
-  0%,
-  100% {
-    opacity: 0.2;
-    transform: scaleX(0.65);
-  }
-  50% {
-    opacity: 0.95;
-    transform: scaleX(1);
-  }
-}
-
-@keyframes cyberNavBellPulse {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 3px rgba(124, 58, 237, 0.45));
-  }
-  50% {
-    filter: drop-shadow(0 0 12px rgba(192, 132, 252, 0.75));
-  }
-}
-
-@keyframes cyberNavRingExpand {
-  0% {
-    transform: scale(0.62);
-    opacity: 0.5;
-  }
-  100% {
-    transform: scale(1.45);
-    opacity: 0;
-  }
-}
-
-/* ========== 顶栏：项目 + 环境 统一上下文切换条 ========== */
-.context-switcher {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  min-width: 0;
-  width: min(520px, 44vw);
-  max-width: 520px;
-}
-
-.tech-select-wrapper {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  width: 100%;
-  gap: 16px;
-  /* Header Select 暗色主题变量（可复用） */
-  --header-select-bg-from: color-mix(in srgb, #161b22 94%, transparent);
-  --header-select-bg-to: color-mix(in srgb, #1b2230 88%, transparent);
-  --header-select-text: #c9d1d9;
-  --header-select-placeholder: #8b949e;
-  --header-select-border: color-mix(in srgb, #30363d 80%, #4b5563 20%);
-  --header-select-border-hover: color-mix(in srgb, var(--layout-brand-primary) 38%, #30363d);
-  --header-select-border-focus: color-mix(in srgb, var(--layout-brand-primary) 66%, #a78bfa 18%);
-  --header-select-focus-glow: color-mix(in srgb, var(--layout-brand-primary) 26%, transparent);
-}
-
-.tech-select-wrapper :deep(.el-input__wrapper) {
-  min-height: 38px;
-  padding: 4px 12px;
-  border-radius: 14px;
-  background: linear-gradient(152deg, var(--header-select-bg-from), var(--header-select-bg-to)) !important;
-  box-shadow: 0 0 0 1px var(--header-select-border) inset !important;
-  border: none !important;
-  transition:
-    background-color 0.2s ease,
-    box-shadow 0.2s ease !important;
-}
-
-.tech-select-wrapper :deep(.el-input__wrapper:hover) {
-  box-shadow:
-    0 0 0 1px var(--header-select-border-hover) inset,
-    0 0 20px color-mix(in srgb, var(--layout-brand-primary) 14%, transparent) !important;
-}
-
-.tech-select-wrapper :deep(.el-input__wrapper.is-focus) {
-  box-shadow:
-    0 0 0 1px var(--header-select-border-focus) inset,
-    0 0 0 2px color-mix(in srgb, var(--header-select-focus-glow) 45%, transparent),
-    0 0 18px var(--header-select-focus-glow) !important;
-}
-
-.tech-select-wrapper :deep(.el-input__inner) {
-  color: var(--header-select-text) !important;
-  -webkit-text-fill-color: var(--header-select-text) !important;
-}
-
-.tech-select-wrapper :deep(.el-select__input-wrapper),
-.tech-select-wrapper :deep(.el-select__input) {
-  color: var(--header-select-text) !important;
-  -webkit-text-fill-color: var(--header-select-text) !important;
-}
-
-.tech-select-wrapper :deep(.el-select__selected-item) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-  font-weight: 500;
-  font-size: 13px;
-  color: var(--header-select-text) !important;
-  -webkit-text-fill-color: var(--header-select-text) !important;
-  opacity: 1 !important;
-}
-
-.tech-select-wrapper :deep(.el-select__placeholder),
-.tech-select-wrapper :deep(.el-select__placeholder span) {
-  color: var(--header-select-placeholder) !important;
-  -webkit-text-fill-color: var(--header-select-placeholder) !important;
-  opacity: 1 !important;
-}
-
-.tech-select-wrapper :deep(.el-select__selected-item.is-transparent),
-.tech-select-wrapper :deep(.el-select__placeholder.is-transparent) {
-  color: var(--header-select-placeholder) !important;
-  -webkit-text-fill-color: var(--header-select-placeholder) !important;
-  opacity: 1 !important;
-}
-
-.tech-select-wrapper :deep(.el-select__selection),
-.tech-select-wrapper :deep(.el-select__selected-item),
-.tech-select-wrapper :deep(.el-select__placeholder),
-.tech-select-wrapper :deep(.el-select__input-wrapper) {
-  filter: none !important;
-  mix-blend-mode: normal !important;
-}
-
-.tech-select-wrapper :deep(.el-select__caret) {
-  width: 12px !important;
-  opacity: 1 !important;
-  color: var(--header-select-text) !important;
-}
-
-.tech-select-wrapper :deep(.el-input__suffix-inner),
-.tech-select-wrapper :deep(.el-input__suffix) {
-  color: var(--header-select-text) !important;
-}
-
-
-.tech-select-wrapper :deep(.el-select__selection) {
-  overflow: hidden;
-}
-
-.context-switcher__pill {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  width: 100%;
-  min-height: 44px;
-  padding: 0;
-  border-radius: 12px;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  transition: none;
-}
-
-.context-switcher__pill--dual {
-  gap: 16px;
-}
-
-.context-switcher__selectors {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 16px;
-  width: 100%;
-  min-width: 0;
-}
-
-.context-switcher__pill:hover {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-
-.context-switcher__segment {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0;
-  min-width: 0;
-  flex: 1 1 0;
-  padding: 0;
-}
-
-.context-switcher__segment-shell {
-  flex: 1 1 0;
-  min-width: 0;
-  width: auto;
-}
-
-.context-switcher__segment-shell,
-.tech-select-wrapper :deep(.current-env-select--navbar) {
-  position: relative;
-  min-height: 38px;
-  border-radius: 14px;
-  background: linear-gradient(152deg, var(--header-select-bg-from), var(--header-select-bg-to));
-  border: 1px solid var(--header-select-border);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.045) inset,
-    0 0 14px color-mix(in srgb, #0ea5e9 8%, transparent),
-    inset 0 1px 0 rgba(148, 163, 184, 0.05);
-  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.22s ease;
-  overflow: hidden;
-}
-
-.context-switcher__segment-shell:hover,
-.tech-select-wrapper :deep(.current-env-select--navbar:hover) {
-  border-color: var(--header-select-border-hover);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--layout-brand-primary) 15%, transparent) inset,
-    0 0 28px color-mix(in srgb, var(--layout-brand-primary) 16%, transparent);
-}
-
-.context-switcher__segment-shell:focus-within {
-  border-color: var(--header-select-border-focus);
-  box-shadow:
-    0 0 0 1px var(--header-select-border-focus) inset,
-    0 0 0 2px color-mix(in srgb, var(--header-select-focus-glow) 42%, transparent),
-    0 0 22px var(--header-select-focus-glow);
-}
-
-.context-switcher__segment-shell::after,
-.tech-select-wrapper :deep(.current-env-select--navbar)::after {
-  display: none;
-}
-
-.context-switcher__segment--project {
-  cursor: default;
-}
-
-.context-switcher__mini-label {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.88);
-  line-height: 1;
-  user-select: none;
-}
-
-.context-switcher__status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #22d3ee;
-  box-shadow:
-    0 0 0 1px rgba(34, 211, 238, 0.22),
-    0 0 10px rgba(34, 211, 238, 0.72);
-  flex-shrink: 0;
-}
-
-.context-switcher__active-tag {
-  max-width: min(220px, 24vw);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 1.2;
-  color: #dbeafe;
-  background: color-mix(in srgb, var(--layout-brand-primary) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--layout-brand-primary) 24%, transparent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--layout-brand-primary) 18%, transparent);
-}
-
-.context-switcher__field {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.context-switcher__divider {
-  display: none;
-}
-
-.context-switcher__select {
-  width: 100%;
-  min-width: 0;
-}
-
-.context-switcher__gear {
-  display: none;
-}
-
-.context-switcher__gear--lead {
-  margin-right: -2px;
-}
-
-.context-switcher__gear-rot {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: cyberNavGearRotate 14s linear infinite;
-}
-
-.context-switcher__streams {
-  display: none;
-}
-
-.context-switcher__streams-inner {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
-  font-size: 9px;
-  letter-spacing: 0.03em;
-  color: color-mix(in srgb, var(--layout-brand-primary) 55%, #94a3b8);
-  animation: cyberNavStreamScroll 18s linear infinite;
-}
-
-.context-switcher__stream-chunk {
-  margin-right: 1.1rem;
 }
 
 .top-nav__right {
   display: flex;
   align-items: center;
-  gap: 20px;
-  flex-shrink: 1;
-  min-width: 0;
+  gap: 16px;
+  flex-shrink: 0;
 }
 
 .top-search {
-  width: clamp(120px, 14vw, 200px);
+  width: clamp(160px, 20vw, 320px);
 }
 
 .top-search--cyber :deep(.el-input__wrapper) {
   position: relative;
-  min-height: 38px;
+  min-height: 34px;
   overflow: visible;
-  border-radius: 14px;
+  border-radius: 12px;
   background: linear-gradient(
     152deg,
     color-mix(in srgb, #0b1224 92%, transparent),
@@ -1774,6 +1606,43 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+/* ===== Keyframes ===== */
+@keyframes cyberNavGearRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cyberNavFiber {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@keyframes cyberNavScanPulse {
+  0%, 100% { opacity: 0.32; }
+  50% { opacity: 0.62; }
+}
+
+@keyframes cyberNavHoloBeam {
+  0%, 100% { opacity: 0.2; transform: scaleX(0.65); }
+  50% { opacity: 0.95; transform: scaleX(1); }
+}
+
+@keyframes cyberNavBellPulse {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(124, 58, 237, 0.45)); }
+  50% { filter: drop-shadow(0 0 12px rgba(192, 132, 252, 0.75)); }
+}
+
+@keyframes cyberNavRingExpand {
+  0% { transform: scale(0.62); opacity: 0.5; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+
+@keyframes animation-toggle-glow {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+/* ===== Nav icon buttons ===== */
 .nav-icon-btn {
   font-size: 20px;
   color: var(--layout-text-muted);
@@ -1802,14 +1671,10 @@ onUnmounted(() => {
     inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
 }
 
-.notice-badge:not(.notice-badge--cyber) :deep(.el-badge__content) {
-  font-size: 10px;
-}
-
 .notice-bell-cyber {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1817,11 +1682,6 @@ onUnmounted(() => {
   outline: none;
   color: inherit;
   animation: cyberNavBellPulse 2.85s ease-in-out infinite;
-}
-
-.notice-bell-cyber:focus-visible {
-  border-radius: 10px;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #a855f7 55%, transparent);
 }
 
 .notice-bell-cyber__ring {
@@ -1832,22 +1692,78 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-.notice-bell-cyber__ring--1 {
-  animation: cyberNavRingExpand 2.45s ease-out infinite;
-}
-
-.notice-bell-cyber__ring--2 {
-  animation: cyberNavRingExpand 2.45s ease-out 0.58s infinite;
-}
-
-.notice-bell-cyber__ring--3 {
-  animation: cyberNavRingExpand 2.45s ease-out 1.16s infinite;
-}
+.notice-bell-cyber__ring--1 { animation: cyberNavRingExpand 2.45s ease-out infinite; }
+.notice-bell-cyber__ring--2 { animation: cyberNavRingExpand 2.45s ease-out 0.58s infinite; }
+.notice-bell-cyber__ring--3 { animation: cyberNavRingExpand 2.45s ease-out 1.16s infinite; }
 
 .notice-bell-cyber__svg {
   position: relative;
   z-index: 1;
   filter: drop-shadow(0 0 9px rgba(124, 58, 237, 0.5));
+}
+
+.animation-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 10px;
+  border: 2px solid rgba(100, 116, 139, 0.35);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #64748b;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.3s ease;
+  overflow: visible;
+}
+
+.animation-toggle:hover {
+  border-color: rgba(148, 163, 184, 0.5);
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.animation-toggle--on {
+  border-color: var(--layout-brand-primary);
+  color: var(--layout-brand-primary);
+  background: rgba(0, 216, 255, 0.08);
+  box-shadow:
+    0 0 14px color-mix(in srgb, var(--layout-brand-primary) 35%, transparent),
+    0 0 28px color-mix(in srgb, var(--layout-brand-primary) 12%, transparent),
+    inset 0 0 10px rgba(0, 216, 255, 0.06);
+}
+
+.animation-toggle--on:hover {
+  border-color: var(--layout-brand-primary);
+  color: #22d3ee;
+  background: rgba(0, 216, 255, 0.12);
+  box-shadow:
+    0 0 20px color-mix(in srgb, var(--layout-brand-primary) 45%, transparent),
+    0 0 36px color-mix(in srgb, var(--layout-brand-primary) 18%, transparent),
+    inset 0 0 12px rgba(0, 216, 255, 0.08);
+}
+
+.animation-toggle__label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+
+.animation-toggle--on .animation-toggle__label {
+  text-shadow: 0 0 8px color-mix(in srgb, var(--layout-brand-primary) 55%, transparent);
+}
+
+.animation-toggle__pulse {
+  position: absolute;
+  inset: -4px;
+  border-radius: 10px;
+  border: 1.5px solid color-mix(in srgb, var(--layout-brand-primary) 40%, transparent);
+  pointer-events: none;
+  animation: animation-toggle-glow 2.2s ease-in-out infinite;
 }
 
 .settings-cyber {
@@ -1867,15 +1783,7 @@ onUnmounted(() => {
     drop-shadow(0 0 18px color-mix(in srgb, #a855f7 38%, transparent));
 }
 
-.settings-cyber:focus-visible {
-  border-radius: 10px;
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--layout-brand-primary) 45%, transparent);
-}
-
-.settings-cyber__svg {
-  display: block;
-}
+.settings-cyber__svg { display: block; }
 
 .user-info {
   display: flex;
@@ -1884,15 +1792,13 @@ onUnmounted(() => {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 8px;
-  transition:
-    background 0.25s ease,
-    box-shadow 0.25s ease;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
 }
 
 .user-info--cyber {
-  gap: 12px;
-  padding: 6px 10px 22px;
-  border-radius: 12px;
+  gap: 10px;
+  padding: 4px 8px 18px;
+  border-radius: 10px;
 }
 
 .user-info:hover {
@@ -1902,8 +1808,8 @@ onUnmounted(() => {
 
 .user-avatar-shell {
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -1945,9 +1851,7 @@ onUnmounted(() => {
     inset 0 0 14px rgba(0, 216, 255, 0.12) !important;
 }
 
-.user-avatar :deep(img) {
-  object-fit: cover;
-}
+.user-avatar :deep(img) { object-fit: cover; }
 
 .user-hud {
   position: absolute;
@@ -1978,11 +1882,7 @@ onUnmounted(() => {
   text-align: center;
 }
 
-.user-name {
-  font-size: 14px;
-  line-height: 1.2;
-  color: var(--layout-text);
-}
+.user-name { font-size: 13px; line-height: 1.2; color: var(--layout-text); }
 
 .user-name--cyber {
   font-weight: 600;
@@ -1992,12 +1892,9 @@ onUnmounted(() => {
     0 0 26px color-mix(in srgb, var(--layout-brand-primary) 14%, transparent);
 }
 
-.user-arrow {
-  font-size: 13px;
-  color: var(--layout-text-subtle);
-}
+.user-arrow { font-size: 12px; color: var(--layout-text-subtle); }
 
-/* ===== 布局主体 ===== */
+/* ===== Layout Body ===== */
 .layout-body {
   position: relative;
   z-index: 1;
@@ -2006,26 +1903,17 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* ===== VS Code 风：极窄 Activity Bar + 次级上下文侧栏 ===== */
-.nav-rail {
-  position: relative;
-  z-index: 4;
-  display: flex;
-  flex-shrink: 0;
-  align-items: stretch;
-  min-height: 0;
-  height: 100%;
-  box-shadow: 6px 0 28px rgba(0, 0, 0, 0.45);
-}
-
+/* ===== Activity Bar ===== */
 .activity-bar {
-  width: 60px;
+  position: relative;
+  z-index: 5;
+  width: 56px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 14px 0;
+  gap: 4px;
+  padding: 12px 0;
   background: var(--panel-bg, rgba(255, 255, 255, 0.03));
   backdrop-filter: var(--panel-blur, blur(20px));
   -webkit-backdrop-filter: var(--panel-blur, blur(20px));
@@ -2036,8 +1924,8 @@ onUnmounted(() => {
 
 .activity-bar__btn {
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2048,11 +1936,7 @@ onUnmounted(() => {
   background: transparent;
   color: #9ca3af;
   cursor: pointer;
-  transition:
-    color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.15s ease;
+  transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
 }
 
 .activity-bar__btn:hover {
@@ -2074,78 +1958,55 @@ onUnmounted(() => {
   left: 0;
   top: 50%;
   width: 3px;
-  height: 22px;
-  margin-top: -11px;
+  height: 20px;
+  margin-top: -10px;
   border-radius: 0 3px 3px 0;
-  background: linear-gradient(180deg, var(--layout-brand-primary), color-mix(in srgb, var(--layout-brand-primary) 40%, #6366f1));
+  background: linear-gradient(180deg, var(--layout-brand-primary), color-mix(in srgb, var(--layout-brand-primary) 40%, #00d8ff));
   box-shadow:
     0 0 12px color-mix(in srgb, var(--layout-brand-primary) 70%, transparent),
     0 0 24px color-mix(in srgb, var(--layout-brand-primary) 35%, transparent);
 }
 
-.activity-bar__expand-fab {
-  position: absolute;
-  left: 48px;
-  top: 50%;
-  z-index: 6;
-  width: 28px;
-  height: 28px;
-  margin-top: -14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 8px;
-  background: #252528;
-  color: var(--layout-brand-primary);
-  cursor: pointer;
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--layout-brand-primary) 28%, transparent),
-    4px 0 16px rgba(0, 0, 0, 0.4);
-  transition: background 0.2s ease, transform 0.15s ease;
-}
-
-.activity-bar__expand-fab:hover {
-  background: #2e2e32;
-  transform: scale(1.05);
-}
-
-.secondary-sidebar {
-  width: 200px;
-  flex-shrink: 0;
+/* ===== Flyout Panel ===== */
+.flyout-panel {
+  position: relative;
+  z-index: 4;
   display: flex;
   flex-direction: column;
-  min-width: 200px;
   background: var(--panel-bg, rgba(255, 255, 255, 0.03));
   backdrop-filter: var(--panel-blur, blur(20px));
   -webkit-backdrop-filter: var(--panel-blur, blur(20px));
   box-shadow:
+    4px 0 24px rgba(0, 0, 0, 0.4),
     inset -1px 0 0 rgba(255, 255, 255, 0.06),
     inset 0 0 48px rgba(0, 240, 255, 0.02);
   overflow: hidden;
-  transition: width 0.22s ease, min-width 0.22s ease, opacity 0.2s ease;
 }
 
-.secondary-sidebar--collapsed {
-  width: 0;
-  min-width: 0;
+.flyout-enter-active,
+.flyout-leave-active {
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+
+.flyout-enter-from,
+.flyout-leave-to {
+  transform: translateX(-20px);
   opacity: 0;
-  pointer-events: none;
 }
 
-.secondary-sidebar__head {
+.flyout-panel__head {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 44px;
+  height: 40px;
   padding: 0 12px 0 14px;
   border-bottom: var(--border-subtle, 1px solid rgba(255, 255, 255, 0.08));
   background: rgba(255, 255, 255, 0.02);
 }
 
-.secondary-sidebar__title {
+.flyout-panel__title {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -2153,27 +2014,27 @@ onUnmounted(() => {
   color: var(--layout-text-muted);
 }
 
-.secondary-sidebar__collapse {
+.flyout-panel__close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: #9ca3af;
   cursor: pointer;
   transition: color 0.2s ease, background 0.2s ease;
 }
 
-.secondary-sidebar__collapse:hover {
+.flyout-panel__close:hover {
   color: var(--layout-brand-primary);
   background: rgba(0, 216, 255, 0.08);
 }
 
-.secondary-menu {
+.flyout-menu {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -2185,37 +2046,33 @@ onUnmounted(() => {
   --el-menu-hover-bg-color: rgba(0, 216, 255, 0.06);
 }
 
-.secondary-menu :deep(.el-menu-item) {
-  height: 40px;
-  line-height: 40px;
-  padding-left: 12px !important;
-  margin: 0 8px 2px 10px;
+.flyout-menu :deep(.el-menu-item) {
+  height: 38px;
+  line-height: 38px;
+  padding-left: 14px !important;
+  margin: 0 6px 2px 8px;
   border-radius: 8px;
   border-left: 3px solid transparent;
   color: var(--layout-text-muted) !important;
   background: transparent !important;
-  transition:
-    color 0.2s ease,
-    background 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.secondary-menu :deep(.el-menu-item .el-icon) {
+.flyout-menu :deep(.el-menu-item .el-icon) {
   color: #aeb9c9 !important;
   margin-right: 8px;
 }
 
-.secondary-menu :deep(.el-menu-item:hover) {
+.flyout-menu :deep(.el-menu-item:hover) {
   color: var(--layout-text) !important;
 }
 
-.secondary-menu :deep(.el-menu-item:hover .el-icon) {
+.flyout-menu :deep(.el-menu-item:hover .el-icon) {
   color: var(--layout-brand-primary) !important;
   filter: drop-shadow(0 0 6px var(--layout-brand-glow));
 }
 
-.secondary-menu :deep(.el-menu-item.is-active) {
+.flyout-menu :deep(.el-menu-item.is-active) {
   font-weight: 600;
   color: #f0f4f8 !important;
   border-left-color: var(--layout-brand-primary);
@@ -2225,12 +2082,123 @@ onUnmounted(() => {
     -2px 0 16px color-mix(in srgb, var(--layout-brand-primary) 12%, transparent);
 }
 
-.secondary-menu :deep(.el-menu-item.is-active .el-icon) {
+.flyout-menu :deep(.el-menu-item.is-active .el-icon) {
   color: var(--layout-brand-primary) !important;
   filter: drop-shadow(0 0 8px var(--layout-brand-glow));
 }
 
-/* ===== 主内容 ===== */
+.flyout-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.flyout-menu :deep(.el-sub-menu__title) {
+  height: 34px;
+  line-height: 34px;
+  padding-left: 14px !important;
+  margin: 6px 6px 0 8px;
+  border-radius: 6px;
+  color: #64748b !important;
+  background: transparent !important;
+}
+
+.flyout-menu :deep(.el-sub-menu__title:hover) {
+  color: var(--layout-text-muted) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.flyout-menu :deep(.el-sub-menu .el-menu-item) {
+  padding-left: 24px !important;
+  margin: 0 6px 2px 8px;
+}
+
+.flyout-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 10;
+  transition: background 0.2s ease;
+}
+
+.flyout-resize-handle:hover,
+.flyout-resize-handle:active {
+  background: color-mix(in srgb, var(--layout-brand-primary) 30%, transparent);
+}
+
+/* ===== Context Selectors (in content header) ===== */
+.nav-context-selectors {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 16px;
+}
+
+.nav-context-selectors :deep(.el-dropdown) {
+  flex-shrink: 0;
+}
+
+.nav-context-selector {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--layout-brand-primary) 20%, rgba(167, 139, 250, 0.22));
+  border-radius: 8px;
+  background: linear-gradient(
+    152deg,
+    color-mix(in srgb, #0b1224 92%, transparent),
+    color-mix(in srgb, #161f38 78%, transparent)
+  );
+  color: #d2d8e3;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  cursor: pointer;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  font-size: 12px;
+}
+
+.nav-context-selector:hover {
+  border-color: color-mix(in srgb, var(--layout-brand-primary) 36%, rgba(192, 132, 252, 0.3));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--layout-brand-primary) 10%, transparent);
+}
+
+.nav-context-selector__icon {
+  display: inline-flex;
+  color: color-mix(in srgb, var(--layout-brand-primary) 76%, #dbeafe);
+  flex-shrink: 0;
+}
+
+.nav-context-selector__label {
+  font-size: 11px;
+  color: #9ca3b8;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.nav-context-selector__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #22d3ee;
+  font-weight: 500;
+}
+
+.nav-context-selector__arrow {
+  margin-left: 2px;
+  color: #9fb4cf;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* ===== Main Content ===== */
 .main-content {
   flex: 1;
   display: flex;
@@ -2246,7 +2214,7 @@ onUnmounted(() => {
 .content-header {
   position: relative;
   z-index: 1;
-  height: 42px;
+  height: 36px;
   padding: 0 20px;
   background: var(--panel-bg, rgba(255, 255, 255, 0.03));
   backdrop-filter: var(--panel-blur, blur(20px));
@@ -2257,6 +2225,14 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+}
+
+.content-header__left {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  flex: 1;
 }
 
 .content-header :deep(.el-breadcrumb__inner),
@@ -2273,6 +2249,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .content-header__actions :deep(.el-button) {
@@ -2296,5 +2273,74 @@ onUnmounted(() => {
     transparent 28%,
     color-mix(in srgb, var(--bg-main, #0a0a0c) 92%, transparent) 100%
   );
+}
+
+/* ===== Animations Off ===== */
+.main-layout--animations-off .notice-bell-cyber,
+.main-layout--animations-off .notice-bell-cyber__ring,
+.main-layout--animations-off .top-search--cyber :deep(.el-input__wrapper)::before,
+.main-layout--animations-off .top-search--cyber :deep(.el-input__wrapper)::after,
+.main-layout--animations-off .top-search__holo-beam,
+.main-layout--animations-off .user-avatar-shell__orbit,
+.main-layout--animations-off .main-layout__glow {
+  animation: none !important;
+}
+
+.main-layout--animations-off .notice-bell-cyber__ring {
+  display: none;
+}
+
+.main-layout--animations-off .top-search--cyber :deep(.el-input__wrapper)::before,
+.main-layout--animations-off .top-search--cyber :deep(.el-input__wrapper)::after {
+  opacity: 0 !important;
+}
+
+.main-layout--animations-off .settings-cyber__svg {
+  filter: none !important;
+}
+
+.main-layout--animations-off .user-avatar-shell__orbit {
+  opacity: 0 !important;
+}
+
+.main-layout--animations-off .main-layout__glow {
+  opacity: 0 !important;
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .main-layout *,
+  .main-layout *::before,
+  .main-layout *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1280px) {
+  .top-search {
+    width: clamp(120px, 14vw, 200px) !important;
+  }
+
+  .flyout-panel {
+    width: 200px !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .activity-bar {
+    width: 44px;
+  }
+
+  .activity-bar__btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .nav-context-selectors {
+    display: none;
+  }
 }
 </style>

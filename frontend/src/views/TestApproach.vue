@@ -11,19 +11,34 @@
           @keyup.enter="load"
         >
           <template #append>
-            <el-button type="primary" class="approach-search-btn" @click="load">
+            <el-button
+              type="primary"
+              class="approach-search-btn"
+              @click="load"
+            >
               <el-icon><Search /></el-icon>
             </el-button>
           </template>
         </el-input>
       </div>
       <div class="approach-toolbar__actions">
-        <el-button class="filter-btn" :type="isRecycleMode ? 'warning' : ''" @click="toggleRecycleMode">
+        <el-button
+          class="filter-btn"
+          :type="isRecycleMode ? 'warning' : ''"
+          @click="toggleRecycleMode"
+        >
           {{ isRecycleMode ? '返回列表' : '回收站' }}
         </el-button>
-        <el-button class="filter-btn" :type="isSelectMode ? 'info' : ''" @click="toggleSelectMode">
+        <el-button
+          class="filter-btn"
+          :type="isSelectMode ? 'info' : ''"
+          @click="toggleSelectMode"
+        >
           {{ isSelectMode ? '取消选择' : '选择' }}
-          <span v-if="isSelectMode && selectedIds.length" style="margin-left: 6px">（{{ selectedIds.length }}）</span>
+          <span
+            v-if="isSelectMode && selectedIds.length"
+            style="margin-left: 6px"
+          >（{{ selectedIds.length }}）</span>
         </el-button>
 
         <el-button
@@ -62,11 +77,18 @@
         >
           批量复制
         </el-button>
-        <el-button class="filter-btn" @click="filterDrawerOpen = true">
+        <el-button
+          class="filter-btn"
+          @click="filterDrawerOpen = true"
+        >
           <el-icon><Filter /></el-icon>
           更多筛选
         </el-button>
-        <el-button type="primary" class="smart-add-btn" @click="openCreate">
+        <el-button
+          type="primary"
+          class="smart-add-btn"
+          @click="openCreate"
+        >
           <el-icon><Plus /></el-icon>
           智能新增
         </el-button>
@@ -82,7 +104,11 @@
         :class="{ 'approach-card--selected': selectedIds.includes(item.id) }"
         @click="onCardClick(item)"
       >
-        <div v-if="isSelectMode" class="approach-card__select" @click.stop>
+        <div
+          v-if="isSelectMode"
+          class="approach-card__select"
+          @click.stop
+        >
           <button
             type="button"
             class="approach-card__select-btn"
@@ -91,7 +117,13 @@
             :aria-label="selectedIdSet.has(item.id) ? '取消选择' : '选择测试方案'"
             @click.stop="toggleSelected(item.id, !selectedIdSet.has(item.id))"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
               <path
                 d="M20 6L9 17l-5-5"
                 stroke="currentColor"
@@ -103,18 +135,40 @@
           </button>
         </div>
         <div class="approach-card__cover">
-          <img v-if="coverUrl(item)" :src="coverUrl(item)" class="cover-img" alt="" loading="lazy" />
-          <div v-else class="cover-placeholder cover-placeholder--empty">
-            <el-icon class="cover-placeholder__icon"><Picture /></el-icon>
+          <img
+            v-if="coverUrl(item)"
+            :src="coverUrl(item)"
+            class="cover-img"
+            alt=""
+            loading="lazy"
+          >
+          <div
+            v-else
+            class="cover-placeholder cover-placeholder--empty"
+          >
+            <el-icon class="cover-placeholder__icon">
+              <Picture />
+            </el-icon>
           </div>
-          <div class="approach-card__badge" :class="'approach-card__badge--' + badgeVariant(item.test_category)">
-            <el-icon :size="18"><component :is="categoryBadgeIcon(item.test_category)" /></el-icon>
+          <div
+            class="approach-card__badge"
+            :class="'approach-card__badge--' + badgeVariant(item.test_category)"
+          >
+            <el-icon :size="18">
+              <component :is="categoryBadgeIcon(item.test_category)" />
+            </el-icon>
           </div>
         </div>
         <div class="approach-card__body">
           <div class="approach-card__title-row">
-            <span class="approach-card__title" :title="item.scheme_name">{{ item.scheme_name }}</span>
-            <div class="approach-card__actions" @click.stop>
+            <span
+              class="approach-card__title"
+              :title="item.scheme_name"
+            >{{ item.scheme_name }}</span>
+            <div
+              class="approach-card__actions"
+              @click.stop
+            >
               <el-button
                 link
                 type="primary"
@@ -177,17 +231,33 @@
         </div>
       </div>
 
-      <div class="approach-card approach-card--empty" @click="openCreate">
-        <el-icon class="empty-icon"><Plus /></el-icon>
+      <div
+        class="approach-card approach-card--empty"
+        @click="openCreate"
+      >
+        <el-icon class="empty-icon">
+          <Plus />
+        </el-icon>
         <span class="empty-text">新增测试方案</span>
       </div>
     </div>
 
     <!-- 更多筛选 -->
-    <el-drawer v-model="filterDrawerOpen" title="筛选条件" direction="rtl" size="320px" class="cyber-drawer-dark">
+    <el-drawer
+      v-model="filterDrawerOpen"
+      title="筛选条件"
+      direction="rtl"
+      size="320px"
+      class="cyber-drawer-dark"
+    >
       <el-form label-position="top">
         <el-form-item label="测试类型">
-          <el-select v-model="filterCategory" placeholder="全部" clearable class="w-full">
+          <el-select
+            v-model="filterCategory"
+            placeholder="全部"
+            clearable
+            class="w-full"
+          >
             <el-option
               v-for="opt in categoryOptions"
               :key="opt.value"
@@ -199,8 +269,15 @@
       </el-form>
       <template #footer>
         <div class="drawer-footer">
-          <el-button @click="resetFilter">重置</el-button>
-          <el-button type="primary" @click="filterDrawerOpen = false">确定</el-button>
+          <el-button @click="resetFilter">
+            重置
+          </el-button>
+          <el-button
+            type="primary"
+            @click="filterDrawerOpen = false"
+          >
+            确定
+          </el-button>
         </div>
       </template>
     </el-drawer>
@@ -212,15 +289,39 @@
       destroy-on-close
       class="approach-dialog cyber-dialog-dark"
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="88px">
-        <el-form-item label="方案名称" prop="scheme_name">
-          <el-input v-model="form.scheme_name" placeholder="请输入方案名称" />
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="88px"
+      >
+        <el-form-item
+          label="方案名称"
+          prop="scheme_name"
+        >
+          <el-input
+            v-model="form.scheme_name"
+            placeholder="请输入方案名称"
+          />
         </el-form-item>
-        <el-form-item label="版本" prop="version">
-          <el-input v-model="form.version" placeholder="如 V3.0" />
+        <el-form-item
+          label="版本"
+          prop="version"
+        >
+          <el-input
+            v-model="form.version"
+            placeholder="如 V3.0"
+          />
         </el-form-item>
-        <el-form-item label="测试类型" prop="test_category">
-          <el-select v-model="form.test_category" placeholder="请选择" class="w-full">
+        <el-form-item
+          label="测试类型"
+          prop="test_category"
+        >
+          <el-select
+            v-model="form.test_category"
+            placeholder="请选择"
+            class="w-full"
+          >
             <el-option
               v-for="opt in categoryOptions"
               :key="opt.value"
@@ -229,7 +330,10 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="测试目标" prop="test_goal">
+        <el-form-item
+          label="测试目标"
+          prop="test_goal"
+        >
           <el-input
             v-model="form.test_goal"
             type="textarea"
@@ -239,11 +343,21 @@
         </el-form-item>
       </el-form>
       <div class="image-section">
-        <div class="image-section__title">图片历史</div>
+        <div class="image-section__title">
+          图片历史
+        </div>
         <div class="thumb-grid">
-          <div v-for="img in dialogImagesHistory" :key="img.id || img.image_url" class="thumb-item">
+          <div
+            v-for="img in dialogImagesHistory"
+            :key="img.id || img.image_url"
+            class="thumb-item"
+          >
             <div class="thumb-item__media">
-              <img :src="img.image_url" alt="" class="thumb-img" />
+              <img
+                :src="img.image_url"
+                alt=""
+                class="thumb-img"
+              >
             </div>
             <el-button
               v-if="img.id && (img.approach_id || editing?.id)"
@@ -257,7 +371,10 @@
               <el-icon><Close /></el-icon>
             </el-button>
           </div>
-          <div v-if="dialogImagesHistory.length === 0" class="thumb-item thumb-item--empty">
+          <div
+            v-if="dialogImagesHistory.length === 0"
+            class="thumb-item thumb-item--empty"
+          >
             暂无图片
           </div>
         </div>
@@ -270,8 +387,10 @@
               multiple
               class="file-input-overlay"
               @change="onFilesChange"
-            />
-            <el-button class="pick-files-btn">选择图片</el-button>
+            >
+            <el-button class="pick-files-btn">
+              选择图片
+            </el-button>
           </div>
           <el-button
             type="primary"
@@ -282,15 +401,34 @@
             上传图片
           </el-button>
         </div>
-        <div v-if="selectedPreviewUrls.length" class="thumb-grid selected-preview-grid">
-          <div v-for="(url, idx) in selectedPreviewUrls" :key="url" class="thumb-item">
-            <img :src="url" alt="" class="thumb-img" />
+        <div
+          v-if="selectedPreviewUrls.length"
+          class="thumb-grid selected-preview-grid"
+        >
+          <div
+            v-for="(url, idx) in selectedPreviewUrls"
+            :key="url"
+            class="thumb-item"
+          >
+            <img
+              :src="url"
+              alt=""
+              class="thumb-img"
+            >
           </div>
         </div>
       </div>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submit">确定</el-button>
+        <el-button @click="showDialog = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="submit"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>

@@ -1,7 +1,10 @@
 <template>
   <div class="cyber-page knowledge-page">
-    <div class="knowledge-bg-mask"></div>
-    <el-card class="admin-list-card cyber-card" shadow="never">
+    <div class="knowledge-bg-mask" />
+    <el-card
+      class="admin-list-card cyber-card"
+      shadow="never"
+    >
       <div class="knowledge-layout knowledge-layout--module-dock">
         <aside
           class="module-tree-dock"
@@ -11,8 +14,15 @@
             'is-expanded': isPurposeDockExpanded,
           }"
         >
-          <div class="module-tree-rail" aria-label="文档分类快捷栏">
-            <el-tooltip :content="isPurposeDockExpanded ? '收起分类面板' : '展开分类面板'" placement="right" :show-after="200">
+          <div
+            class="module-tree-rail"
+            aria-label="文档分类快捷栏"
+          >
+            <el-tooltip
+              :content="isPurposeDockExpanded ? '收起分类面板' : '展开分类面板'"
+              placement="right"
+              :show-after="200"
+            >
               <el-button
                 class="module-tree-rail__expand-btn"
                 :class="{ 'is-expanded': isPurposeDockExpanded }"
@@ -21,23 +31,41 @@
                 :aria-expanded="isPurposeDockExpanded"
                 @click.stop="togglePurposeDockExpanded"
               >
-                <el-icon :size="20"><DArrowLeft v-if="isPurposeDockExpanded" /><DArrowRight v-else /></el-icon>
+                <el-icon :size="20">
+                  <DArrowLeft v-if="isPurposeDockExpanded" /><DArrowRight v-else />
+                </el-icon>
               </el-button>
             </el-tooltip>
           </div>
 
-          <div class="module-tree-slide" :class="{ 'is-open': isPurposeDockExpanded }">
-            <el-card class="tc-card tc-card--tree admin-list-card tc-tree-panel" shadow="never">
+          <div
+            class="module-tree-slide"
+            :class="{ 'is-open': isPurposeDockExpanded }"
+          >
+            <el-card
+              class="tc-card tc-card--tree admin-list-card tc-tree-panel"
+              shadow="never"
+            >
               <div class="tree-panel__head">
-                <div class="tree-panel__all-label">文档分类</div>
+                <div class="tree-panel__all-label">
+                  文档分类
+                </div>
                 <div class="tree-panel__head-actions">
                   <el-tooltip
                     :content="isModuleDockWideLayout ? '收起侧栏' : '关闭分类面板'"
                     placement="bottom"
                     :show-after="400"
                   >
-                    <el-button class="tree-panel__icon-btn" text type="primary" size="small" @click="closePurposeDock">
-                      <el-icon :size="18"><DArrowLeft v-if="isModuleDockWideLayout" /><Fold v-else /></el-icon>
+                    <el-button
+                      class="tree-panel__icon-btn"
+                      text
+                      type="primary"
+                      size="small"
+                      @click="closePurposeDock"
+                    >
+                      <el-icon :size="18">
+                        <DArrowLeft v-if="isModuleDockWideLayout" /><Fold v-else />
+                      </el-icon>
                     </el-button>
                   </el-tooltip>
                 </div>
@@ -61,45 +89,88 @@
           </div>
         </aside>
 
-        <div v-if="isPurposeDockExpanded && !isModuleDockWideLayout" class="module-tree-mask" @click="closePurposeDock" />
+        <div
+          v-if="isPurposeDockExpanded && !isModuleDockWideLayout"
+          class="module-tree-mask"
+          @click="closePurposeDock"
+        />
 
         <section class="knowledge-main">
           <div class="admin-toolbar-row knowledge-toolbar">
             <div class="admin-toolbar-row__left">
               <div class="title-stack">
-                <h3 class="knowledge-title">知识中心 / Knowledge Hub</h3>
+                <h3 class="knowledge-title">
+                  知识中心 / Knowledge Hub
+                </h3>
                 <div class="title-subline">
-                  <span class="capability-chip" :class="`capability-chip--${deleteCapability.status}`">
-                    <span class="capability-chip__dot"></span>
+                  <span
+                    class="capability-chip"
+                    :class="`capability-chip--${deleteCapability.status}`"
+                  >
+                    <span class="capability-chip__dot" />
                     <span>删除能力：{{ deleteCapability.label }}</span>
                   </span>
                 </div>
               </div>
             </div>
             <div class="admin-toolbar-row__right">
-              <el-button class="cyber-ghost-btn" @click="loadDocuments">刷新</el-button>
-              <el-button class="cyber-ghost-btn" @click="retryPendingDocuments">批量重试待处理</el-button>
-              <el-button class="holo-btn" @click="openIngestDrawer">导入/新增</el-button>
+              <el-button
+                class="cyber-ghost-btn"
+                @click="loadDocuments"
+              >
+                刷新
+              </el-button>
+              <el-button
+                class="cyber-ghost-btn"
+                @click="retryPendingDocuments"
+              >
+                批量重试待处理
+              </el-button>
+              <el-button
+                class="holo-btn"
+                @click="openIngestDrawer"
+              >
+                导入/新增
+              </el-button>
             </div>
           </div>
 
           <div class="runtime-summary">
-            <el-tag size="small" class="cyber-tag cyber-tag--info">待处理 {{ runtimeStatus.counters.pending || 0 }}</el-tag>
-            <el-tag size="small" type="warning" class="cyber-tag cyber-tag--warning">
+            <el-tag
+              size="small"
+              class="cyber-tag cyber-tag--info"
+            >
+              待处理 {{ runtimeStatus.counters.pending || 0 }}
+            </el-tag>
+            <el-tag
+              size="small"
+              type="warning"
+              class="cyber-tag cyber-tag--warning"
+            >
               处理中 {{ runtimeStatus.counters.processing || 0 }}
             </el-tag>
-            <el-tag size="small" type="success" class="cyber-tag cyber-tag--success">
+            <el-tag
+              size="small"
+              type="success"
+              class="cyber-tag cyber-tag--success"
+            >
               已完成 {{ runtimeStatus.counters.completed || 0 }}
             </el-tag>
-            <el-tag size="small" type="danger" class="cyber-tag cyber-tag--danger">失败 {{ runtimeStatus.counters.failed || 0 }}</el-tag>
+            <el-tag
+              size="small"
+              type="danger"
+              class="cyber-tag cyber-tag--danger"
+            >
+              失败 {{ runtimeStatus.counters.failed || 0 }}
+            </el-tag>
           </div>
           <div class="knowledge-filters">
             <el-input
               v-model="docFilters.keyword"
               clearable
               placeholder="搜索标题/文件名/URL"
-              @keyup.enter="onSearch"
               style="max-width: 320px"
+              @keyup.enter="onSearch"
             />
             <el-select
               v-model="docFilters.module_id"
@@ -116,11 +187,29 @@
                 :value="m.value"
               />
             </el-select>
-            <el-select v-model="docFilters.status" clearable placeholder="状态" style="width: 160px" @change="onSearch">
-              <el-option label="待处理" value="pending" />
-              <el-option label="处理中" value="processing" />
-              <el-option label="已完成" value="completed" />
-              <el-option label="失败" value="failed" />
+            <el-select
+              v-model="docFilters.status"
+              clearable
+              placeholder="状态"
+              style="width: 160px"
+              @change="onSearch"
+            >
+              <el-option
+                label="待处理"
+                value="pending"
+              />
+              <el-option
+                label="处理中"
+                value="processing"
+              />
+              <el-option
+                label="已完成"
+                value="completed"
+              />
+              <el-option
+                label="失败"
+                value="failed"
+              />
             </el-select>
           </div>
           <el-alert
@@ -133,44 +222,120 @@
             @close="pageErrorMessage = ''"
           />
 
-          <el-table :data="filteredDocuments" border stripe v-loading="loading" class="knowledge-table">
-            <el-table-column label="文件名" min-width="220" show-overflow-tooltip>
-              <template #default="{ row }">{{ row.title || row.file_name || "-" }}</template>
-            </el-table-column>
-            <el-table-column label="用途标签" width="150">
+          <el-table
+            v-loading="loading"
+            :data="filteredDocuments"
+            border
+            stripe
+            class="knowledge-table"
+          >
+            <el-table-column
+              label="文件名"
+              min-width="220"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
-                <el-tag effect="plain" class="cyber-tag cyber-tag--neutral">
+                {{ row.title || row.file_name || "-" }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="用途标签"
+              width="150"
+            >
+              <template #default="{ row }">
+                <el-tag
+                  effect="plain"
+                  class="cyber-tag cyber-tag--neutral"
+                >
                   {{ purposeLabelByValue(resolvePurpose(row)) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="所属模块" width="160" show-overflow-tooltip>
-              <template #default="{ row }">{{ resolveModuleLabel(row) }}</template>
+            <el-table-column
+              label="所属模块"
+              width="160"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                {{ resolveModuleLabel(row) }}
+              </template>
             </el-table-column>
-            <el-table-column label="向量化状态" width="180">
+            <el-table-column
+              label="向量化状态"
+              width="180"
+            >
               <template #default="{ row }">
                 <div class="status-line">
-                  <span :class="['status-dot', `status-dot--${row.status || 'pending'}`]"></span>
-                  <el-icon v-if="row.status === 'failed'" class="status-icon-fail"><WarningFilled /></el-icon>
+                  <span :class="['status-dot', `status-dot--${row.status || 'pending'}`]" />
+                  <el-icon
+                    v-if="row.status === 'failed'"
+                    class="status-icon-fail"
+                  >
+                    <WarningFilled />
+                  </el-icon>
                   <span>{{ statusLabel(row.status) }}</span>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="失败原因" min-width="200" show-overflow-tooltip>
+            <el-table-column
+              label="失败原因"
+              min-width="200"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
                 {{ row.status === "failed" ? row.error_message || "-" : "-" }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="230" align="center">
+            <el-table-column
+              label="操作"
+              width="230"
+              align="center"
+            >
               <template #default="{ row }">
-                <el-button class="action-icon-btn" link :icon="View" title="预览" @click="previewDoc(row)" />
-                <el-button class="action-icon-btn brain-btn" link title="语义摘要" @click="runSemanticLookup(row)">
-                  <span class="brain-svg-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path d="M8 8.2C8 6.43 9.43 5 11.2 5h1.6C14.57 5 16 6.43 16 8.2v.2a2.8 2.8 0 0 1 1.8 2.62v.58A2.8 2.8 0 0 1 16 14.2V15c0 2.21-1.79 4-4 4s-4-1.79-4-4v-.8a2.8 2.8 0 0 1-1.8-2.6v-.58A2.8 2.8 0 0 1 8 8.4v-.2Z" stroke="currentColor" stroke-width="1.6"/>
-                      <path d="M12 7.4v9.2M9.4 10.2h2.6M12 13.2h2.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                      <circle cx="7.1" cy="11.3" r="1" fill="currentColor"/>
-                      <circle cx="16.9" cy="11.3" r="1" fill="currentColor"/>
+                <el-button
+                  class="action-icon-btn"
+                  link
+                  :icon="View"
+                  title="预览"
+                  @click="previewDoc(row)"
+                />
+                <el-button
+                  class="action-icon-btn brain-btn"
+                  link
+                  title="语义摘要"
+                  @click="runSemanticLookup(row)"
+                >
+                  <span
+                    class="brain-svg-icon"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <path
+                        d="M8 8.2C8 6.43 9.43 5 11.2 5h1.6C14.57 5 16 6.43 16 8.2v.2a2.8 2.8 0 0 1 1.8 2.62v.58A2.8 2.8 0 0 1 16 14.2V15c0 2.21-1.79 4-4 4s-4-1.79-4-4v-.8a2.8 2.8 0 0 1-1.8-2.6v-.58A2.8 2.8 0 0 1 8 8.4v-.2Z"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                      />
+                      <path
+                        d="M12 7.4v9.2M9.4 10.2h2.6M12 13.2h2.8"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                      />
+                      <circle
+                        cx="7.1"
+                        cy="11.3"
+                        r="1"
+                        fill="currentColor"
+                      />
+                      <circle
+                        cx="16.9"
+                        cy="11.3"
+                        r="1"
+                        fill="currentColor"
+                      />
                     </svg>
                   </span>
                 </el-button>
@@ -182,7 +347,13 @@
                   :disabled="row.status === 'processing'"
                   @click="retryDocument(row)"
                 />
-                <el-button class="action-icon-btn danger" link :icon="Delete" title="删除" @click="deleteDocument(row)" />
+                <el-button
+                  class="action-icon-btn danger"
+                  link
+                  :icon="Delete"
+                  title="删除"
+                  @click="deleteDocument(row)"
+                />
               </template>
             </el-table-column>
           </el-table>
@@ -202,33 +373,81 @@
       </div>
     </el-card>
 
-    <el-drawer v-model="ingestDrawerVisible" title="导入/新增文档" size="440px" class="cyber-drawer">
-      <el-form :model="docIngestForm" label-width="90px" class="ingest-form">
+    <el-drawer
+      v-model="ingestDrawerVisible"
+      title="导入/新增文档"
+      size="440px"
+      class="cyber-drawer"
+    >
+      <el-form
+        :model="docIngestForm"
+        label-width="90px"
+        class="ingest-form"
+      >
         <el-form-item label="提交模式">
           <el-radio-group v-model="docIngestForm.mode">
-            <el-radio-button label="upload">上传文件</el-radio-button>
-            <el-radio-button label="url">提交 URL</el-radio-button>
+            <el-radio-button label="upload">
+              上传文件
+            </el-radio-button>
+            <el-radio-button label="url">
+              提交 URL
+            </el-radio-button>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="文档分类">
-          <el-select v-model="docIngestForm.purpose" style="width: 100%" @change="markFieldTouched('purpose')">
-            <el-option label="PRD/需求文档" value="requirement" />
-            <el-option label="规范标准" value="standard" />
-            <el-option label="报告/计划模版" value="template" />
+          <el-select
+            v-model="docIngestForm.purpose"
+            style="width: 100%"
+            @change="markFieldTouched('purpose')"
+          >
+            <el-option
+              label="PRD/需求文档"
+              value="requirement"
+            />
+            <el-option
+              label="规范标准"
+              value="standard"
+            />
+            <el-option
+              label="报告/计划模版"
+              value="template"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="文档名称">
-          <el-input v-model="docIngestForm.title" placeholder="可选，默认使用文件名或 URL" @input="markFieldTouched('title')" />
+          <el-input
+            v-model="docIngestForm.title"
+            placeholder="可选，默认使用文件名或 URL"
+            @input="markFieldTouched('title')"
+          />
         </el-form-item>
         <el-form-item label="关联模块">
-          <el-select v-model="docIngestForm.module_id" clearable filterable style="width: 100%" @change="markFieldTouched('module_id')">
-            <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="docIngestForm.module_id"
+            clearable
+            filterable
+            style="width: 100%"
+            @change="markFieldTouched('module_id')"
+          >
+            <el-option
+              v-for="item in moduleOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="语义标签">
-          <el-input v-model="docIngestForm.tagsText" placeholder="多个关键词请用逗号分隔" @input="markFieldTouched('tagsText')" />
+          <el-input
+            v-model="docIngestForm.tagsText"
+            placeholder="多个关键词请用逗号分隔"
+            @input="markFieldTouched('tagsText')"
+          />
         </el-form-item>
-        <el-form-item v-if="docIngestForm.mode === 'upload'" label="上传文件">
+        <el-form-item
+          v-if="docIngestForm.mode === 'upload'"
+          label="上传文件"
+        >
           <el-upload
             class="doc-upload"
             drag
@@ -241,68 +460,167 @@
           >
             <div>拖拽 PDF / MD 到此，或点击上传</div>
           </el-upload>
-          <div v-if="docAutoFilling" class="ingest-autofill-tip">
+          <div
+            v-if="docAutoFilling"
+            class="ingest-autofill-tip"
+          >
             AI 正在解析文档并自动填写表单...
           </div>
         </el-form-item>
-        <el-form-item v-else label="文档 URL">
-          <el-input v-model="docIngestForm.url" placeholder="请输入 http(s):// 开头的 URL" />
+        <el-form-item
+          v-else
+          label="文档 URL"
+        >
+          <el-input
+            v-model="docIngestForm.url"
+            placeholder="请输入 http(s):// 开头的 URL"
+          />
         </el-form-item>
         <div class="drawer-actions">
-          <el-button @click="ingestDrawerVisible = false">取消</el-button>
-          <el-button type="primary" :loading="docSubmitting" @click="submitDocumentIngest">提交处理</el-button>
+          <el-button @click="ingestDrawerVisible = false">
+            取消
+          </el-button>
+          <el-button
+            type="primary"
+            :loading="docSubmitting"
+            @click="submitDocumentIngest"
+          >
+            提交处理
+          </el-button>
         </div>
       </el-form>
     </el-drawer>
 
-    <el-drawer v-model="semanticDrawerVisible" :title="semanticDrawerTitle" size="46%" class="cyber-drawer">
-      <div class="summary-drawer" v-loading="semanticLoading">
-        <div class="summary-drawer__meta" v-if="activeDrawerDocument">
-          <el-tag effect="plain">{{ purposeLabelByValue(resolvePurpose(activeDrawerDocument)) }}</el-tag>
+    <el-drawer
+      v-model="semanticDrawerVisible"
+      :title="semanticDrawerTitle"
+      size="46%"
+      class="cyber-drawer"
+    >
+      <div
+        v-loading="semanticLoading"
+        class="summary-drawer"
+      >
+        <div
+          v-if="activeDrawerDocument"
+          class="summary-drawer__meta"
+        >
+          <el-tag effect="plain">
+            {{ purposeLabelByValue(resolvePurpose(activeDrawerDocument)) }}
+          </el-tag>
           <span>{{ activeDrawerDocument.title || activeDrawerDocument.file_name || "-" }}</span>
         </div>
-        <div class="summary-drawer__content">{{ drawerSummaryText }}</div>
-        <div v-if="drawerMode === 'preview'" class="preview-panel">
-          <div class="summary-drawer__chunks-title">原文预览</div>
-          <div class="preview-panel__text">{{ previewText }}</div>
+        <div class="summary-drawer__content">
+          {{ drawerSummaryText }}
         </div>
-        <div v-else class="summary-drawer__chunks">
-          <div class="summary-drawer__chunks-title">计划/报告结构化输出</div>
+        <div
+          v-if="drawerMode === 'preview'"
+          class="preview-panel"
+        >
+          <div class="summary-drawer__chunks-title">
+            原文预览
+          </div>
+          <div class="preview-panel__text">
+            {{ previewText }}
+          </div>
+        </div>
+        <div
+          v-else
+          class="summary-drawer__chunks"
+        >
+          <div class="summary-drawer__chunks-title">
+            计划/报告结构化输出
+          </div>
           <div class="structured-json-panel">
             <div class="structured-json-actions">
-              <el-button size="small" type="primary" @click="copyStructuredPayload">复制 JSON</el-button>
-              <el-button size="small" type="success" @click="saveStructuredPayload">保存为测试资产</el-button>
+              <el-button
+                size="small"
+                type="primary"
+                @click="copyStructuredPayload"
+              >
+                复制 JSON
+              </el-button>
+              <el-button
+                size="small"
+                type="success"
+                @click="saveStructuredPayload"
+              >
+                保存为测试资产
+              </el-button>
             </div>
             <pre class="structured-json-content">{{ structuredPayloadText }}</pre>
           </div>
 
-          <div class="summary-drawer__chunks-title">语义洞察</div>
+          <div class="summary-drawer__chunks-title">
+            语义洞察
+          </div>
           <div class="insight-list">
-            <div v-for="(item, idx) in semanticInsightItems" :key="`insight-${idx}`" class="insight-item">
+            <div
+              v-for="(item, idx) in semanticInsightItems"
+              :key="`insight-${idx}`"
+              class="insight-item"
+            >
               {{ idx + 1 }}. {{ item }}
             </div>
           </div>
-          <div class="summary-drawer__chunks-title">语义切片结果</div>
-          <div v-for="(item, idx) in semanticChunkItems" :key="`${idx}-${item.id || ''}`" class="chunk-card">
+          <div class="summary-drawer__chunks-title">
+            语义切片结果
+          </div>
+          <div
+            v-for="(item, idx) in semanticChunkItems"
+            :key="`${idx}-${item.id || ''}`"
+            class="chunk-card"
+          >
             <div class="chunk-card__meta">
-              <el-tag size="small" effect="plain">Chunk {{ idx + 1 }}</el-tag>
-              <el-tag v-if="item.score !== undefined && item.score !== null" size="small" type="success">
+              <el-tag
+                size="small"
+                effect="plain"
+              >
+                Chunk {{ idx + 1 }}
+              </el-tag>
+              <el-tag
+                v-if="item.score !== undefined && item.score !== null"
+                size="small"
+                type="success"
+              >
                 相似度 {{ Number(item.score).toFixed(3) }}
               </el-tag>
             </div>
-            <div class="chunk-card__text">{{ item.text || "暂无片段内容" }}</div>
+            <div class="chunk-card__text">
+              {{ item.text || "暂无片段内容" }}
+            </div>
           </div>
         </div>
       </div>
     </el-drawer>
 
-    <el-dialog v-model="importPreviewDialogVisible" title="进一步落地：导入预览" width="860px">
-      <div v-if="!importPreviewData" style="color: rgba(226,232,240,.75)">暂无预览数据</div>
-      <div v-else class="import-preview">
-        <div class="import-preview__section-title">发布计划（可编辑）</div>
+    <el-dialog
+      v-model="importPreviewDialogVisible"
+      title="进一步落地：导入预览"
+      width="860px"
+    >
+      <div
+        v-if="!importPreviewData"
+        style="color: rgba(226,232,240,.75)"
+      >
+        暂无预览数据
+      </div>
+      <div
+        v-else
+        class="import-preview"
+      >
+        <div class="import-preview__section-title">
+          发布计划（可编辑）
+        </div>
         <div class="release-plan-form">
-          <el-input v-model="releasePlanForm.release_name" placeholder="发布名称" />
-          <el-input v-model="releasePlanForm.version_no" placeholder="版本号（唯一）" />
+          <el-input
+            v-model="releasePlanForm.release_name"
+            placeholder="发布名称"
+          />
+          <el-input
+            v-model="releasePlanForm.version_no"
+            placeholder="版本号（唯一）"
+          />
           <el-date-picker
             v-model="releasePlanForm.release_date"
             type="datetime"
@@ -313,22 +631,63 @@
           />
         </div>
 
-        <div class="import-preview__section-title">将要导入/更新的用例（去重合并）</div>
-        <el-table :data="importPreviewData.draft_cases || []" border size="small" style="margin-bottom: 12px">
-          <el-table-column label="导入" width="72" align="center">
+        <div class="import-preview__section-title">
+          将要导入/更新的用例（去重合并）
+        </div>
+        <el-table
+          :data="importPreviewData.draft_cases || []"
+          border
+          size="small"
+          style="margin-bottom: 12px"
+        >
+          <el-table-column
+            label="导入"
+            width="72"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-checkbox :model-value="selectedDraftIdxs.includes(row.idx)" @change="(v)=>toggleDraftIdx(row.idx, v)" />
+              <el-checkbox
+                :model-value="selectedDraftIdxs.includes(row.idx)"
+                @change="(v)=>toggleDraftIdx(row.idx, v)"
+              />
             </template>
           </el-table-column>
-          <el-table-column prop="idx" label="#" width="60" />
-          <el-table-column prop="case_name" label="用例名称" min-width="260" show-overflow-tooltip />
-          <el-table-column prop="action" label="动作" width="100" />
-          <el-table-column prop="step_desc_preview" label="步骤预览" min-width="260" show-overflow-tooltip />
+          <el-table-column
+            prop="idx"
+            label="#"
+            width="60"
+          />
+          <el-table-column
+            prop="case_name"
+            label="用例名称"
+            min-width="260"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="action"
+            label="动作"
+            width="100"
+          />
+          <el-table-column
+            prop="step_desc_preview"
+            label="步骤预览"
+            min-width="260"
+            show-overflow-tooltip
+          />
         </el-table>
 
-        <div class="import-preview__section-title">推荐关联的“模块内已有用例”（将绑定到发布计划）</div>
-        <el-checkbox-group v-model="selectedExistingCaseIds" class="existing-case-group">
-          <div v-for="row in importPreviewData.suggest_existing_cases || []" :key="row.id" class="existing-case-item">
+        <div class="import-preview__section-title">
+          推荐关联的“模块内已有用例”（将绑定到发布计划）
+        </div>
+        <el-checkbox-group
+          v-model="selectedExistingCaseIds"
+          class="existing-case-group"
+        >
+          <div
+            v-for="row in importPreviewData.suggest_existing_cases || []"
+            :key="row.id"
+            class="existing-case-item"
+          >
             <el-checkbox :label="row.id">
               <span class="existing-case-name">{{ row.case_name }}</span>
               <span class="existing-case-meta">({{ row.test_type }})</span>
@@ -337,8 +696,16 @@
         </el-checkbox-group>
       </div>
       <template #footer>
-        <el-button @click="importPreviewDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="importingFromPreview" @click="confirmImportFromPreview">确认导入</el-button>
+        <el-button @click="importPreviewDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="importingFromPreview"
+          @click="confirmImportFromPreview"
+        >
+          确认导入
+        </el-button>
       </template>
     </el-dialog>
   </div>

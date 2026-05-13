@@ -107,6 +107,7 @@ if _app_installed("daphne"):
 
 INSTALLED_APPS = _INSTALLED_PREFIX + [
     "channels",
+    "corsheaders",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -133,11 +134,13 @@ if _app_installed("django_celery_results"):
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "common.middleware.exception_middleware.GlobalExceptionMiddleware",
 ]
 
 ROOT_URLCONF = "AITestProduct.urls"
@@ -174,8 +177,10 @@ DATABASES = {
         "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
         "PORT": os.environ.get("DB_PORT", "3306"),
         "OPTIONS": {
-            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",  # 严格模式，避免截断数据
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
         },
+        "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
+        "CONN_HEALTH_CHECKS": _env_bool("DB_CONN_HEALTH_CHECKS", default=True),
     }
 }
 
@@ -188,17 +193,23 @@ if not DEBUG:
 
 
 REST_FRAMEWORK = {
-    # 默认认证方式：Token认证
+    "EXCEPTION_HANDLER": "common.exception_handler.custom_exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework.authentication.TokenAuthentication",
     ),
-    # 默认权限策略：必须是登录用户（IsAuthenticated）
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
-    # ScopedRateThrottle 的配额（仅对声明了 throttle_scope 的视图生效）
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ),
     "DEFAULT_THROTTLE_RATES": {
+        "anon": os.environ.get("ANON_THROTTLE", "100/hour"),
+        "user": os.environ.get("USER_THROTTLE", "300/hour"),
         "server_logs_analyze": os.environ.get(
             "SERVER_LOGS_ANALYZE_THROTTLE", "40/hour"
         ),
+        "ai_generate": os.environ.get("AI_GENERATE_THROTTLE", "30/hour"),
+        "default": os.environ.get("DEFAULT_API_THROTTLE", "200/hour"),
     },
 }
 
@@ -254,7 +265,17 @@ if _use_redis_cache and _redis_is_available(_redis_host, _redis_port):
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 "CONNECTION_POOL_KWARGS": {"max_connections": 100},
             },
+            "KEY_PREFIX": "aitest",
         }
+    }
+    CACHES["hot"] = {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": f"redis://{_redis_host}:{_redis_port}/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {"max_connections": 50},
+        },
+        "TIMEOUT": 60,
     }
 else:
     CACHES = {
@@ -262,7 +283,13 @@ else:
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "unique-per-process",
             "TIMEOUT": 300,
+            "KEY_PREFIX": "aitest",
         }
+    }
+    CACHES["hot"] = {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "hot-cache",
+        "TIMEOUT": 60,
     }
 
 # 可选配置：将会话（Session）引擎也改为使用 Redis，提升 Session 存取速度
@@ -292,7 +319,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "zh-hans"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = "Asia/Shanghai"
 
 USE_I18N = True
 
@@ -395,9 +422,31 @@ CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 # 部署机约 2G 内存：单 worker 并发 1、子进程累计任务数上限小，降低泄漏与峰值内存
 CELERY_WORKER_MAX_TASKS_PER_CHILD = int(
-    os.environ.get("CELERY_WORKER_MAX_TASKS_PER_CHILD", "10")
+    os.environ.get("CELERY_WORKER_MAX_TASKS_PER_CHILD", "1000")
 )
-CELERY_WORKER_CONCURRENCY = int(os.environ.get("CELERY_WORKER_CONCURRENCY", "1"))
+CELERY_WORKER_CONCURRENCY = int(os.environ.get("CELERY_WORKER_CONCURRENCY", "4"))
+CELERY_TASK_SOFT_TIME_LIMIT = int(os.environ.get("CELERY_TASK_SOFT_TIME_LIMIT", "300"))
+CELERY_TASK_TIME_LIMIT = int(os.environ.get("CELERY_TASK_TIME_LIMIT", "600"))
+
+CELERY_TASK_ROUTES = {
+    "execution.run_execution_task": {"queue": "fast"},
+    "execution.run_scheduled_api_case": {"queue": "fast"},
+    "execution.run_report_api_case": {"queue": "fast"},
+    "execution.run_test_report_execute": {"queue": "report"},
+    "execution.run_scheduled_task": {"queue": "report"},
+    "execution.run_api_scenario_run": {"queue": "fast"},
+    "execution.run_k6_load_test": {"queue": "perf"},
+    "assistant.process_document_rag": {"queue": "ai"},
+    "assistant.process_knowledge_document": {"queue": "ai"},
+    "assistant.process_knowledge_article": {"queue": "ai"},
+    "server_logs.index_server_log_doc": {"queue": "logs"},
+    "server_logs.index_server_log_docs_bulk": {"queue": "logs"},
+    "server_logs.run_log_auto_ticket_job": {"queue": "ai"},
+    "run_pipeline_task": {"queue": "cicd"},
+    "run_build_task": {"queue": "cicd"},
+}
+
+CELERY_TASK_DEFAULT_QUEUE = "default"
 
 # 自动化：登录接口可选验证码；OCR 接口需密钥（见 user.views.CaptchaRecognizeAPIView）
 CAPTCHA_OCR_SECRET = os.environ.get("CAPTCHA_OCR_SECRET", "").strip()
@@ -408,8 +457,13 @@ KNOWLEDGE_UPLOAD_MAX_SIZE = int(
 )
 
 # RAG 参数：检索召回条数与上下文截断长度
-RAG_TOP_K = int(os.environ.get("RAG_TOP_K", "5"))
-RAG_MAX_CONTEXT_CHARS = int(os.environ.get("RAG_MAX_CONTEXT_CHARS", "1200"))
+RAG_TOP_K = int(os.environ.get("RAG_TOP_K", "8"))
+RAG_MAX_CONTEXT_CHARS = int(os.environ.get("RAG_MAX_CONTEXT_CHARS", "4000"))
+RAG_CONTEXT_BY_MODEL = {
+    "gpt-4": 6000,
+    "gpt-3.5-turbo": 4000,
+    "default": 4000,
+}
 # 知识中心 Embedding 提供方（openai/ollama）。
 # 默认 openai；若未配置 OPENAI_API_KEY，任务层会自动尝试降级到 ollama。
 KNOWLEDGE_EMBEDDING_PROVIDER = os.environ.get("KNOWLEDGE_EMBEDDING_PROVIDER", "openai")
@@ -431,7 +485,7 @@ AI_CASE_SEMANTIC_DUP_THRESHOLD = float(
 # AI 治理：配额/并发保护（最小可用版，按用户维度）
 # ---------------------------------------------------------------------------
 # 0 表示不启用每日配额（默认不限制，建议生产环境配置）
-AI_GUARD_DAILY_REQUESTS = int(os.environ.get("AI_GUARD_DAILY_REQUESTS", "0"))
+AI_GUARD_DAILY_REQUESTS = int(os.environ.get("AI_GUARD_DAILY_REQUESTS", "100"))
 # 单用户最大并发（同步+流式算在一起）；0 表示不限制（不建议）
 AI_GUARD_MAX_CONCURRENCY = int(os.environ.get("AI_GUARD_MAX_CONCURRENCY", "2"))
 # 并发槽位 TTL：用于异常中断时自动释放（秒）
@@ -483,3 +537,81 @@ if not DEBUG:
         raise RuntimeError(
             "Missing ELASTICSEARCH_PASSWORD while DJANGO_DEBUG=0 (production safety check)."
         )
+
+# ---------------------------------------------------------------------------
+# 生产安全加固（仅非 DEBUG 模式生效）
+# ---------------------------------------------------------------------------
+if not DEBUG:
+    SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", default=True)
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = "DENY"
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+else:
+    SECURE_SSL_REDIRECT = False
+    SECURE_HSTS_SECONDS = 0
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+
+_logging_formatters = {
+    "verbose": {
+        "format": "[%(asctime)s] %(levelname)s %(name)s %(message)s",
+    },
+}
+try:
+    import pythonjsonlogger.jsonlogger  # noqa: F401
+
+    _logging_formatters["json"] = {
+        "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+        "format": "%(asctime)s %(name)s %(levelname)s %(message)s",
+    }
+except ImportError:
+    pass
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": _logging_formatters,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": os.environ.get("DJANGO_LOG_LEVEL", "INFO"),
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "assistant": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "execution": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
+CORS_ALLOW_ALL_ORIGINS = _env_bool("CORS_ALLOW_ALL_ORIGINS", default=False)
+CORS_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    if o.strip()
+]
+CORS_ALLOW_CREDENTIALS = True

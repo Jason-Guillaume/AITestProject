@@ -2,8 +2,12 @@
   <div class="ui-automation-workbench">
     <!-- Header -->
     <div class="workbench-header">
-      <h1 class="header-title">UI自动化脚本工作台</h1>
-      <p class="header-subtitle">支持AI生成、在线编辑、文件上传和POM工程导入</p>
+      <h1 class="header-title">
+        UI自动化脚本工作台
+      </h1>
+      <p class="header-subtitle">
+        支持AI生成、在线编辑、文件上传和POM工程导入
+      </p>
     </div>
 
     <div class="workbench-content">
@@ -11,21 +15,38 @@
       <div class="control-panel">
         <!-- 脚本来源切换 -->
         <div class="source-selector">
-          <div class="section-title">脚本来源</div>
-          <el-radio-group v-model="scriptSource" class="source-radio-group">
-            <el-radio-button label="online" class="source-radio-btn">
+          <div class="section-title">
+            脚本来源
+          </div>
+          <el-radio-group
+            v-model="scriptSource"
+            class="source-radio-group"
+          >
+            <el-radio-button
+              label="online"
+              class="source-radio-btn"
+            >
               <span class="radio-icon">✏️</span>
               <span class="radio-text">在线编辑</span>
             </el-radio-button>
-            <el-radio-button label="ai" class="source-radio-btn">
+            <el-radio-button
+              label="ai"
+              class="source-radio-btn"
+            >
               <span class="radio-icon">🤖</span>
               <span class="radio-text">AI 生成</span>
             </el-radio-button>
-            <el-radio-button label="linear" class="source-radio-btn">
+            <el-radio-button
+              label="linear"
+              class="source-radio-btn"
+            >
               <span class="radio-icon">📄</span>
               <span class="radio-text">单文件上传</span>
             </el-radio-button>
-            <el-radio-button label="pom" class="source-radio-btn">
+            <el-radio-button
+              label="pom"
+              class="source-radio-btn"
+            >
               <span class="radio-icon">📦</span>
               <span class="radio-text">POM工程</span>
             </el-radio-button>
@@ -33,8 +54,13 @@
         </div>
 
         <!-- 在线编辑配置 -->
-        <div v-if="scriptSource === 'online'" class="config-section">
-          <div class="section-title">在线脚本编辑</div>
+        <div
+          v-if="scriptSource === 'online'"
+          class="config-section"
+        >
+          <div class="section-title">
+            在线脚本编辑
+          </div>
 
           <div class="form-item">
             <label class="form-label">脚本名称</label>
@@ -47,29 +73,80 @@
 
           <div class="form-item">
             <label class="form-label">脚本语言</label>
-            <el-select v-model="onlineConfig.language" class="cyber-input">
-              <el-option label="Python" value="PYTHON" />
-              <el-option label="Java" value="JAVA" />
+            <el-select
+              v-model="onlineConfig.language"
+              class="cyber-input"
+            >
+              <el-option
+                label="Python"
+                value="PYTHON"
+              />
+              <el-option
+                label="Java"
+                value="JAVA"
+              />
             </el-select>
           </div>
 
           <div class="form-item">
             <label class="form-label">测试框架</label>
-            <el-select v-model="onlineConfig.framework" class="cyber-input">
-              <el-option label="自动检测" value="AUTO" />
-              <el-option-group v-if="onlineConfig.language === 'PYTHON'" label="Python框架">
-                <el-option label="Pytest" value="PYTEST" />
-                <el-option label="Unittest" value="UNITTEST" />
-                <el-option label="Nose" value="NOSE" />
-                <el-option label="Robot Framework" value="ROBOT" />
-                <el-option label="Behave" value="BEHAVE" />
+            <el-select
+              v-model="onlineConfig.framework"
+              class="cyber-input"
+            >
+              <el-option
+                label="自动检测"
+                value="AUTO"
+              />
+              <el-option-group
+                v-if="onlineConfig.language === 'PYTHON'"
+                label="Python框架"
+              >
+                <el-option
+                  label="Pytest"
+                  value="PYTEST"
+                />
+                <el-option
+                  label="Unittest"
+                  value="UNITTEST"
+                />
+                <el-option
+                  label="Nose"
+                  value="NOSE"
+                />
+                <el-option
+                  label="Robot Framework"
+                  value="ROBOT"
+                />
+                <el-option
+                  label="Behave"
+                  value="BEHAVE"
+                />
               </el-option-group>
-              <el-option-group v-if="onlineConfig.language === 'JAVA'" label="Java框架">
-                <el-option label="JUnit 4" value="JUNIT4" />
-                <el-option label="JUnit 5" value="JUNIT5" />
-                <el-option label="TestNG" value="TESTNG" />
-                <el-option label="Cucumber" value="CUCUMBER" />
-                <el-option label="Spock" value="SPOCK" />
+              <el-option-group
+                v-if="onlineConfig.language === 'JAVA'"
+                label="Java框架"
+              >
+                <el-option
+                  label="JUnit 4"
+                  value="JUNIT4"
+                />
+                <el-option
+                  label="JUnit 5"
+                  value="JUNIT5"
+                />
+                <el-option
+                  label="TestNG"
+                  value="TESTNG"
+                />
+                <el-option
+                  label="Cucumber"
+                  value="CUCUMBER"
+                />
+                <el-option
+                  label="Spock"
+                  value="SPOCK"
+                />
               </el-option-group>
             </el-select>
           </div>
@@ -87,8 +164,8 @@
             type="primary"
             :loading="uploading"
             :disabled="!canSaveOnline"
-            @click="handleSaveOnline"
             class="action-btn"
+            @click="handleSaveOnline"
           >
             <span v-if="uploading">保存中...</span>
             <span v-else>保存并创建</span>
@@ -96,8 +173,13 @@
         </div>
 
         <!-- AI 生成配置 -->
-        <div v-if="scriptSource === 'ai'" class="config-section">
-          <div class="section-title">AI 生成配置</div>
+        <div
+          v-if="scriptSource === 'ai'"
+          class="config-section"
+        >
+          <div class="section-title">
+            AI 生成配置
+          </div>
 
           <div class="form-item">
             <label class="form-label">目标 URL</label>
@@ -123,8 +205,8 @@
             type="primary"
             :loading="generating"
             :disabled="!canGenerateAI"
-            @click="handleGenerateAI"
             class="action-btn"
+            @click="handleGenerateAI"
           >
             <span v-if="generating">生成中...</span>
             <span v-else>生成脚本</span>
@@ -132,8 +214,13 @@
         </div>
 
         <!-- 单文件上传 -->
-        <div v-if="scriptSource === 'linear'" class="config-section">
-          <div class="section-title">单文件上传</div>
+        <div
+          v-if="scriptSource === 'linear'"
+          class="config-section"
+        >
+          <div class="section-title">
+            单文件上传
+          </div>
 
           <div class="form-item">
             <label class="form-label">脚本名称</label>
@@ -146,9 +233,18 @@
 
           <div class="form-item">
             <label class="form-label">脚本语言</label>
-            <el-select v-model="linearConfig.language" class="cyber-input">
-              <el-option label="Python" value="PYTHON" />
-              <el-option label="Java" value="JAVA" />
+            <el-select
+              v-model="linearConfig.language"
+              class="cyber-input"
+            >
+              <el-option
+                label="Python"
+                value="PYTHON"
+              />
+              <el-option
+                label="Java"
+                value="JAVA"
+              />
             </el-select>
           </div>
 
@@ -165,9 +261,15 @@
               :file-list="linearConfig.file ? [{ name: linearConfig.file.name }] : []"
             >
               <div class="upload-content">
-                <el-icon class="upload-icon"><UploadFilled /></el-icon>
-                <div class="upload-text">拖拽文件到此处</div>
-                <div class="upload-hint">或点击选择文件</div>
+                <el-icon class="upload-icon">
+                  <UploadFilled />
+                </el-icon>
+                <div class="upload-text">
+                  拖拽文件到此处
+                </div>
+                <div class="upload-hint">
+                  或点击选择文件
+                </div>
               </div>
             </el-upload>
           </div>
@@ -176,8 +278,8 @@
             type="primary"
             :loading="uploading"
             :disabled="!canUploadLinear"
-            @click="handleUploadLinear"
             class="action-btn"
+            @click="handleUploadLinear"
           >
             <span v-if="uploading">上传中...</span>
             <span v-else>上传脚本</span>
@@ -185,8 +287,13 @@
         </div>
 
         <!-- POM工程导入 -->
-        <div v-if="scriptSource === 'pom'" class="config-section">
-          <div class="section-title">POM工程导入</div>
+        <div
+          v-if="scriptSource === 'pom'"
+          class="config-section"
+        >
+          <div class="section-title">
+            POM工程导入
+          </div>
 
           <div class="form-item">
             <label class="form-label">脚本名称</label>
@@ -199,21 +306,37 @@
 
           <div class="form-item">
             <label class="form-label">脚本语言</label>
-            <el-select v-model="pomConfig.language" class="cyber-input">
-              <el-option label="Python" value="PYTHON" />
-              <el-option label="Java" value="JAVA" />
+            <el-select
+              v-model="pomConfig.language"
+              class="cyber-input"
+            >
+              <el-option
+                label="Python"
+                value="PYTHON"
+              />
+              <el-option
+                label="Java"
+                value="JAVA"
+              />
             </el-select>
           </div>
 
           <div class="form-item">
             <label class="form-label">导入方式</label>
             <el-radio-group v-model="pomConfig.importType">
-              <el-radio label="zip">ZIP 文件</el-radio>
-              <el-radio label="git">Git 仓库</el-radio>
+              <el-radio label="zip">
+                ZIP 文件
+              </el-radio>
+              <el-radio label="git">
+                Git 仓库
+              </el-radio>
             </el-radio-group>
           </div>
 
-          <div v-if="pomConfig.importType === 'zip'" class="form-item">
+          <div
+            v-if="pomConfig.importType === 'zip'"
+            class="form-item"
+          >
             <label class="form-label">上传 ZIP 文件</label>
             <el-upload
               class="cyber-upload"
@@ -226,14 +349,23 @@
               :file-list="pomConfig.file ? [{ name: pomConfig.file.name }] : []"
             >
               <div class="upload-content">
-                <el-icon class="upload-icon"><UploadFilled /></el-icon>
-                <div class="upload-text">拖拽 .zip 文件到此处</div>
-                <div class="upload-hint">最大50MB</div>
+                <el-icon class="upload-icon">
+                  <UploadFilled />
+                </el-icon>
+                <div class="upload-text">
+                  拖拽 .zip 文件到此处
+                </div>
+                <div class="upload-hint">
+                  最大50MB
+                </div>
               </div>
             </el-upload>
           </div>
 
-          <div v-if="pomConfig.importType === 'git'" class="form-item">
+          <div
+            v-if="pomConfig.importType === 'git'"
+            class="form-item"
+          >
             <label class="form-label">Git 仓库 URL</label>
             <el-input
               v-model="pomConfig.gitRepoUrl"
@@ -255,8 +387,8 @@
             type="primary"
             :loading="uploading"
             :disabled="!canUploadPom"
-            @click="handleUploadPom"
             class="action-btn"
+            @click="handleUploadPom"
           >
             <span v-if="uploading">导入中...</span>
             <span v-else>导入工程</span>
@@ -270,26 +402,50 @@
           <h3 class="panel-title">
             {{ scriptSource === 'online' ? '代码编辑器' : '生成结果' }}
           </h3>
-          <div v-if="scriptSource === 'online'" class="panel-actions">
-            <el-button size="small" @click="handleFormatCode">格式化</el-button>
-            <el-button size="small" type="primary" @click="handleRunScript">运行测试</el-button>
+          <div
+            v-if="scriptSource === 'online'"
+            class="panel-actions"
+          >
+            <el-button
+              size="small"
+              @click="handleFormatCode"
+            >
+              格式化
+            </el-button>
+            <el-button
+              size="small"
+              type="primary"
+              @click="handleRunScript"
+            >
+              运行测试
+            </el-button>
           </div>
         </div>
 
         <!-- 在线代码编辑器 -->
-        <div v-if="scriptSource === 'online'" class="code-editor-container">
+        <div
+          v-if="scriptSource === 'online'"
+          class="code-editor-container"
+        >
           <textarea
             v-model="onlineConfig.content"
             class="code-editor"
             placeholder="在此编写测试脚本..."
             spellcheck="false"
-          ></textarea>
+          />
         </div>
 
         <!-- 其他模式的空状态 -->
-        <div v-else class="empty-state">
-          <div class="empty-icon">🤖</div>
-          <p class="empty-text">填写左侧配置后开始</p>
+        <div
+          v-else
+          class="empty-state"
+        >
+          <div class="empty-icon">
+            🤖
+          </div>
+          <p class="empty-text">
+            填写左侧配置后开始
+          </p>
         </div>
       </div>
     </div>
@@ -301,17 +457,60 @@
       width="80%"
       class="script-list-dialog"
     >
-      <el-table :data="scriptList" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="name" label="名称" width="200" />
-        <el-table-column prop="language" label="语言" width="100" />
-        <el-table-column prop="framework" label="框架" width="120" />
-        <el-table-column prop="script_type" label="类型" width="100" />
-        <el-table-column label="操作" width="300">
+      <el-table
+        :data="scriptList"
+        style="width: 100%"
+      >
+        <el-table-column
+          prop="id"
+          label="ID"
+          width="80"
+        />
+        <el-table-column
+          prop="name"
+          label="名称"
+          width="200"
+        />
+        <el-table-column
+          prop="language"
+          label="语言"
+          width="100"
+        />
+        <el-table-column
+          prop="framework"
+          label="框架"
+          width="120"
+        />
+        <el-table-column
+          prop="script_type"
+          label="类型"
+          width="100"
+        />
+        <el-table-column
+          label="操作"
+          width="300"
+        >
           <template #default="scope">
-            <el-button size="small" @click="handleEditScript(scope.row)">编辑</el-button>
-            <el-button size="small" type="primary" @click="handleExecuteScript(scope.row)">执行</el-button>
-            <el-button size="small" type="danger" @click="handleDeleteScript(scope.row)">删除</el-button>
+            <el-button
+              size="small"
+              @click="handleEditScript(scope.row)"
+            >
+              编辑
+            </el-button>
+            <el-button
+              size="small"
+              type="primary"
+              @click="handleExecuteScript(scope.row)"
+            >
+              执行
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click="handleDeleteScript(scope.row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -541,7 +740,7 @@ onMounted(() => {
   font-weight: 700;
   color: #e2e8f0;
   margin: 0 0 8px 0;
-  background: linear-gradient(135deg, #00d8ff 0%, #0ea5e9 50%, #3b82f6 100%);
+  background: linear-gradient(135deg, #00d8ff 0%, #0ea5e9 50%, #06b6d4 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

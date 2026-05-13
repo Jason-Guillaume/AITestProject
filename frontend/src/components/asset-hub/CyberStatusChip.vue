@@ -20,8 +20,14 @@ const dotClass = computed(() => {
 </script>
 
 <template>
-  <span class="asset-hub-status-chip" :class="`asset-hub-status-chip--${variant}`">
-    <span :class="dotClass" aria-hidden="true" />
+  <span
+    class="asset-hub-status-chip"
+    :class="`asset-hub-status-chip--${variant}`"
+  >
+    <span
+      :class="dotClass"
+      aria-hidden="true"
+    />
     <span class="asset-hub-status-chip__text">{{ label }}</span>
   </span>
 </template>

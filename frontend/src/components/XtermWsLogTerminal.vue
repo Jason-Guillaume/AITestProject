@@ -1,6 +1,13 @@
 <template>
-  <div ref="wrapRef" class="xterm-ws-log" :style="wrapStyle">
-    <div ref="hostRef" class="xterm-ws-log__host" />
+  <div
+    ref="wrapRef"
+    class="xterm-ws-log"
+    :style="wrapStyle"
+  >
+    <div
+      ref="hostRef"
+      class="xterm-ws-log__host"
+    />
   </div>
 </template>
 

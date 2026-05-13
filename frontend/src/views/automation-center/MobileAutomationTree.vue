@@ -38,7 +38,9 @@ function onMobileTreeNodeClick(data: HubTreeNode) {
 
 <template>
   <div class="tree-pane">
-    <div class="tree-panel-head">Mobile · Node Explorer</div>
+    <div class="tree-panel-head">
+      Mobile · Node Explorer
+    </div>
     <div class="script-tree-scroll">
       <el-tree
         class="script-resource-tree"

@@ -4,9 +4,27 @@
       <div class="server-logs-page__side-head">
         <span>SSH 主机</span>
         <div class="server-logs-page__side-actions">
-          <el-button type="primary" size="small" @click="openCreate">新增</el-button>
-          <el-button size="small" :disabled="checkedIds.length !== 1" @click="openEditChecked">编辑</el-button>
-          <el-button type="danger" plain size="small" :disabled="checkedIds.length === 0" @click="removeChecked">
+          <el-button
+            type="primary"
+            size="small"
+            @click="openCreate"
+          >
+            新增
+          </el-button>
+          <el-button
+            size="small"
+            :disabled="checkedIds.length !== 1"
+            @click="openEditChecked"
+          >
+            编辑
+          </el-button>
+          <el-button
+            type="danger"
+            plain
+            size="small"
+            :disabled="checkedIds.length === 0"
+            @click="removeChecked"
+          >
             删除
           </el-button>
         </div>
@@ -26,14 +44,22 @@
               @click.stop
               @change="(v) => toggleChecked(row.id, v)"
             />
-            <div class="server-logs-page__host-name">{{ row.name }}</div>
+            <div class="server-logs-page__host-name">
+              {{ row.name }}
+            </div>
           </div>
           <div class="server-logs-page__host-meta">
             {{ row.host }}:{{ row.port }}
-            <span v-if="row.organization_name" class="server-logs-page__org-tag">{{ row.organization_name }}</span>
+            <span
+              v-if="row.organization_name"
+              class="server-logs-page__org-tag"
+            >{{ row.organization_name }}</span>
           </div>
         </div>
-        <el-empty v-if="!loading && !hosts.length" description="暂无主机" />
+        <el-empty
+          v-if="!loading && !hosts.length"
+          description="暂无主机"
+        />
       </el-scrollbar>
     </div>
 
@@ -53,13 +79,33 @@
             placeholder="远程日志文件路径"
             clearable
           />
-          <el-button v-if="!streaming" type="primary" @click="startStream">
+          <el-button
+            v-if="!streaming"
+            type="primary"
+            @click="startStream"
+          >
             连接实时日志
           </el-button>
-          <el-button v-else type="danger" plain @click="stopStream">断开</el-button>
-          <el-button class="server-logs-page__ghost" @click="openEdit">编辑主机</el-button>
+          <el-button
+            v-else
+            type="danger"
+            plain
+            @click="stopStream"
+          >
+            断开
+          </el-button>
+          <el-button
+            class="server-logs-page__ghost"
+            @click="openEdit"
+          >
+            编辑主机
+          </el-button>
         </div>
-        <LogTerminal :server-id="currentHost?.id" :log-path="logPath || currentHost?.default_log_path" :streaming="streaming" />
+        <LogTerminal
+          :server-id="currentHost?.id"
+          :log-path="logPath || currentHost?.default_log_path"
+          :streaming="streaming"
+        />
         <div class="server-logs-page__search">
           <el-input
             v-model="searchQ"
@@ -68,8 +114,18 @@
             class="server-logs-page__search-input"
             @keyup.enter="runSearch"
           />
-          <el-button :loading="searchLoading" @click="runSearch">历史检索</el-button>
-          <el-button :loading="trendLoading" @click="loadTrend">错误趋势</el-button>
+          <el-button
+            :loading="searchLoading"
+            @click="runSearch"
+          >
+            历史检索
+          </el-button>
+          <el-button
+            :loading="trendLoading"
+            @click="loadTrend"
+          >
+            错误趋势
+          </el-button>
         </div>
         <el-alert
           v-if="searchHint"
@@ -78,9 +134,17 @@
           show-icon
           class="server-logs-page__search-alert"
         />
-        <div v-if="trendPoints.length" class="server-logs-page__trend">
-          <div class="server-logs-page__trend-title">关键字趋势（默认 ERROR，最近 60 分钟）</div>
-          <div ref="trendChartEl" class="server-logs-page__trend-chart" />
+        <div
+          v-if="trendPoints.length"
+          class="server-logs-page__trend"
+        >
+          <div class="server-logs-page__trend-title">
+            关键字趋势（默认 ERROR，最近 60 分钟）
+          </div>
+          <div
+            ref="trendChartEl"
+            class="server-logs-page__trend-chart"
+          />
         </div>
         <el-alert
           v-else-if="trendHint"
@@ -89,20 +153,61 @@
           show-icon
           class="server-logs-page__search-alert"
         />
-        <pre v-if="searchLines.length" class="server-logs-page__search-pre">{{ searchLines.join("\n") }}</pre>
+        <pre
+          v-if="searchLines.length"
+          class="server-logs-page__search-pre"
+        >{{ searchLines.join("\n") }}</pre>
 
-        <el-collapse v-model="auditCollapse" class="server-logs-page__audit">
-          <el-collapse-item title="操作审计" name="audit">
+        <el-collapse
+          v-model="auditCollapse"
+          class="server-logs-page__audit"
+        >
+          <el-collapse-item
+            title="操作审计"
+            name="audit"
+          >
             <div class="server-logs-page__audit-bar">
-              <el-button size="small" :loading="auditLoading" @click="loadAudit(1)">刷新审计</el-button>
+              <el-button
+                size="small"
+                :loading="auditLoading"
+                @click="loadAudit(1)"
+              >
+                刷新审计
+              </el-button>
               <span class="server-logs-page__audit-meta">共 {{ auditTotal }} 条</span>
             </div>
-            <el-table :data="auditRows" size="small" stripe class="server-logs-page__audit-table" max-height="280">
-              <el-table-column prop="created_at" label="时间" width="168" />
-              <el-table-column prop="action_display" label="动作" width="120" />
-              <el-table-column prop="user_display" label="用户" min-width="100" show-overflow-tooltip />
-              <el-table-column prop="client_ip" label="IP" width="120" />
-              <el-table-column label="详情" min-width="160">
+            <el-table
+              :data="auditRows"
+              size="small"
+              stripe
+              class="server-logs-page__audit-table"
+              max-height="280"
+            >
+              <el-table-column
+                prop="created_at"
+                label="时间"
+                width="168"
+              />
+              <el-table-column
+                prop="action_display"
+                label="动作"
+                width="120"
+              />
+              <el-table-column
+                prop="user_display"
+                label="用户"
+                min-width="100"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                prop="client_ip"
+                label="IP"
+                width="120"
+              />
+              <el-table-column
+                label="详情"
+                min-width="160"
+              >
                 <template #default="{ row }">
                   <span class="server-logs-page__audit-meta">{{ auditMetaBrief(row.meta) }}</span>
                 </template>
@@ -120,7 +225,10 @@
           </el-collapse-item>
         </el-collapse>
       </template>
-      <el-empty v-else description="请选择或新增一台主机" />
+      <el-empty
+        v-else
+        description="请选择或新增一台主机"
+      />
     </div>
 
     <el-dialog
@@ -130,21 +238,52 @@
       destroy-on-close
       class="server-logs-dialog"
     >
-      <el-form :model="form" label-width="108px">
-        <el-form-item label="名称" required>
-          <el-input v-model="form.name" maxlength="128" show-word-limit />
+      <el-form
+        :model="form"
+        label-width="108px"
+      >
+        <el-form-item
+          label="名称"
+          required
+        >
+          <el-input
+            v-model="form.name"
+            maxlength="128"
+            show-word-limit
+          />
         </el-form-item>
-        <el-form-item label="地址" required>
-          <el-input v-model="form.host" placeholder="IP 或域名" />
+        <el-form-item
+          label="地址"
+          required
+        >
+          <el-input
+            v-model="form.host"
+            placeholder="IP 或域名"
+          />
         </el-form-item>
         <el-form-item label="端口">
-          <el-input-number v-model="form.port" :min="1" :max="65535" />
+          <el-input-number
+            v-model="form.port"
+            :min="1"
+            :max="65535"
+          />
         </el-form-item>
-        <el-form-item label="用户名" required>
-          <el-input v-model="form.username" autocomplete="off" />
+        <el-form-item
+          label="用户名"
+          required
+        >
+          <el-input
+            v-model="form.username"
+            autocomplete="off"
+          />
         </el-form-item>
         <el-form-item label="密码">
-          <el-input v-model="form.password" type="password" show-password autocomplete="new-password" />
+          <el-input
+            v-model="form.password"
+            type="password"
+            show-password
+            autocomplete="new-password"
+          />
         </el-form-item>
         <el-form-item label="私钥 PEM">
           <el-input
@@ -156,12 +295,19 @@
         </el-form-item>
         <el-form-item label="系统类型">
           <el-radio-group v-model="form.server_type">
-            <el-radio label="linux">Linux</el-radio>
-            <el-radio label="windows">Windows</el-radio>
+            <el-radio label="linux">
+              Linux
+            </el-radio>
+            <el-radio label="windows">
+              Windows
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="默认路径">
-          <el-input v-model="form.default_log_path" placeholder="/var/log/messages" />
+          <el-input
+            v-model="form.default_log_path"
+            placeholder="/var/log/messages"
+          />
         </el-form-item>
         <el-form-item label="共享组织">
           <el-select
@@ -181,9 +327,24 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button v-if="editingId" type="danger" plain @click="removeHost">删除</el-button>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveHost">保存</el-button>
+        <el-button
+          v-if="editingId"
+          type="danger"
+          plain
+          @click="removeHost"
+        >
+          删除
+        </el-button>
+        <el-button @click="dialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="saveHost"
+        >
+          保存
+        </el-button>
       </template>
     </el-dialog>
   </div>

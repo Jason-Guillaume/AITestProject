@@ -13,7 +13,7 @@ export function useRealtimePolling(
   refreshFn: () => Promise<void> | void,
   options: UseRealtimePollingOptions = {},
 ) {
-  const intervalMs = options.intervalMs ?? 5000;
+  const intervalMs = options.intervalMs ?? 15000;
   const runOnMount = options.runOnMount ?? true;
   const deferredInitialRunMs = options.deferredInitialRunMs ?? 0;
   const refreshEvents = options.refreshEvents ?? [];

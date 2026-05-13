@@ -1,25 +1,67 @@
 <template>
-  <div v-if="caseRow" class="drawer-api-panel">
-    <el-tabs v-model="activeTab" class="drawer-api-tabs">
-      <el-tab-pane label="Request Config" name="request">
-        <el-form label-position="top" class="drawer-api-form" @submit.prevent>
+  <div
+    v-if="caseRow"
+    class="drawer-api-panel"
+  >
+    <el-tabs
+      v-model="activeTab"
+      class="drawer-api-tabs"
+    >
+      <el-tab-pane
+        label="Request Config"
+        name="request"
+      >
+        <el-form
+          label-position="top"
+          class="drawer-api-form"
+          @submit.prevent
+        >
           <el-row :gutter="10">
             <el-col :span="8">
               <el-form-item label="Method">
-                <el-select v-model="requestMethod" class="drawer-api-full" filterable>
-                  <el-option label="GET" value="GET" />
-                  <el-option label="POST" value="POST" />
-                  <el-option label="PUT" value="PUT" />
-                  <el-option label="PATCH" value="PATCH" />
-                  <el-option label="DELETE" value="DELETE" />
-                  <el-option label="HEAD" value="HEAD" />
-                  <el-option label="OPTIONS" value="OPTIONS" />
+                <el-select
+                  v-model="requestMethod"
+                  class="drawer-api-full"
+                  filterable
+                >
+                  <el-option
+                    label="GET"
+                    value="GET"
+                  />
+                  <el-option
+                    label="POST"
+                    value="POST"
+                  />
+                  <el-option
+                    label="PUT"
+                    value="PUT"
+                  />
+                  <el-option
+                    label="PATCH"
+                    value="PATCH"
+                  />
+                  <el-option
+                    label="DELETE"
+                    value="DELETE"
+                  />
+                  <el-option
+                    label="HEAD"
+                    value="HEAD"
+                  />
+                  <el-option
+                    label="OPTIONS"
+                    value="OPTIONS"
+                  />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="16">
               <el-form-item label="URL">
-                <el-input v-model="requestUrl" placeholder="https://..." clearable />
+                <el-input
+                  v-model="requestUrl"
+                  placeholder="https://..."
+                  clearable
+                />
               </el-form-item>
             </el-col>
           </el-row>
@@ -42,14 +84,26 @@
               placeholder="curl -X GET 'https://api.example.com/path' -H 'Authorization: Bearer ${token}'"
             />
             <div style="margin-top:8px">
-              <el-button size="small" plain @click="onApplyCurl">从 cURL 填充</el-button>
+              <el-button
+                size="small"
+                plain
+                @click="onApplyCurl"
+              >
+                从 cURL 填充
+              </el-button>
             </div>
           </el-form-item>
           <el-form-item>
             <template #label>
               <span class="drawer-api-label-row">
                 <span>Headers（JSON）</span>
-                <el-button size="small" text type="primary" :loading="aiFilling" @click="onAiHeaders">
+                <el-button
+                  size="small"
+                  text
+                  type="primary"
+                  :loading="aiFilling"
+                  @click="onAiHeaders"
+                >
                   <el-icon><MagicStick /></el-icon>
                   AI 自动填值
                 </el-button>
@@ -67,7 +121,13 @@
             <template #label>
               <span class="drawer-api-label-row">
                 <span>Body（JSON）</span>
-                <el-button size="small" type="primary" plain :loading="aiFilling" @click="onAiBody">
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  :loading="aiFilling"
+                  @click="onAiBody"
+                >
                   <el-icon><MagicStick /></el-icon>
                   AI 自动填值
                 </el-button>
@@ -102,33 +162,66 @@
           </div>
         </el-form>
       </el-tab-pane>
-      <el-tab-pane label="Variable Extraction" name="variable-extraction">
+      <el-tab-pane
+        label="Variable Extraction"
+        name="variable-extraction"
+      >
         <div class="drawer-api-extract-head">
           <div class="drawer-api-extract-head__tip">
             已提取规则 {{ extractionRules.length }} 条
           </div>
-          <el-button type="primary" plain @click="openAiAssistant">
+          <el-button
+            type="primary"
+            plain
+            @click="openAiAssistant"
+          >
             <el-icon><MagicStick /></el-icon>
             打开 AI 提取助手
           </el-button>
         </div>
 
         <div class="drawer-api-extract-table-wrap">
-          <el-table :data="extractionRules" size="small" border class="drawer-api-extract-table">
-            <el-table-column label="变量名" min-width="150">
+          <el-table
+            :data="extractionRules"
+            size="small"
+            border
+            class="drawer-api-extract-table"
+          >
+            <el-table-column
+              label="变量名"
+              min-width="150"
+            >
               <template #default="{ row }">
-                <el-input v-model="row.variableName" placeholder="例如 token" />
+                <el-input
+                  v-model="row.variableName"
+                  placeholder="例如 token"
+                />
               </template>
             </el-table-column>
-            <el-table-column label="来源" width="120">
+            <el-table-column
+              label="来源"
+              width="120"
+            >
               <template #default="{ row }">
-                <el-select v-model="row.source" class="drawer-api-full">
-                  <el-option label="Body" value="Body" />
-                  <el-option label="Header" value="Header" />
+                <el-select
+                  v-model="row.source"
+                  class="drawer-api-full"
+                >
+                  <el-option
+                    label="Body"
+                    value="Body"
+                  />
+                  <el-option
+                    label="Header"
+                    value="Header"
+                  />
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="提取表达式" min-width="240">
+            <el-table-column
+              label="提取表达式"
+              min-width="240"
+            >
               <template #default="{ row }">
                 <el-input
                   v-model="row.expression"
@@ -136,18 +229,39 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column label="当前值预览" min-width="160">
+            <el-table-column
+              label="当前值预览"
+              min-width="160"
+            >
               <template #default="{ row }">
-                <el-input :model-value="previewValue(row)" readonly />
+                <el-input
+                  :model-value="previewValue(row)"
+                  readonly
+                />
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="80" align="center">
+            <el-table-column
+              label="操作"
+              width="80"
+              align="center"
+            >
               <template #default="{ $index }">
-                <TableActionGroup :row="{ index: $index }" :actions="ruleTableActions" @action="handleRuleTableAction" />
+                <TableActionGroup
+                  :row="{ index: $index }"
+                  :actions="ruleTableActions"
+                  @action="handleRuleTableAction"
+                />
               </template>
             </el-table-column>
           </el-table>
-          <el-button class="drawer-api-add-rule" plain type="primary" @click="addEmptyRule">+ 新增规则</el-button>
+          <el-button
+            class="drawer-api-add-rule"
+            plain
+            type="primary"
+            @click="addEmptyRule"
+          >
+            + 新增规则
+          </el-button>
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -166,7 +280,10 @@
             <el-icon><MagicStick /></el-icon>
             <span>可一键应用建议字段</span>
           </span>
-          <span v-if="freshSuggestionCount > 0" class="drawer-api-ai-suggest__fresh-tip">
+          <span
+            v-if="freshSuggestionCount > 0"
+            class="drawer-api-ai-suggest__fresh-tip"
+          >
             发现 {{ freshSuggestionCount }} 条新建议
           </span>
         </div>
@@ -181,7 +298,10 @@
             一键全部添加（{{ addableSuggestionCount }}）
           </el-button>
         </div>
-        <div v-if="aiSuggestions.length" class="drawer-api-ai-suggest__chips">
+        <div
+          v-if="aiSuggestions.length"
+          class="drawer-api-ai-suggest__chips"
+        >
           <el-tag
             v-for="(item, index) in aiSuggestions"
             :key="`${item.variableName}-${item.expression}-${index}`"
@@ -193,18 +313,40 @@
             [+ {{ item.variableName }}]
           </el-tag>
         </div>
-        <p v-else class="drawer-api-ai-suggest__empty">先运行一次接口，助手会自动给出可提取字段建议。</p>
+        <p
+          v-else
+          class="drawer-api-ai-suggest__empty"
+        >
+          先运行一次接口，助手会自动给出可提取字段建议。
+        </p>
       </div>
     </el-drawer>
 
-    <div class="drawer-api-term-title">执行日志（终端）</div>
-    <div ref="terminalRef" class="drawer-api-terminal">
-      <div v-if="!consoleLines.length" class="drawer-api-terminal__ph">> 等待执行…</div>
-      <div v-for="(line, i) in consoleLines" :key="i" class="drawer-api-terminal__line">
+    <div class="drawer-api-term-title">
+      执行日志（终端）
+    </div>
+    <div
+      ref="terminalRef"
+      class="drawer-api-terminal"
+    >
+      <div
+        v-if="!consoleLines.length"
+        class="drawer-api-terminal__ph"
+      >
+        > 等待执行…
+      </div>
+      <div
+        v-for="(line, i) in consoleLines"
+        :key="i"
+        class="drawer-api-terminal__line"
+      >
         {{ line }}
       </div>
     </div>
-    <p v-if="executionLog?.trace_id" class="drawer-api-trace">
+    <p
+      v-if="executionLog?.trace_id"
+      class="drawer-api-trace"
+    >
       trace_id: {{ executionLog.trace_id }}
     </p>
   </div>

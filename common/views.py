@@ -1,4 +1,7 @@
+from functools import cached_property
+
 from rest_framework import viewsets
+from rest_framework.exceptions import ValidationError
 from django.db.models import Q
 from django.db import models
 from common.models import AuditEvent
@@ -14,6 +17,31 @@ class BaseModelViewSet(viewsets.ModelViewSet):
 
     enable_data_scope = True
 
+    def _parse_id_list(self, raw_ids, max_count=500):
+        if raw_ids is None:
+            raise ValidationError({"msg": "ids 必填", "code": 400, "data": None})
+        if not isinstance(raw_ids, list):
+            raise ValidationError({"msg": "ids 必须为数组", "code": 400, "data": None})
+        ids = []
+        for x in raw_ids:
+            try:
+                ids.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        ids = [i for i in ids if i > 0]
+        if not ids:
+            raise ValidationError({"msg": "ids 不能为空", "code": 400, "data": None})
+        if len(ids) > max_count:
+            raise ValidationError({"msg": f"单次最多处理 {max_count} 条", "code": 400, "data": None})
+        seen = set()
+        uniq = []
+        for i in ids:
+            if i in seen:
+                continue
+            seen.add(i)
+            uniq.append(i)
+        return uniq
+
     def _is_admin_user(self, user):
         return bool(
             user
@@ -28,23 +56,22 @@ class BaseModelViewSet(viewsets.ModelViewSet):
     def _has_field(self, field_name: str) -> bool:
         return any(f.name == field_name for f in self.queryset.model._meta.get_fields())
 
+    @cached_property
+    def _rel_field_names(self):
+        return {
+            f.name for f in self.queryset.model._meta.get_fields()
+            if isinstance(f, (models.ForeignKey, models.OneToOneField, models.ManyToManyField))
+        }
+
     def _has_rel_field(self, field_name: str) -> bool:
         """
-        是否存在“关系字段”（FK/O2O/M2M）。
+        是否存在"关系字段"（FK/O2O/M2M）。
 
         重要：避免字段同名但类型不匹配导致的错误 join。
         例如 TestApproach.version 是 CharField，但其他模型的 version 常为 FK，
         若误按 FK 链路拼接 version__project 会触发 FieldError。
         """
-        try:
-            f = self.queryset.model._meta.get_field(field_name)
-        except Exception:
-            return False
-        if isinstance(
-            f, (models.ForeignKey, models.OneToOneField, models.ManyToManyField)
-        ):
-            return True
-        return False
+        return field_name in self._rel_field_names
 
     def _apply_member_scope(self, qs, user):
         """

@@ -8,229 +8,354 @@
     class="api-exec-console-dialog"
     append-to-body
   >
-    <div v-if="caseRow" class="api-exec-dialog-body">
-      <div class="api-exec-status-ribbon" role="status" aria-live="polite">
-        <div class="api-exec-status-badge" :class="statusBadgeClass">{{ statusBadgeLabel }}</div>
-        <span v-if="executionMetaChips.length" class="api-exec-status-chips">
-          <span v-for="(t, i) in executionMetaChips" :key="i" class="api-exec-status-chip">{{ t }}</span>
+    <div
+      v-if="caseRow"
+      class="api-exec-dialog-body"
+    >
+      <div
+        class="api-exec-status-ribbon"
+        role="status"
+        aria-live="polite"
+      >
+        <div
+          class="api-exec-status-badge"
+          :class="statusBadgeClass"
+        >
+          {{ statusBadgeLabel }}
+        </div>
+        <span
+          v-if="executionMetaChips.length"
+          class="api-exec-status-chips"
+        >
+          <span
+            v-for="(t, i) in executionMetaChips"
+            :key="i"
+            class="api-exec-status-chip"
+          >{{ t }}</span>
         </span>
       </div>
 
       <div class="api-exec-layout">
-      <!-- 左侧：表单可调 Headers / Body 等（约 30%） -->
-      <section class="api-exec-pane api-exec-pane--request">
-        <div class="api-exec-pane__title">请求配置</div>
-        <el-form label-position="top" class="api-exec-el-form" @submit.prevent>
-          <el-row :gutter="12">
-            <el-col :span="8">
-              <el-form-item label="请求方法">
-                <el-select v-model="requestMethod" class="api-exec-method-full" filterable>
-                  <el-option label="GET" value="GET" />
-                  <el-option label="POST" value="POST" />
-                  <el-option label="PUT" value="PUT" />
-                  <el-option label="PATCH" value="PATCH" />
-                  <el-option label="DELETE" value="DELETE" />
-                  <el-option label="HEAD" value="HEAD" />
-                  <el-option label="OPTIONS" value="OPTIONS" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="16">
-              <el-form-item label="URL">
-                <el-input v-model="requestUrl" placeholder="https://api.example.com/path" clearable />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-form-item label="期望状态码">
-            <el-input-number
-              v-model="expectedStatus"
-              :min="100"
-              :max="599"
-              controls-position="right"
-              class="api-exec-status-num"
-            />
-          </el-form-item>
-          <el-form-item label="cURL（可选，一键填充请求）">
-            <el-input
-              v-model="curlText"
-              type="textarea"
-              :rows="4"
-              class="api-exec-code-input"
-              spellcheck="false"
-              placeholder="curl -X POST 'https://api.example.com/login' -H 'Content-Type: application/json' -d '{&quot;username&quot;:&quot;test&quot;}'"
-            />
-            <div style="margin-top:8px">
-              <el-button size="small" plain @click="onApplyCurl">从 cURL 填充</el-button>
-            </div>
-          </el-form-item>
-
-          <el-form-item>
-            <template #label>
-              <span class="api-exec-form-label-row">
-                <span>Headers（JSON）</span>
+        <!-- 左侧：表单可调 Headers / Body 等（约 30%） -->
+        <section class="api-exec-pane api-exec-pane--request">
+          <div class="api-exec-pane__title">
+            请求配置
+          </div>
+          <el-form
+            label-position="top"
+            class="api-exec-el-form"
+            @submit.prevent
+          >
+            <el-row :gutter="12">
+              <el-col :span="8">
+                <el-form-item label="请求方法">
+                  <el-select
+                    v-model="requestMethod"
+                    class="api-exec-method-full"
+                    filterable
+                  >
+                    <el-option
+                      label="GET"
+                      value="GET"
+                    />
+                    <el-option
+                      label="POST"
+                      value="POST"
+                    />
+                    <el-option
+                      label="PUT"
+                      value="PUT"
+                    />
+                    <el-option
+                      label="PATCH"
+                      value="PATCH"
+                    />
+                    <el-option
+                      label="DELETE"
+                      value="DELETE"
+                    />
+                    <el-option
+                      label="HEAD"
+                      value="HEAD"
+                    />
+                    <el-option
+                      label="OPTIONS"
+                      value="OPTIONS"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="16">
+                <el-form-item label="URL">
+                  <el-input
+                    v-model="requestUrl"
+                    placeholder="https://api.example.com/path"
+                    clearable
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item label="期望状态码">
+              <el-input-number
+                v-model="expectedStatus"
+                :min="100"
+                :max="599"
+                controls-position="right"
+                class="api-exec-status-num"
+              />
+            </el-form-item>
+            <el-form-item label="cURL（可选，一键填充请求）">
+              <el-input
+                v-model="curlText"
+                type="textarea"
+                :rows="4"
+                class="api-exec-code-input"
+                spellcheck="false"
+                placeholder="curl -X POST 'https://api.example.com/login' -H 'Content-Type: application/json' -d '{&quot;username&quot;:&quot;test&quot;}'"
+              />
+              <div style="margin-top:8px">
                 <el-button
                   size="small"
-                  class="api-exec-ai-btn"
-                  :loading="aiFilling"
-                  @click="onAiFillHeaders"
-                >
-                  <el-icon class="api-exec-ai-icon"><MagicStick /></el-icon>
-                  AI 填充
-                </el-button>
-              </span>
-            </template>
-            <el-input
-              v-model="headersText"
-              type="textarea"
-              :rows="6"
-              class="api-exec-code-input"
-              spellcheck="false"
-              placeholder='{"Content-Type":"application/json"}'
-            />
-          </el-form-item>
-
-          <el-form-item>
-            <template #label>
-              <span class="api-exec-form-label-row">
-                <span>Body（JSON）</span>
-                <el-button
-                  size="small"
-                  type="primary"
                   plain
-                  class="api-exec-ai-btn"
-                  :loading="aiFilling"
-                  @click="onAiFillBody"
+                  @click="onApplyCurl"
                 >
-                  <el-icon class="api-exec-ai-icon"><MagicStick /></el-icon>
-                  AI 填充
+                  从 cURL 填充
                 </el-button>
-              </span>
-            </template>
-            <el-input
-              v-model="bodyText"
-              type="textarea"
-              :rows="10"
-              class="api-exec-code-input"
-              spellcheck="false"
-              placeholder="{}"
-            />
-          </el-form-item>
+              </div>
+            </el-form-item>
 
-          <el-divider content-position="left">报告（执行成功后生成）</el-divider>
-          <el-form-item label="关联测试计划">
-            <el-select
-              v-model="reportForm.plan"
-              placeholder="请选择测试计划"
-              filterable
-              class="api-exec-field-full"
-            >
-              <el-option v-for="p in plans" :key="p.id" :label="p.plan_name" :value="p.id" />
-            </el-select>
-          </el-form-item>
-          <el-row :gutter="12">
-            <el-col :span="16">
-              <el-form-item label="报告名称">
-                <el-input v-model="reportForm.report_name" placeholder="报告名称" clearable />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="环境">
-                <el-select v-model="reportForm.environment" class="api-exec-field-full">
-                  <el-option label="TEST" value="TEST" />
-                  <el-option label="PROD" value="PROD" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-          </el-row>
+            <el-form-item>
+              <template #label>
+                <span class="api-exec-form-label-row">
+                  <span>Headers（JSON）</span>
+                  <el-button
+                    size="small"
+                    class="api-exec-ai-btn"
+                    :loading="aiFilling"
+                    @click="onAiFillHeaders"
+                  >
+                    <el-icon class="api-exec-ai-icon"><MagicStick /></el-icon>
+                    AI 填充
+                  </el-button>
+                </span>
+              </template>
+              <el-input
+                v-model="headersText"
+                type="textarea"
+                :rows="6"
+                class="api-exec-code-input"
+                spellcheck="false"
+                placeholder="{&quot;Content-Type&quot;:&quot;application/json&quot;}"
+              />
+            </el-form-item>
 
-          <div class="api-exec-run-actions">
-            <el-button
-              size="large"
-              plain
-              class="api-exec-run-btn-half"
-              :disabled="activeRunMode !== 'idle'"
-              @click="onPreviewResolved"
-            >
-              预览替换
-            </el-button>
-            <el-button
-              size="large"
-              plain
-              class="api-exec-run-btn-half"
-              title="仅调用 run-api 写入执行日志，不生成测试报告"
-              :disabled="activeRunMode !== 'idle'"
-              :loading="activeRunMode === 'only'"
-              @click="onRunOnly"
-            >
-              仅执行
-            </el-button>
-            <el-button
-              type="primary"
-              size="large"
-              class="api-exec-run-btn-half"
-              :disabled="activeRunMode !== 'idle'"
-              :loading="activeRunMode === 'withReport'"
-              @click="onRunAndSaveReport"
-            >
-              执行并保存报告
-            </el-button>
-          </div>
-          <p v-if="executionLog" class="api-exec-log-hint">
-            执行记录已写入日志表 ExecutionLog（#{{ executionLog.id ?? '—' }}）
-            <template v-if="executionLog.trace_id">
-              · trace_id: {{ executionLog.trace_id }}
-            </template>
-          </p>
-        </el-form>
-      </section>
+            <el-form-item>
+              <template #label>
+                <span class="api-exec-form-label-row">
+                  <span>Body（JSON）</span>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    plain
+                    class="api-exec-ai-btn"
+                    :loading="aiFilling"
+                    @click="onAiFillBody"
+                  >
+                    <el-icon class="api-exec-ai-icon"><MagicStick /></el-icon>
+                    AI 填充
+                  </el-button>
+                </span>
+              </template>
+              <el-input
+                v-model="bodyText"
+                type="textarea"
+                :rows="10"
+                class="api-exec-code-input"
+                spellcheck="false"
+                placeholder="{}"
+              />
+            </el-form-item>
 
-      <!-- 右侧：执行日志 + 响应 + 断言明细（约 70%） -->
-      <section class="api-exec-pane api-exec-pane--console">
-        <div class="api-exec-pane__title">执行日志</div>
-        <div ref="terminalRef" class="api-exec-terminal" tabindex="-1">
-          <div v-if="!consoleLines.length" class="api-exec-terminal__placeholder">
-            > 等待执行…
+            <el-divider content-position="left">
+              报告（执行成功后生成）
+            </el-divider>
+            <el-form-item label="关联测试计划">
+              <el-select
+                v-model="reportForm.plan"
+                placeholder="请选择测试计划"
+                filterable
+                class="api-exec-field-full"
+              >
+                <el-option
+                  v-for="p in plans"
+                  :key="p.id"
+                  :label="p.plan_name"
+                  :value="p.id"
+                />
+              </el-select>
+            </el-form-item>
+            <el-row :gutter="12">
+              <el-col :span="16">
+                <el-form-item label="报告名称">
+                  <el-input
+                    v-model="reportForm.report_name"
+                    placeholder="报告名称"
+                    clearable
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="环境">
+                  <el-select
+                    v-model="reportForm.environment"
+                    class="api-exec-field-full"
+                  >
+                    <el-option
+                      label="TEST"
+                      value="TEST"
+                    />
+                    <el-option
+                      label="PROD"
+                      value="PROD"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <div class="api-exec-run-actions">
+              <el-button
+                size="large"
+                plain
+                class="api-exec-run-btn-half"
+                :disabled="activeRunMode !== 'idle'"
+                @click="onPreviewResolved"
+              >
+                预览替换
+              </el-button>
+              <el-button
+                size="large"
+                plain
+                class="api-exec-run-btn-half"
+                title="仅调用 run-api 写入执行日志，不生成测试报告"
+                :disabled="activeRunMode !== 'idle'"
+                :loading="activeRunMode === 'only'"
+                @click="onRunOnly"
+              >
+                仅执行
+              </el-button>
+              <el-button
+                type="primary"
+                size="large"
+                class="api-exec-run-btn-half"
+                :disabled="activeRunMode !== 'idle'"
+                :loading="activeRunMode === 'withReport'"
+                @click="onRunAndSaveReport"
+              >
+                执行并保存报告
+              </el-button>
+            </div>
+            <p
+              v-if="executionLog"
+              class="api-exec-log-hint"
+            >
+              执行记录已写入日志表 ExecutionLog（#{{ executionLog.id ?? '—' }}）
+              <template v-if="executionLog.trace_id">
+                · trace_id: {{ executionLog.trace_id }}
+              </template>
+            </p>
+          </el-form>
+        </section>
+
+        <!-- 右侧：执行日志 + 响应 + 断言明细（约 70%） -->
+        <section class="api-exec-pane api-exec-pane--console">
+          <div class="api-exec-pane__title">
+            执行日志
           </div>
-          <div v-for="(line, i) in consoleLines" :key="i" class="api-exec-terminal__line">
-            {{ line }}
+          <div
+            ref="terminalRef"
+            class="api-exec-terminal"
+            tabindex="-1"
+          >
+            <div
+              v-if="!consoleLines.length"
+              class="api-exec-terminal__placeholder"
+            >
+              > 等待执行…
+            </div>
+            <div
+              v-for="(line, i) in consoleLines"
+              :key="i"
+              class="api-exec-terminal__line"
+            >
+              {{ line }}
+            </div>
           </div>
-        </div>
-        <div class="api-exec-subhead api-exec-subhead--dim">
-          响应体
-          <span class="api-exec-lang-pill">{{ responseBodyLangLabel }}</span>
-        </div>
-        <pre class="api-exec-prism api-exec-prism--response"><code
+          <div class="api-exec-subhead api-exec-subhead--dim">
+            响应体
+            <span class="api-exec-lang-pill">{{ responseBodyLangLabel }}</span>
+          </div>
+          <pre class="api-exec-prism api-exec-prism--response"><code
           :class="responseBodyCodeClass"
           v-html="responseBodyPrism.html"
-        /></pre>
+          /></pre>
 
-        <div v-if="executionLog && assertionTableData.length" class="api-exec-assertions-inline">
-          <div class="api-exec-subhead">断言明细</div>
-          <el-table
-            :data="assertionTableData"
-            size="small"
-            border
-            class="api-exec-assert-table"
-            empty-text="无断言明细"
+          <div
+            v-if="executionLog && assertionTableData.length"
+            class="api-exec-assertions-inline"
           >
-            <el-table-column prop="name" label="名称" width="120" />
-            <el-table-column prop="passed" label="通过" width="72" align="center">
-              <template #default="{ row }">
-                <el-tag :type="row.passed ? 'success' : 'danger'" size="small">
-                  {{ row.passed ? '是' : '否' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="detail" label="说明" min-width="160" show-overflow-tooltip />
-          </el-table>
-        </div>
-      </section>
+            <div class="api-exec-subhead">
+              断言明细
+            </div>
+            <el-table
+              :data="assertionTableData"
+              size="small"
+              border
+              class="api-exec-assert-table"
+              empty-text="无断言明细"
+            >
+              <el-table-column
+                prop="name"
+                label="名称"
+                width="120"
+              />
+              <el-table-column
+                prop="passed"
+                label="通过"
+                width="72"
+                align="center"
+              >
+                <template #default="{ row }">
+                  <el-tag
+                    :type="row.passed ? 'success' : 'danger'"
+                    size="small"
+                  >
+                    {{ row.passed ? '是' : '否' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column
+                prop="detail"
+                label="说明"
+                min-width="160"
+                show-overflow-tooltip
+              />
+            </el-table>
+          </div>
+        </section>
       </div>
     </div>
-    <div v-else class="api-exec-empty">未选择用例</div>
+    <div
+      v-else
+      class="api-exec-empty"
+    >
+      未选择用例
+    </div>
 
     <template #footer>
-      <el-button @click="visible = false">关闭</el-button>
+      <el-button @click="visible = false">
+        关闭
+      </el-button>
     </template>
   </el-dialog>
 </template>
@@ -244,6 +369,8 @@ import type { TestCaseRow } from '@/types/testcase'
 import { formatCaseDisplayId } from '@/composables/useTestCaseTypeColumns'
 import { useApiExecuteConsole, HTTP_STATUS_PHRASE } from '@/composables/useApiExecuteConsole'
 import { updateCaseApi } from '@/api/testcase'
+// OPTIMIZE: prismjs CSS theme is only used here for the API execute console syntax highlighting.
+// If prismjs is replaced with a lighter alternative (see useApiExecuteConsole.ts), remove this import too.
 import 'prismjs/themes/prism-tomorrow.min.css'
 
 const visible = defineModel<boolean>({ default: false })

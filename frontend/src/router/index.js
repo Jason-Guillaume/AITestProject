@@ -3,6 +3,11 @@ import { createRouter, createWebHistory } from "vue-router";
 import MainLayout from "@/layouts/MainLayout.vue";
 
 const routes = [
+  // keepAlive 要求组件 <script> 中定义与路由 name 一致的 name 属性，
+  // 否则 <keep-alive> 缓存失效。已标记 keepAlive 的路由：
+  // Dashboard → name:"Dashboard", TestCase → name:"TestCase",
+  // AgentHub → name:"AgentHub", DefectList → name:"DefectList",
+  // PipelineList → name:"PipelineList", ServerLogs → name:"ServerLogs"
   { path: "/", redirect: "/dashboard" },
 
   { path: "/login", name: "Login", component: () => import("@/views/Login.vue"), meta: { public: true } },
@@ -47,7 +52,7 @@ const routes = [
     component: MainLayout,
     meta: { public: false },
     children: [
-      { path: "dashboard", component: () => import("@/views/Dashboard.vue") },
+      { path: "dashboard", component: () => import("@/views/Dashboard.vue"), meta: { keepAlive: true } },
       { path: "user/center", component: () => import("@/views/UserCenter.vue") },
       { path: "projects", component: () => import("@/views/ProjectManagement.vue") },
 
@@ -72,6 +77,7 @@ const routes = [
         path: "agent-hub",
         name: "AgentHub",
         component: () => import("@/views/AgentHub.vue"),
+        meta: { keepAlive: true },
       },
       {
         path: "element-library",
@@ -138,6 +144,7 @@ const routes = [
         path: "test-case/:type",
         name: "TestCase",
         component: () => import("@/views/TestCase.vue"),
+        meta: { keepAlive: true },
       },
       { path: "test-report", component: () => import("@/views/TestReport/index.vue") },
       { path: "test-report/:id", component: () => import("@/views/TestReport/Detail.vue") },
@@ -166,7 +173,7 @@ const routes = [
         component: () => import("@/views/performance/EnvironmentManagement.vue"),
       },
 
-      { path: "defect/list", component: () => import("@/views/defect/DefectList.vue") },
+      { path: "defect/list", component: () => import("@/views/defect/DefectList.vue"), meta: { keepAlive: true } },
       { path: "defect/board", component: () => import("@/views/defect/TaskBoard.vue") },
       { path: "defect/release", component: () => import("@/views/defect/ReleasePlan.vue") },
       { path: "defect/detail", component: () => import("@/views/defect/DefectDetail.vue") },
@@ -181,7 +188,7 @@ const routes = [
         component: () => import("@/views/PipelineCreate.vue"),
         meta: { public: true },
       },
-      { path: "pipelines", name: "PipelineList", component: () => import("@/views/PipelineList.vue"), meta: { public: true } },
+      { path: "pipelines", name: "PipelineList", component: () => import("@/views/PipelineList.vue"), meta: { public: true, keepAlive: true } },
       { path: "pipelines/:id", name: "PipelineDetail", component: () => import("@/views/PipelineDetail.vue"), meta: { public: true } },
       {
         path: "server-logs",
@@ -336,8 +343,16 @@ const SYSTEM_ADMIN_ONLY_PREFIXES = [
 ];
 
 router.beforeEach((to, _from, next) => {
+  const bar = document.getElementById("route-loading-bar");
+  if (bar) bar.style.display = "block";
+
   // Allow pipeline routes without authentication (useful for CI/CD dashboard preview)
   if (to.path.startsWith('/pipelines')) {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      next({ path: "/login", query: { redirect: to.fullPath } });
+      return;
+    }
     next();
     return;
   }
@@ -362,6 +377,11 @@ router.beforeEach((to, _from, next) => {
     return;
   }
   next();
+});
+
+router.afterEach(() => {
+  const el = document.getElementById("route-loading-bar");
+  if (el) el.style.display = "none";
 });
 
 export default router;

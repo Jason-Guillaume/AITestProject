@@ -1,32 +1,66 @@
 <template>
   <div class="webui-workbench">
     <header class="wb-page-head">
-      <el-breadcrumb separator="/" class="wb-crumb">
+      <el-breadcrumb
+        separator="/"
+        class="wb-crumb"
+      >
         <el-breadcrumb-item :to="{ path: '/automation-center' }">
           <el-icon><HomeFilled /></el-icon>
           自动化指挥中心
         </el-breadcrumb-item>
         <el-breadcrumb-item>Web UI 工作台</el-breadcrumb-item>
       </el-breadcrumb>
-      <p class="wb-page-desc">管理脚本、执行浏览器自动化；删除的脚本可在回收站恢复或彻底清理。</p>
+      <p class="wb-page-desc">
+        管理脚本、执行浏览器自动化；删除的脚本可在回收站恢复或彻底清理。
+      </p>
     </header>
 
     <div class="wb-layout">
       <!-- 左侧 -->
       <aside class="wb-aside">
         <div class="wb-aside-top">
-          <el-radio-group v-model="listMode" class="wb-mode-tabs" size="default" @change="onModeTabChange">
-            <el-radio-button label="active">我的脚本</el-radio-button>
-            <el-radio-button label="trash">回收站{{ trashCount > 0 ? ` (${trashCount})` : '' }}</el-radio-button>
+          <el-radio-group
+            v-model="listMode"
+            class="wb-mode-tabs"
+            size="default"
+            @change="onModeTabChange"
+          >
+            <el-radio-button label="active">
+              我的脚本
+            </el-radio-button>
+            <el-radio-button label="trash">
+              回收站{{ trashCount > 0 ? ` (${trashCount})` : '' }}
+            </el-radio-button>
           </el-radio-group>
         </div>
 
         <div class="wb-toolbar">
           <template v-if="listMode === 'active'">
-            <el-button type="primary" class="wb-btn-primary" :icon="Plus" @click="handleImportProject">导入脚本</el-button>
+            <el-button
+              type="primary"
+              class="wb-btn-primary"
+              :icon="Plus"
+              @click="handleImportProject"
+            >
+              导入脚本
+            </el-button>
             <template v-if="selectedProjects.length > 0">
-              <el-button text bg class="wb-btn-ghost" @click="handleBatchMove">移动</el-button>
-              <el-button text bg type="danger" class="wb-btn-ghost" @click="handleBatchDelete">
+              <el-button
+                text
+                bg
+                class="wb-btn-ghost"
+                @click="handleBatchMove"
+              >
+                移动
+              </el-button>
+              <el-button
+                text
+                bg
+                type="danger"
+                class="wb-btn-ghost"
+                @click="handleBatchDelete"
+              >
                 移入回收站 ({{ selectedProjects.length }})
               </el-button>
             </template>
@@ -65,11 +99,21 @@
 
         <!-- 我的脚本：目录树 + 批量勾选 -->
         <template v-if="listMode === 'active'">
-          <div v-if="projects.length > 0" class="wb-list-head">
-            <el-checkbox v-model="selectAll" :indeterminate="isIndeterminate" @change="handleSelectAll">
+          <div
+            v-if="projects.length > 0"
+            class="wb-list-head"
+          >
+            <el-checkbox
+              v-model="selectAll"
+              :indeterminate="isIndeterminate"
+              @change="handleSelectAll"
+            >
               全选
             </el-checkbox>
-            <span v-if="selectedProjects.length" class="wb-select-hint">已选 {{ selectedProjects.length }} 项</span>
+            <span
+              v-if="selectedProjects.length"
+              class="wb-select-hint"
+            >已选 {{ selectedProjects.length }} 项</span>
           </div>
           <div class="wb-tree-wrap">
             <el-empty
@@ -105,7 +149,12 @@
                     @command="handleProjectAction"
                     @click.stop
                   >
-                    <button type="button" class="wb-item-more" aria-label="更多" @click.stop>
+                    <button
+                      type="button"
+                      class="wb-item-more"
+                      aria-label="更多"
+                      @click.stop
+                    >
                       <el-icon><MoreFilled /></el-icon>
                     </button>
                     <template #dropdown>
@@ -116,14 +165,23 @@
                         >
                           启用脚本
                         </el-dropdown-item>
-                        <el-dropdown-item v-else :command="{ action: 'toggle_active', project: data.project }">
+                        <el-dropdown-item
+                          v-else
+                          :command="{ action: 'toggle_active', project: data.project }"
+                        >
                           停用脚本
                         </el-dropdown-item>
-                        <el-dropdown-item :command="{ action: 'edit', project: data.project }" divided>
+                        <el-dropdown-item
+                          :command="{ action: 'edit', project: data.project }"
+                          divided
+                        >
                           <el-icon><Edit /></el-icon>
                           重命名
                         </el-dropdown-item>
-                        <el-dropdown-item :command="{ action: 'delete', project: data.project }" divided>
+                        <el-dropdown-item
+                          :command="{ action: 'delete', project: data.project }"
+                          divided
+                        >
                           <el-icon><Delete /></el-icon>
                           移入回收站
                         </el-dropdown-item>
@@ -138,11 +196,21 @@
 
         <!-- 回收站：沿用列表 -->
         <template v-else>
-          <div v-if="projects.length > 0" class="wb-list-head">
-            <el-checkbox v-model="selectAll" :indeterminate="isIndeterminate" @change="handleSelectAll">
+          <div
+            v-if="projects.length > 0"
+            class="wb-list-head"
+          >
+            <el-checkbox
+              v-model="selectAll"
+              :indeterminate="isIndeterminate"
+              @change="handleSelectAll"
+            >
               全选
             </el-checkbox>
-            <span v-if="selectedProjects.length" class="wb-select-hint">已选 {{ selectedProjects.length }} 项</span>
+            <span
+              v-if="selectedProjects.length"
+              class="wb-select-hint"
+            >已选 {{ selectedProjects.length }} 项</span>
           </div>
           <div class="wb-list">
             <el-empty
@@ -166,7 +234,10 @@
                 @change="(val: boolean) => handleProjectSelect(project.id, val)"
                 @click.stop
               />
-              <div class="wb-item-body" @click="selectProject(project)">
+              <div
+                class="wb-item-body"
+                @click="selectProject(project)"
+              >
                 <div class="wb-item-icon">
                   <el-icon><Document /></el-icon>
                 </div>
@@ -177,14 +248,25 @@
                   <div class="wb-item-meta">
                     <span class="wb-chip">{{ project.framework }}</span>
                     <span class="wb-type">{{ project.type }}</span>
-                    <span v-if="project.deleted_at" class="wb-deleted-at">
+                    <span
+                      v-if="project.deleted_at"
+                      class="wb-deleted-at"
+                    >
                       删除于 {{ formatDeletedAt(project.deleted_at) }}
                     </span>
                   </div>
                 </div>
               </div>
-              <el-dropdown trigger="click" @command="handleProjectAction" @click.stop>
-                <button type="button" class="wb-item-more" aria-label="更多">
+              <el-dropdown
+                trigger="click"
+                @command="handleProjectAction"
+                @click.stop
+              >
+                <button
+                  type="button"
+                  class="wb-item-more"
+                  aria-label="更多"
+                >
                   <el-icon><MoreFilled /></el-icon>
                 </button>
                 <template #dropdown>
@@ -193,7 +275,11 @@
                       <el-icon><RefreshLeft /></el-icon>
                       恢复到列表
                     </el-dropdown-item>
-                    <el-dropdown-item :command="{ action: 'purge', project }" divided class="danger-item">
+                    <el-dropdown-item
+                      :command="{ action: 'purge', project }"
+                      divided
+                      class="danger-item"
+                    >
                       <el-icon><Delete /></el-icon>
                       彻底删除
                     </el-dropdown-item>
@@ -209,11 +295,18 @@
       <main class="wb-main">
         <div class="wb-main-head">
           <div class="wb-main-title">
-            <el-icon v-if="listMode === 'active'"><VideoPlay /></el-icon>
-            <el-icon v-else><Delete /></el-icon>
+            <el-icon v-if="listMode === 'active'">
+              <VideoPlay />
+            </el-icon>
+            <el-icon v-else>
+              <Delete />
+            </el-icon>
             <span>{{ listMode === 'active' ? '执行控制台' : '回收站' }}</span>
           </div>
-          <div v-if="listMode === 'active'" class="wb-run-actions">
+          <div
+            v-if="listMode === 'active'"
+            class="wb-run-actions"
+          >
             <el-button
               type="primary"
               class="wb-run-btn"
@@ -238,56 +331,72 @@
           </div>
         </div>
 
-        <div v-if="listMode === 'trash'" class="wb-trash-panel">
+        <div
+          v-if="listMode === 'trash'"
+          class="wb-trash-panel"
+        >
           <p class="wb-trash-tip">
             回收站中的脚本不会出现在「我的脚本」中，也无法执行。恢复后可再次运行；彻底删除将删除数据库记录并清理工作空间文件，不可恢复。
           </p>
           <template v-if="selectedProject">
             <div class="wb-trash-card">
-              <h3 class="wb-trash-name">{{ selectedProject.name }}</h3>
-              <p class="wb-trash-sub">{{ selectedProject.framework }} · {{ selectedProject.type }}</p>
+              <h3 class="wb-trash-name">
+                {{ selectedProject.name }}
+              </h3>
+              <p class="wb-trash-sub">
+                {{ selectedProject.framework }} · {{ selectedProject.type }}
+              </p>
               <div class="wb-trash-btns">
-                <el-button type="primary" @click="restoreOne(selectedProject)">恢复至我的脚本</el-button>
-                <el-button type="danger" plain @click="purgeOne(selectedProject)">彻底删除</el-button>
+                <el-button
+                  type="primary"
+                  @click="restoreOne(selectedProject)"
+                >
+                  恢复至我的脚本
+                </el-button>
+                <el-button
+                  type="danger"
+                  plain
+                  @click="purgeOne(selectedProject)"
+                >
+                  彻底删除
+                </el-button>
               </div>
             </div>
           </template>
-          <el-empty v-else description="在左侧选择一个脚本，可进行恢复或彻底删除" :image-size="120" />
+          <el-empty
+            v-else
+            description="在左侧选择一个脚本，可进行恢复或彻底删除"
+            :image-size="120"
+          />
         </div>
 
-        <div v-else-if="!selectedProject" class="wb-empty-main">
-          <el-empty description="请选择一个脚本以配置执行并查看日志" :image-size="140" />
-        </div>
-
-        <div v-else class="wb-ide-layout">
+        <div
+          v-else
+          class="wb-ide-layout"
+        >
           <div class="wb-editor-column">
             <div class="wb-editor-bar">
-              <span class="wb-editor-bar__title">{{ editorTitle || '未打开文件' }}</span>
+              <span class="wb-editor-bar__title">
+                {{ selectedProject ? `关键字驱动 · ${selectedProject.name}` : '关键字驱动 · 步骤编辑器' }}
+              </span>
               <div class="wb-editor-bar__actions">
                 <el-button
                   size="small"
                   type="primary"
                   plain
-                  :loading="saveLoading"
-                  :disabled="!canSaveEditor"
-                  @click="handleSaveEditor"
+                  :disabled="!selectedProject"
+                  @click="handleSaveKWSteps"
                 >
-                  保存
+                  保存步骤
                 </el-button>
               </div>
             </div>
-            <div v-loading="editorLoading" class="wb-monaco-host">
-              <MonacoEditor
-                v-if="editorPath"
-                v-model="editorContent"
-                :language="editorLanguage"
-                :read-only="editorReadOnly"
-              />
-              <el-empty
-                v-else
-                class="wb-monaco-placeholder"
-                description="在左侧展开脚本节点，点击文件即可编辑"
-                :image-size="100"
+            <div class="wb-action-builder-host">
+              <ActionBuilder
+                :case-id="selectedProject?.id"
+                :case-name="selectedProject?.name"
+                :project-id="kwProjectId"
+                @update:json="onKWJsonUpdate"
               />
             </div>
           </div>
@@ -295,14 +404,26 @@
           <div class="execution-panel wb-exec-column">
             <!-- 执行配置 -->
             <div class="config-section">
-              <h4 class="section-title">执行配置</h4>
+              <h4 class="section-title">
+                执行配置
+              </h4>
               <div class="wb-exec-hint-row">
                 <span class="wb-exec-hint-inline">
                   浏览器在<strong>运行 Django 的机器</strong>上启动。无头时平台会为常见 Selenium（Chrome/Edge/Firefox）自动加无头参数；有头时不改脚本行为。
                 </span>
-                <el-popover placement="bottom-start" :width="420" trigger="click">
+                <el-popover
+                  placement="bottom-start"
+                  :width="420"
+                  trigger="click"
+                >
                   <template #reference>
-                    <el-button link type="primary" size="small">查看详细说明</el-button>
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                    >
+                      查看详细说明
+                    </el-button>
                   </template>
                   <div class="wb-popover-body">
                     <p><strong>为什么本地看不到窗口？</strong>若后端与浏览器不在同一环境（远程服务器、无桌 Docker），有头模式也不会出现在你当前这台电脑的桌面上。</p>
@@ -311,18 +432,38 @@
                   </div>
                 </el-popover>
               </div>
-              <el-form :model="executionConfig" label-width="100px" size="default">
+              <el-form
+                :model="executionConfig"
+                label-width="100px"
+                size="default"
+              >
                 <el-form-item label="浏览器">
-                  <el-select v-model="executionConfig.browser" placeholder="选择浏览器">
-                    <el-option label="Chrome" value="chrome" />
-                    <el-option label="Firefox" value="firefox" />
-                    <el-option label="Edge" value="edge" />
+                  <el-select
+                    v-model="executionConfig.browser"
+                    placeholder="选择浏览器"
+                  >
+                    <el-option
+                      label="Chrome"
+                      value="chrome"
+                    />
+                    <el-option
+                      label="Firefox"
+                      value="firefox"
+                    />
+                    <el-option
+                      label="Edge"
+                      value="edge"
+                    />
                   </el-select>
                 </el-form-item>
                 <el-form-item label="执行模式">
                   <el-radio-group v-model="executionConfig.headless">
-                    <el-radio :label="false">有头模式</el-radio>
-                    <el-radio :label="true">无头模式</el-radio>
+                    <el-radio :label="false">
+                      有头模式
+                    </el-radio>
+                    <el-radio :label="true">
+                      无头模式
+                    </el-radio>
                   </el-radio-group>
                 </el-form-item>
                 <el-form-item label="并发数">
@@ -338,7 +479,9 @@
             <!-- 执行日志 -->
             <div class="log-section">
               <div class="wb-log-section-head">
-                <h4 class="section-title">执行日志</h4>
+                <h4 class="section-title">
+                  执行日志
+                </h4>
                 <div class="wb-log-actions">
                   <el-button
                     text
@@ -361,8 +504,14 @@
                   </el-button>
                 </div>
               </div>
-              <div ref="logScrollRef" class="log-container">
-                <div v-if="uiStore.logs.length === 0" class="log-empty">
+              <div
+                ref="logScrollRef"
+                class="log-container"
+              >
+                <div
+                  v-if="uiStore.logs.length === 0"
+                  class="log-empty"
+                >
                   等待执行...
                 </div>
                 <div
@@ -378,38 +527,64 @@
             </div>
 
             <!-- 执行结果统计：运行中不展示假数字；结束后用 Redis 中的 result_stats 或 junit 解析结果 -->
-            <div v-if="uiStore.result?.pending" class="result-section result-section--pending">
-              <h4 class="section-title">执行结果</h4>
+            <div
+              v-if="uiStore.result?.pending"
+              class="result-section result-section--pending"
+            >
+              <h4 class="section-title">
+                执行结果
+              </h4>
               <p class="wb-result-pending">
                 统计中… 用例数将在本次执行结束并写入 Redis 后更新（pytest 工程优先读取工作区
                 <code>test-results/junit.xml</code>；线性脚本按单次执行计 1 条）。
               </p>
             </div>
-            <div v-else-if="uiStore.result" class="result-section">
-              <h4 class="section-title">执行结果</h4>
+            <div
+              v-else-if="uiStore.result"
+              class="result-section"
+            >
+              <h4 class="section-title">
+                执行结果
+              </h4>
               <el-row :gutter="16">
                 <el-col :span="6">
                   <div class="stat-card total">
-                <div class="stat-value">{{ uiStore.result.total }}</div>
-                    <div class="stat-label">总用例数</div>
+                    <div class="stat-value">
+                      {{ uiStore.result.total }}
+                    </div>
+                    <div class="stat-label">
+                      总用例数
+                    </div>
                   </div>
                 </el-col>
                 <el-col :span="6">
                   <div class="stat-card success">
-                <div class="stat-value">{{ uiStore.result.passed }}</div>
-                    <div class="stat-label">通过</div>
+                    <div class="stat-value">
+                      {{ uiStore.result.passed }}
+                    </div>
+                    <div class="stat-label">
+                      通过
+                    </div>
                   </div>
                 </el-col>
                 <el-col :span="6">
                   <div class="stat-card failed">
-                <div class="stat-value">{{ uiStore.result.failed }}</div>
-                    <div class="stat-label">失败</div>
+                    <div class="stat-value">
+                      {{ uiStore.result.failed }}
+                    </div>
+                    <div class="stat-label">
+                      失败
+                    </div>
                   </div>
                 </el-col>
                 <el-col :span="6">
                   <div class="stat-card skipped">
-                <div class="stat-value">{{ uiStore.result.skipped }}</div>
-                    <div class="stat-label">跳过</div>
+                    <div class="stat-value">
+                      {{ uiStore.result.skipped }}
+                    </div>
+                    <div class="stat-label">
+                      跳过
+                    </div>
                   </div>
                 </el-col>
               </el-row>
@@ -426,20 +601,48 @@
       width="600px"
       :close-on-click-modal="false"
     >
-      <el-form :model="importForm" label-width="100px">
-        <el-form-item label="工程名称" required>
-          <el-input v-model="importForm.name" placeholder="请输入工程名称" />
+      <el-form
+        :model="importForm"
+        label-width="100px"
+      >
+        <el-form-item
+          label="工程名称"
+          required
+        >
+          <el-input
+            v-model="importForm.name"
+            placeholder="请输入工程名称"
+          />
         </el-form-item>
-        <el-form-item label="框架类型" required>
-          <el-select v-model="importForm.framework" placeholder="选择框架">
-            <el-option label="Selenium" value="Selenium" />
-            <el-option label="Playwright" value="Playwright" />
+        <el-form-item
+          label="框架类型"
+          required
+        >
+          <el-select
+            v-model="importForm.framework"
+            placeholder="选择框架"
+          >
+            <el-option
+              label="Selenium"
+              value="Selenium"
+            />
+            <el-option
+              label="Playwright"
+              value="Playwright"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="工程类型" required>
+        <el-form-item
+          label="工程类型"
+          required
+        >
           <el-radio-group v-model="importForm.type">
-            <el-radio label="线性脚本">线性脚本</el-radio>
-            <el-radio label="POM 工程">POM 工程</el-radio>
+            <el-radio label="线性脚本">
+              线性脚本
+            </el-radio>
+            <el-radio label="POM 工程">
+              POM 工程
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item
@@ -452,7 +655,10 @@
             placeholder="ZIP 解压后的相对路径，例如 tests/test_login.py 或 src/main.py"
           />
         </el-form-item>
-        <el-form-item label="工程路径" required>
+        <el-form-item
+          label="工程路径"
+          required
+        >
           <el-upload
             ref="uploadRef"
             :auto-upload="false"
@@ -469,7 +675,9 @@
               readonly
             >
               <template #append>
-                <el-button :icon="Upload">上传</el-button>
+                <el-button :icon="Upload">
+                  上传
+                </el-button>
               </template>
             </el-input>
           </el-upload>
@@ -484,8 +692,15 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="importDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleConfirmImport">确认导入</el-button>
+        <el-button @click="importDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleConfirmImport"
+        >
+          确认导入
+        </el-button>
       </template>
     </el-dialog>
 
@@ -498,9 +713,14 @@
     >
       <el-form label-width="100px">
         <el-form-item label="选中工程">
-          <el-tag type="info">{{ selectedProjects.length }} 个工程</el-tag>
+          <el-tag type="info">
+            {{ selectedProjects.length }} 个工程
+          </el-tag>
         </el-form-item>
-        <el-form-item label="目标文件夹" required>
+        <el-form-item
+          label="目标文件夹"
+          required
+        >
           <el-input
             v-model="moveToFolder"
             placeholder="请输入目标文件夹路径"
@@ -508,8 +728,15 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="moveDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleConfirmMove">确认移动</el-button>
+        <el-button @click="moveDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleConfirmMove"
+        >
+          确认移动
+        </el-button>
       </template>
     </el-dialog>
 
@@ -521,20 +748,36 @@
       :close-on-click-modal="false"
     >
       <el-form label-width="90px">
-        <el-form-item label="名称" required>
-          <el-input v-model="editForm.name" maxlength="255" show-word-limit placeholder="脚本显示名称" />
+        <el-form-item
+          label="名称"
+          required
+        >
+          <el-input
+            v-model="editForm.name"
+            maxlength="255"
+            show-word-limit
+            placeholder="脚本显示名称"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="editDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="editSaving" @click="handleConfirmEditName">保存</el-button>
+        <el-button @click="editDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="editSaving"
+          @click="handleConfirmEditName"
+        >
+          保存
+        </el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -551,12 +794,24 @@ import {
   RefreshLeft,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
-import { useUiExecutionStore } from '@/store/modules/uiExecution'
+import { useUiExecutionStore } from '@/stores/uiExecutionStore'
+import ActionBuilder from '@/components/automation-center/ActionBuilder.vue'
 
 const route = useRoute()
 const router = useRouter()
 
-const MonacoEditor = defineAsyncComponent(() => import('@/components/MonacoEditor/index.vue'))
+const kwProjectId = computed(() => {
+  if (!selectedProject.value?.id) return undefined
+  return Number(selectedProject.value.id) || undefined
+})
+
+function handleSaveKWSteps() {
+  ElMessage.success('步骤已保存（关键字驱动模式）')
+}
+
+function onKWJsonUpdate(payload: object[]) {
+  console.log('[KW] JSON exported:', payload)
+}
 
 interface TreeNodeData {
   id: string
@@ -1556,8 +1811,8 @@ onUnmounted(() => {
   --wb-border: rgba(148, 163, 184, 0.12);
   --wb-text: #e2e8f0;
   --wb-muted: #94a3b8;
-  --wb-accent: #6366f1;
-  --wb-accent-hover: #818cf8;
+  --wb-accent: #00d8ff;
+  --wb-accent-hover: #22d3ee;
   --wb-danger: #f87171;
   min-height: 100vh;
   background: var(--wb-bg);
@@ -1687,11 +1942,11 @@ onUnmounted(() => {
 }
 .wb-item:hover {
   border-color: var(--wb-border);
-  background: rgba(99, 102, 241, 0.06);
+  background: rgba(0, 216, 255, 0.06);
 }
 .wb-item--active {
-  border-color: rgba(99, 102, 241, 0.45);
-  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(0, 216, 255, 0.45);
+  background: rgba(0, 216, 255, 0.1);
 }
 .wb-item--checked {
   border-color: rgba(34, 197, 94, 0.25);
@@ -1711,7 +1966,7 @@ onUnmounted(() => {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(0, 216, 255, 0.15);
   color: var(--wb-accent-hover);
   display: flex;
   align-items: center;
@@ -1877,7 +2132,7 @@ onUnmounted(() => {
 
 .wb-script-tree {
   background: transparent;
-  --el-tree-node-hover-bg-color: rgba(99, 102, 241, 0.12);
+  --el-tree-node-hover-bg-color: rgba(0, 216, 255, 0.12);
   --el-tree-text-color: var(--wb-text);
 }
 
@@ -1954,24 +2209,13 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.wb-monaco-host {
+.wb-action-builder-host {
   flex: 1;
   min-height: 200px;
   min-width: 0;
   padding: 10px 12px 12px;
   box-sizing: border-box;
-}
-
-.wb-monaco-placeholder {
-  height: 100%;
-  min-height: 180px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.wb-monaco-placeholder :deep(.el-empty__description) {
-  color: var(--wb-muted);
+  overflow-y: auto;
 }
 
 .execution-panel.wb-exec-column {
@@ -2006,8 +2250,8 @@ onUnmounted(() => {
   margin-bottom: 14px;
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(99, 102, 241, 0.08);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: rgba(0, 216, 255, 0.08);
+  border: 1px solid rgba(0, 216, 255, 0.2);
   font-size: 12px;
   color: var(--wb-muted);
   line-height: 1.5;
@@ -2167,7 +2411,7 @@ onUnmounted(() => {
 .wb-list::-webkit-scrollbar-thumb,
 .log-container::-webkit-scrollbar-thumb,
 .execution-panel::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.35);
+  background: rgba(0, 216, 255, 0.35);
   border-radius: 4px;
 }
 

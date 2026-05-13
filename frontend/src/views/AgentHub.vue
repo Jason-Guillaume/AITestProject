@@ -2,8 +2,12 @@
   <div class="agent-hub-page">
     <!-- Header Section -->
     <div class="hub-header">
-      <h1 class="hub-title">智能体中心</h1>
-      <p class="hub-subtitle">智能'数字员工'中心，让测试降本增效</p>
+      <h1 class="hub-title">
+        智能体中心
+      </h1>
+      <p class="hub-subtitle">
+        智能'数字员工'中心，让测试降本增效
+      </p>
     </div>
 
     <!-- Agent Grid -->
@@ -15,25 +19,38 @@
         class="agent-card"
         @click="navigateToAgent(agent.route)"
       >
-        <div class="card-glow"></div>
+        <div class="card-glow" />
 
         <!-- Top Section: Avatar + Badge -->
         <div class="card-top">
-          <div class="agent-avatar" :style="{ background: agent.avatarGradient }">
+          <div
+            class="agent-avatar"
+            :style="{ background: agent.avatarGradient }"
+          >
             <span class="avatar-icon">{{ agent.icon }}</span>
           </div>
-          <div class="ai-badge">AI</div>
+          <div class="ai-badge">
+            AI
+          </div>
         </div>
 
         <!-- Title -->
-        <h3 class="agent-title">{{ agent.name }}</h3>
+        <h3 class="agent-title">
+          {{ agent.name }}
+        </h3>
 
         <!-- Description -->
-        <p class="agent-description">{{ agent.description }}</p>
+        <p class="agent-description">
+          {{ agent.description }}
+        </p>
 
         <!-- Tags -->
         <div class="agent-tags">
-          <span v-for="tag in agent.tags" :key="tag" class="tag-pill">
+          <span
+            v-for="tag in agent.tags"
+            :key="tag"
+            class="tag-pill"
+          >
             {{ tag }}
           </span>
         </div>
@@ -48,8 +65,12 @@
       <!-- Placeholder Card -->
       <div class="agent-card placeholder-card">
         <div class="placeholder-content">
-          <div class="plus-icon">+</div>
-          <p class="placeholder-text">更多智能体数字员工<br/>会不断更新上线</p>
+          <div class="plus-icon">
+            +
+          </div>
+          <p class="placeholder-text">
+            更多智能体数字员工<br>会不断更新上线
+          </p>
         </div>
       </div>
     </div>
@@ -163,7 +184,7 @@ const navigateToAgent = (route) => {
   color: #e2e8f0;
   margin: 0 0 12px 0;
   letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #00d8ff 0%, #0ea5e9 50%, #3b82f6 100%);
+  background: linear-gradient(135deg, #00d8ff 0%, #0ea5e9 50%, #06b6d4 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

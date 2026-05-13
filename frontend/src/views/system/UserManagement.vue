@@ -1,6 +1,9 @@
 <template>
   <div class="page-wrap cyber-page admin-list-page sys-admin-page">
-    <el-card class="sys-filter-card" shadow="never">
+    <el-card
+      class="sys-filter-card"
+      shadow="never"
+    >
       <div class="sys-toolbar">
         <el-input
           v-model="keyword"
@@ -15,16 +18,31 @@
           </template>
         </el-input>
         <div class="sys-toolbar__actions">
-          <el-button size="default" @click="downloadImportTemplate">
+          <el-button
+            size="default"
+            @click="downloadImportTemplate"
+          >
             下载导入模板
           </el-button>
-          <el-button size="default" @click="onBatchImport">
+          <el-button
+            size="default"
+            @click="onBatchImport"
+          >
             批量导入
           </el-button>
-          <el-button size="default" @click="onExport">
+          <el-button
+            size="default"
+            @click="onExport"
+          >
             导出
           </el-button>
-          <el-button type="primary" size="default" @click="onAddUser">新增用户</el-button>
+          <el-button
+            type="primary"
+            size="default"
+            @click="onAddUser"
+          >
+            新增用户
+          </el-button>
         </div>
       </div>
     </el-card>
@@ -34,19 +52,30 @@
       accept=".csv,text/csv"
       class="import-file-input"
       @change="onImportFileChange"
-    />
+    >
 
-    <el-card class="sys-table-card" shadow="never">
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
       <el-table
-        :data="rows"
         v-loading="loading"
+        :data="rows"
         class="admin-data-table sys-enterprise-table"
         row-key="id"
       >
         <template #empty>
-          <el-empty description="暂无用户数据" :image-size="88" />
+          <el-empty
+            description="暂无用户数据"
+            :image-size="88"
+          />
         </template>
-        <el-table-column label="头像" width="80" align="center" class-name="col-avatar">
+        <el-table-column
+          label="头像"
+          width="80"
+          align="center"
+          class-name="col-avatar"
+        >
           <template #default="{ row }">
             <div class="avatar-cell">
               <el-avatar
@@ -60,10 +89,33 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="id" label="ID" min-width="88" width="88" align="left" />
-        <el-table-column prop="username" label="用户名" min-width="140" align="left" show-overflow-tooltip />
-        <el-table-column prop="real_name" label="真实姓名" min-width="140" align="left" show-overflow-tooltip />
-        <el-table-column label="系统管理员" min-width="120" width="120" align="center">
+        <el-table-column
+          prop="id"
+          label="ID"
+          min-width="88"
+          width="88"
+          align="left"
+        />
+        <el-table-column
+          prop="username"
+          label="用户名"
+          min-width="140"
+          align="left"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="real_name"
+          label="真实姓名"
+          min-width="140"
+          align="left"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="系统管理员"
+          min-width="120"
+          width="120"
+          align="center"
+        >
           <template #default="{ row }">
             <el-switch
               :model-value="!!row.is_system_admin"
@@ -75,7 +127,12 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="账号状态" min-width="120" width="120" align="center">
+        <el-table-column
+          label="账号状态"
+          min-width="120"
+          width="120"
+          align="center"
+        >
           <template #default="{ row }">
             <div class="status-cell">
               <el-badge
@@ -88,14 +145,30 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" min-width="176" width="176" align="center" class-name="col-datetime">
+        <el-table-column
+          label="创建时间"
+          min-width="176"
+          width="176"
+          align="center"
+          class-name="col-datetime"
+        >
           <template #default="{ row }">
             <span>{{ formatDate(row.create_time) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="168" width="168" fixed="right" align="center">
+        <el-table-column
+          label="操作"
+          min-width="168"
+          width="168"
+          fixed="right"
+          align="center"
+        >
           <template #default="{ row }">
-            <TableActionGroup :row="row" :actions="userTableActions(row)" @action="handleUserTableAction" />
+            <TableActionGroup
+              :row="row"
+              :actions="userTableActions(row)"
+              @action="handleUserTableAction"
+            />
           </template>
         </el-table-column>
       </el-table>
@@ -108,14 +181,36 @@
       destroy-on-close
       class="cyber-dialog-dark"
     >
-      <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="92px">
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model.trim="createForm.username" placeholder="请输入用户名" autocomplete="off" />
+      <el-form
+        ref="createFormRef"
+        :model="createForm"
+        :rules="createRules"
+        label-width="92px"
+      >
+        <el-form-item
+          label="用户名"
+          prop="username"
+        >
+          <el-input
+            v-model.trim="createForm.username"
+            placeholder="请输入用户名"
+            autocomplete="off"
+          />
         </el-form-item>
-        <el-form-item label="真实姓名" prop="real_name">
-          <el-input v-model.trim="createForm.real_name" placeholder="请输入真实姓名" autocomplete="off" />
+        <el-form-item
+          label="真实姓名"
+          prop="real_name"
+        >
+          <el-input
+            v-model.trim="createForm.real_name"
+            placeholder="请输入真实姓名"
+            autocomplete="off"
+          />
         </el-form-item>
-        <el-form-item label="初始密码" prop="password">
+        <el-form-item
+          label="初始密码"
+          prop="password"
+        >
           <el-input
             v-model="createForm.password"
             placeholder="请输入初始密码"
@@ -124,7 +219,12 @@
           />
         </el-form-item>
         <el-form-item label="账号状态">
-          <el-switch v-model="createForm.is_active" inline-prompt active-text="启用" inactive-text="禁用" />
+          <el-switch
+            v-model="createForm.is_active"
+            inline-prompt
+            active-text="启用"
+            inactive-text="禁用"
+          />
         </el-form-item>
         <el-form-item label="系统管理员">
           <el-switch
@@ -136,8 +236,16 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="submitCreateUser">创建</el-button>
+        <el-button @click="createDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="creating"
+          @click="submitCreateUser"
+        >
+          创建
+        </el-button>
       </template>
     </el-dialog>
 
@@ -149,17 +257,57 @@
       class="cyber-dialog-dark"
     >
       <div class="import-summary">
-        <el-tag type="success" effect="plain">成功 {{ importSummary.ok }} 条</el-tag>
-        <el-tag type="danger" effect="plain">失败 {{ importSummary.failed }} 条</el-tag>
+        <el-tag
+          type="success"
+          effect="plain"
+        >
+          成功 {{ importSummary.ok }} 条
+        </el-tag>
+        <el-tag
+          type="danger"
+          effect="plain"
+        >
+          失败 {{ importSummary.failed }} 条
+        </el-tag>
       </div>
-      <el-table :data="importFailures" size="small" max-height="360" border>
-        <el-table-column prop="lineNo" label="行号" width="90" align="center" />
-        <el-table-column prop="username" label="用户名" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="reason" label="失败原因" min-width="360" show-overflow-tooltip />
+      <el-table
+        :data="importFailures"
+        size="small"
+        max-height="360"
+        border
+      >
+        <el-table-column
+          prop="lineNo"
+          label="行号"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="username"
+          label="用户名"
+          min-width="180"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="reason"
+          label="失败原因"
+          min-width="360"
+          show-overflow-tooltip
+        />
       </el-table>
       <template #footer>
-        <el-button :disabled="!importFailures.length" @click="exportImportFailuresCsv">导出失败明细</el-button>
-        <el-button type="primary" @click="importResultVisible = false">我知道了</el-button>
+        <el-button
+          :disabled="!importFailures.length"
+          @click="exportImportFailuresCsv"
+        >
+          导出失败明细
+        </el-button>
+        <el-button
+          type="primary"
+          @click="importResultVisible = false"
+        >
+          我知道了
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -272,7 +420,7 @@ async function load() {
     }
   } catch (e) {
     ElMessage.error("获取用户失败");
-    // eslint-disable-next-line no-console
+     
     console.error(e);
   } finally {
     loading.value = false;
@@ -286,7 +434,7 @@ async function toggleActive(row) {
     await load();
   } catch (e) {
     ElMessage.error("更新失败");
-    // eslint-disable-next-line no-console
+     
     console.error(e);
   }
 }
@@ -304,7 +452,7 @@ async function toggleSystemAdmin(row, isAdmin) {
     await load();
   } catch (e) {
     ElMessage.error(e?.response?.data?.detail || e?.response?.data?.msg || "更新失败");
-    // eslint-disable-next-line no-console
+     
     console.error(e);
   } finally {
     adminToggleId.value = null;
@@ -323,7 +471,7 @@ async function delRow(row) {
     await load();
   } catch (e) {
     ElMessage.error("删除失败");
-    // eslint-disable-next-line no-console
+     
     console.error(e);
   }
 }
@@ -566,7 +714,7 @@ async function submitCreateUser() {
       await load();
     } catch (e) {
       ElMessage.error(e?.response?.data?.detail || e?.response?.data?.msg || "创建失败");
-      // eslint-disable-next-line no-console
+       
       console.error(e);
     } finally {
       creating.value = false;
@@ -660,13 +808,13 @@ onMounted(load);
 }
 
 .user-avatar-ent--tone-0 {
-  background: linear-gradient(145deg, #2563eb, #1d4ed8) !important;
+  background: linear-gradient(145deg, #0891b2, #1d4ed8) !important;
 }
 .user-avatar-ent--tone-1 {
   background: linear-gradient(145deg, #059669, #047857) !important;
 }
 .user-avatar-ent--tone-2 {
-  background: linear-gradient(145deg, #7c3aed, #6d28d9) !important;
+  background: linear-gradient(145deg, #0891b2, #0e7490) !important;
 }
 .user-avatar-ent--tone-3 {
   background: linear-gradient(145deg, #c2410c, #9a3412) !important;
@@ -675,7 +823,7 @@ onMounted(load);
   background: linear-gradient(145deg, #0e7490, #155e75) !important;
 }
 .user-avatar-ent--tone-5 {
-  background: linear-gradient(145deg, #4f46e5, #4338ca) !important;
+  background: linear-gradient(145deg, #155e75, #164e63) !important;
 }
 
 .status-cell {

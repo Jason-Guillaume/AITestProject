@@ -1,9 +1,21 @@
 <template>
-  <aside class="build-history" v-loading="loading">
-    <div class="build-history__title">构建历史</div>
-    <p class="build-history__hint">点击 #编号查看该次构建日志</p>
+  <aside
+    v-loading="loading"
+    class="build-history"
+  >
+    <div class="build-history__title">
+      构建历史
+    </div>
+    <p class="build-history__hint">
+      点击 #编号查看该次构建日志
+    </p>
     <el-scrollbar max-height="calc(100vh - 220px)">
-      <div v-if="!items.length && !loading" class="build-history__empty">暂无构建记录</div>
+      <div
+        v-if="!items.length && !loading"
+        class="build-history__empty"
+      >
+        暂无构建记录
+      </div>
       <button
         v-for="row in items"
         :key="row.id"
@@ -13,7 +25,11 @@
         @click="select(row.id)"
       >
         <span class="build-history__num">#{{ row.build_number }}</span>
-        <el-tag :type="statusTag(row.status)" size="small" class="build-history__tag">
+        <el-tag
+          :type="statusTag(row.status)"
+          size="small"
+          class="build-history__tag"
+        >
           {{ statusText(row.status) }}
         </el-tag>
         <span class="build-history__time">{{ formatTime(row.start_time) }}</span>

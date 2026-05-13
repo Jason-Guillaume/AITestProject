@@ -4,6 +4,7 @@ import string
 import uuid
 import re
 
+from django.conf import settings
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -323,12 +324,12 @@ class UserLoginAPIView(APIView):
         # 如果该用户之前登录过，就会取出旧Token；如果是首次登录，会生成新Token
         token, created = Token.objects.get_or_create(user=user)
 
-        return Response(
+        response = Response(
             {
                 "code": 200,
                 "msg": "登录成功",
                 "data": {
-                    "token": token.key,  # 前端需要的凭证
+                    "token": token.key,
                     "username": user.username,
                     "real_name": user.real_name,
                     "user_id": user.id,
@@ -336,6 +337,26 @@ class UserLoginAPIView(APIView):
                 },
             }
         )
+        response.set_cookie(
+            key="auth_token",
+            value=token.key,
+            max_age=getattr(settings, "AUTH_COOKIE_MAX_AGE", 86400 * 7),
+            httponly=True,
+            secure=not settings.DEBUG,
+            samesite="Lax",
+            path="/api",
+        )
+        return response
+
+
+class LogoutAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        Token.objects.filter(user=request.user).delete()
+        response = Response({"code": 200, "msg": "已登出", "data": None})
+        response.delete_cookie(key="auth_token", path="/api")
+        return response
 
 
 class CurrentUserAPIView(APIView):
@@ -423,6 +444,7 @@ class ChangePasswordAPIView(APIView):
 
         user.set_password(new_password)
         user.save(update_fields=["password"])
+        Token.objects.filter(user=user).delete()
 
         return Response({"code": 200, "msg": "密码修改成功", "data": None})
 

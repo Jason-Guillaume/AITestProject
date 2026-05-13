@@ -1,7 +1,9 @@
 <template>
   <div class="inspector-api-panel">
     <section class="inspector-block">
-      <h4 class="inspector-block__h">API · Telemetry</h4>
+      <h4 class="inspector-block__h">
+        API · Telemetry
+      </h4>
       <p class="inspector-block__desc">
         场景执行 Telemetry 由运行器输出；Artifacts（HAR、响应体）将汇总至 Analysis Lab。
       </p>

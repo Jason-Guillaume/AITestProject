@@ -1,5 +1,8 @@
 <template>
-  <div v-if="showChrome" class="global-copilot">
+  <div
+    v-if="showChrome"
+    class="global-copilot"
+  >
     <button
       type="button"
       class="copilot-fab"
@@ -7,7 +10,9 @@
       aria-label="打开 AI Copilot"
       @click="copilot.toggleDrawer()"
     >
-      <el-icon :size="18"><Cpu /></el-icon>
+      <el-icon :size="18">
+        <Cpu />
+      </el-icon>
     </button>
 
     <el-drawer
@@ -37,14 +42,18 @@
             <span class="ctx-k">场景</span>
             <span class="ctx-v">{{ sceneHint }}</span>
           </div>
-          <div v-if="copilot.workflowContext.executionLogId" class="context-line">
+          <div
+            v-if="copilot.workflowContext.executionLogId"
+            class="context-line"
+          >
             <span class="ctx-k">失败日志</span>
-            <span class="ctx-v"
-              >#{{ copilot.workflowContext.executionLogId }}
-              {{ copilot.workflowContext.executionLogLabel }}</span
-            >
+            <span class="ctx-v">#{{ copilot.workflowContext.executionLogId }}
+              {{ copilot.workflowContext.executionLogLabel }}</span>
           </div>
-          <div v-if="copilot.workflowContext.reportHint" class="context-line">
+          <div
+            v-if="copilot.workflowContext.reportHint"
+            class="context-line"
+          >
             <span class="ctx-k">报告</span>
             <span class="ctx-v">{{ copilot.workflowContext.reportHint }}</span>
           </div>
@@ -55,7 +64,12 @@
         </div>
 
         <div class="quick-actions">
-          <el-button size="small" class="cyber-btn" :disabled="!activeEditor" @click="injectEditorSnapshot">
+          <el-button
+            size="small"
+            class="cyber-btn"
+            :disabled="!activeEditor"
+            @click="injectEditorSnapshot"
+          >
             读取当前代码
           </el-button>
           <el-button
@@ -70,21 +84,50 @@
           </el-button>
         </div>
 
-        <div ref="scrollRef" class="msg-scroll">
-          <div v-for="(m, idx) in messages" :key="idx" class="msg" :class="`msg--${m.role}`">
-            <div class="msg-role">{{ m.role === 'user' ? '你' : 'AI' }}</div>
-            <div v-if="m.role === 'assistant'" class="msg-bubble md" v-html="renderMd(m.content)"></div>
-            <pre v-else class="msg-bubble msg-bubble--raw">{{ m.content }}</pre>
+        <div
+          ref="scrollRef"
+          class="msg-scroll"
+        >
+          <div
+            v-for="(m, idx) in messages"
+            :key="idx"
+            class="msg"
+            :class="`msg--${m.role}`"
+          >
+            <div class="msg-role">
+              {{ m.role === 'user' ? '你' : 'AI' }}
+            </div>
+            <div
+              v-if="m.role === 'assistant'"
+              class="msg-bubble md"
+              v-html="renderMd(m.content)"
+            />
+            <pre
+              v-else
+              class="msg-bubble msg-bubble--raw"
+            >{{ m.content }}</pre>
 
             <div
               v-if="m.role === 'assistant' && m.codeBlocks?.length && activeEditor && !activeEditor.isReadOnly()"
               class="apply-row"
             >
               <span class="apply-label">一键应用（取最后一段代码块）</span>
-              <el-button size="small" type="warning" plain class="cyber-btn" @click="applyCode(m, 'replace')">
+              <el-button
+                size="small"
+                type="warning"
+                plain
+                class="cyber-btn"
+                @click="applyCode(m, 'replace')"
+              >
                 覆盖编辑器
               </el-button>
-              <el-button size="small" type="success" plain class="cyber-btn" @click="applyCode(m, 'insert')">
+              <el-button
+                size="small"
+                type="success"
+                plain
+                class="cyber-btn"
+                @click="applyCode(m, 'insert')"
+              >
                 插入到光标
               </el-button>
             </div>
@@ -102,8 +145,20 @@
             @keydown.enter.exact.prevent="sendChat"
           />
           <div class="composer-actions">
-            <el-button :loading="sending" type="primary" class="send-btn" @click="sendChat">发送</el-button>
-            <el-button class="cyber-btn" @click="clearThread">清空对话</el-button>
+            <el-button
+              :loading="sending"
+              type="primary"
+              class="send-btn"
+              @click="sendChat"
+            >
+              发送
+            </el-button>
+            <el-button
+              class="cyber-btn"
+              @click="clearThread"
+            >
+              清空对话
+            </el-button>
           </div>
         </div>
       </div>

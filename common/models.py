@@ -90,3 +90,18 @@ class AuditEvent(BaseModel):
             models.Index(fields=["action", "-create_time"]),
             models.Index(fields=["object_app", "object_model", "object_id"]),
         ]
+
+
+class ActiveManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+
+
+class SoftDeleteModelMixin(models.Model):
+    is_deleted = models.BooleanField(default=False, verbose_name="是否删除")
+
+    objects = ActiveManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        abstract = True

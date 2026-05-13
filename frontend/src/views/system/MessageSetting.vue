@@ -1,22 +1,46 @@
 <template>
   <div class="page-wrap cyber-page admin-list-page sys-admin-page">
-    <el-card class="sys-page-head" shadow="never">
+    <el-card
+      class="sys-page-head"
+      shadow="never"
+    >
       <div class="sys-page-head__row">
         <div>
-          <h2 class="sys-page-head__title">消息设置</h2>
-          <p class="sys-page-head__sub">配置通知渠道与汇总策略，保存后写入消息设置接口。</p>
+          <h2 class="sys-page-head__title">
+            消息设置
+          </h2>
+          <p class="sys-page-head__sub">
+            配置通知渠道与汇总策略，保存后写入消息设置接口。
+          </p>
         </div>
-        <el-button type="primary" size="default" :loading="saving" @click="handleSave">保存设置</el-button>
+        <el-button
+          type="primary"
+          size="default"
+          :loading="saving"
+          @click="handleSave"
+        >
+          保存设置
+        </el-button>
       </div>
     </el-card>
 
     <div class="sys-msg-cards">
-      <el-card class="sys-msg-card" shadow="never">
+      <el-card
+        class="sys-msg-card"
+        shadow="never"
+      >
         <template #header>
           <span class="sys-msg-card__title">系统告警与通道</span>
         </template>
-        <p class="sys-msg-card__intro">控制系统级通知是否通过站内信、邮件或短信触达账号。</p>
-        <el-form :model="form" label-width="0" class="sys-msg-form" ref="formRef">
+        <p class="sys-msg-card__intro">
+          控制系统级通知是否通过站内信、邮件或短信触达账号。
+        </p>
+        <el-form
+          ref="formRef"
+          :model="form"
+          label-width="0"
+          class="sys-msg-form"
+        >
           <div class="toggle-row">
             <div class="toggle-row__main">
               <el-form-item label="">
@@ -25,7 +49,9 @@
                   <el-switch v-model="form.in_app_enabled" />
                 </div>
               </el-form-item>
-              <p class="toggle-hint">在平台内展示系统通知、审批待办与重要提醒。</p>
+              <p class="toggle-hint">
+                在平台内展示系统通知、审批待办与重要提醒。
+              </p>
             </div>
           </div>
           <div class="toggle-row">
@@ -36,7 +62,9 @@
                   <el-switch v-model="form.email_enabled" />
                 </div>
               </el-form-item>
-              <p class="toggle-hint">向用户绑定邮箱发送关键事件摘要（需邮件服务配置）。</p>
+              <p class="toggle-hint">
+                向用户绑定邮箱发送关键事件摘要（需邮件服务配置）。
+              </p>
             </div>
           </div>
           <div class="toggle-row">
@@ -47,18 +75,29 @@
                   <el-switch v-model="form.sms_enabled" />
                 </div>
               </el-form-item>
-              <p class="toggle-hint">高优先级告警短信推送，适用于值班与紧急缺陷场景。</p>
+              <p class="toggle-hint">
+                高优先级告警短信推送，适用于值班与紧急缺陷场景。
+              </p>
             </div>
           </div>
         </el-form>
       </el-card>
 
-      <el-card class="sys-msg-card" shadow="never">
+      <el-card
+        class="sys-msg-card"
+        shadow="never"
+      >
         <template #header>
           <span class="sys-msg-card__title">任务与日报汇总</span>
         </template>
-        <p class="sys-msg-card__intro">定时汇总测试进度、待办任务与日报，减少打扰、提高可读性。</p>
-        <el-form :model="form" label-width="0" class="sys-msg-form">
+        <p class="sys-msg-card__intro">
+          定时汇总测试进度、待办任务与日报，减少打扰、提高可读性。
+        </p>
+        <el-form
+          :model="form"
+          label-width="0"
+          class="sys-msg-form"
+        >
           <div class="toggle-row">
             <div class="toggle-row__main">
               <el-form-item label="">
@@ -67,7 +106,9 @@
                   <el-switch v-model="form.digest_enabled" />
                 </div>
               </el-form-item>
-              <p class="toggle-hint">在指定时间生成前一日活动摘要（用例执行、缺陷变化等）。</p>
+              <p class="toggle-hint">
+                在指定时间生成前一日活动摘要（用例执行、缺陷变化等）。
+              </p>
             </div>
           </div>
           <div class="toggle-row toggle-row--time">
@@ -83,7 +124,9 @@
                 placeholder="例如 08:30"
                 class="digest-input"
               />
-              <p class="toggle-hint">仅在开启日报汇总时生效；建议使用非业务高峰时段。</p>
+              <p class="toggle-hint">
+                仅在开启日报汇总时生效；建议使用非业务高峰时段。
+              </p>
             </div>
           </div>
         </el-form>
@@ -129,7 +172,7 @@ async function load() {
     }
   } catch (e) {
     ElMessage.error("加载消息设置失败");
-    // eslint-disable-next-line no-console
+     
     console.error(e);
   }
 }
@@ -154,7 +197,7 @@ async function handleSave() {
     await load();
   } catch (e) {
     ElMessage.error("保存失败，请检查后端接口与字段");
-    // eslint-disable-next-line no-console
+     
     console.error(e);
   } finally {
     saving.value = false;

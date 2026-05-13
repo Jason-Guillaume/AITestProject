@@ -616,6 +616,7 @@ export function useAutomationHubCore() {
     onExecuteClick,
     onStopClick,
     goAnalysisLabDeepLink,
+    selectedProjectId,
   })
 
   return { hub, hubTerminalRef }

@@ -1,5 +1,8 @@
 <template>
-  <div ref="containerRef" class="monaco-editor-root" />
+  <div
+    ref="containerRef"
+    class="monaco-editor-root"
+  />
 </template>
 
 <script setup>

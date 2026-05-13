@@ -2,7 +2,11 @@
   <div class="page-wrap cyber-page release-plan-page">
     <div class="page-toolbar defect-toolbar">
       <div class="defect-toolbar__actions">
-        <el-button type="primary" size="default" @click="openCreate">
+        <el-button
+          type="primary"
+          size="default"
+          @click="openCreate"
+        >
           <el-icon><Plus /></el-icon> 新增发布计划
         </el-button>
       </div>
@@ -27,35 +31,117 @@
     </div>
 
     <div class="table-card cyber-glass release-table-card">
-      <el-table :data="list" v-loading="loading" class="admin-data-table">
+      <el-table
+        v-loading="loading"
+        :data="list"
+        class="admin-data-table"
+      >
         <template #empty>
-          <el-empty description="暂无发布计划数据" :image-size="88" />
+          <el-empty
+            description="暂无发布计划数据"
+            :image-size="88"
+          />
         </template>
-        <el-table-column prop="id" label="ID" width="80" align="left" />
-        <el-table-column prop="project_name" label="所属项目" min-width="120" align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.project_name || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="release_name" label="发布名称" min-width="140" align="left" show-overflow-tooltip>
+        <el-table-column
+          prop="id"
+          label="ID"
+          width="80"
+          align="left"
+        />
+        <el-table-column
+          prop="project_name"
+          label="所属项目"
+          min-width="120"
+          align="center"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click="router.push(`/defect/release/${row.id}`)">{{ row.release_name }}</el-button>
+            {{ row.project_name || '—' }}
           </template>
         </el-table-column>
-        <el-table-column prop="version_no" label="版本号" min-width="104" width="104" align="center" show-overflow-tooltip />
-        <el-table-column label="计划发布日期" min-width="168" width="168" align="center" class-name="col-datetime">
-          <template #default="{ row }">{{ formatDate(row.release_date) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="90" align="center">
+        <el-table-column
+          prop="release_name"
+          label="发布名称"
+          min-width="140"
+          align="left"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
-            <el-tag :type="releaseTag(row.status)" size="small">{{ releaseLabel(row.status) }}</el-tag>
+            <el-button
+              link
+              type="primary"
+              @click="router.push(`/defect/release/${row.id}`)"
+            >
+              {{ row.release_name }}
+            </el-button>
           </template>
         </el-table-column>
-        <el-table-column prop="creator_name" label="创建人" min-width="104" width="104" align="center" show-overflow-tooltip />
-        <el-table-column label="创建时间" min-width="176" width="176" align="center" class-name="col-datetime">
-          <template #default="{ row }">{{ formatDate(row.create_time) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" min-width="220" width="220" fixed="right" align="center" class-name="col-release-actions">
+        <el-table-column
+          prop="version_no"
+          label="版本号"
+          min-width="104"
+          width="104"
+          align="center"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="计划发布日期"
+          min-width="168"
+          width="168"
+          align="center"
+          class-name="col-datetime"
+        >
           <template #default="{ row }">
-            <TableActionGroup :row="row" :actions="releaseTableActions" @action="handleReleaseTableAction" />
+            {{ formatDate(row.release_date) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="状态"
+          width="90"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-tag
+              :type="releaseTag(row.status)"
+              size="small"
+            >
+              {{ releaseLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="creator_name"
+          label="创建人"
+          min-width="104"
+          width="104"
+          align="center"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="创建时间"
+          min-width="176"
+          width="176"
+          align="center"
+          class-name="col-datetime"
+        >
+          <template #default="{ row }">
+            {{ formatDate(row.create_time) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          min-width="220"
+          width="220"
+          fixed="right"
+          align="center"
+          class-name="col-release-actions"
+        >
+          <template #default="{ row }">
+            <TableActionGroup
+              :row="row"
+              :actions="releaseTableActions"
+              @action="handleReleaseTableAction"
+            />
           </template>
         </el-table-column>
       </el-table>
@@ -71,9 +157,22 @@
       </div>
     </div>
 
-    <el-dialog v-model="showDialog" :title="editing ? '编辑发布计划' : '新增发布计划'" width="440px" class="cyber-dialog-dark">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
-        <el-form-item label="所属项目" prop="project">
+    <el-dialog
+      v-model="showDialog"
+      :title="editing ? '编辑发布计划' : '新增发布计划'"
+      width="440px"
+      class="cyber-dialog-dark"
+    >
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="96px"
+      >
+        <el-form-item
+          label="所属项目"
+          prop="project"
+        >
           <el-select
             v-model="form.project"
             placeholder="可选，与项目管理中的版本发布一致"
@@ -89,19 +188,47 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="发布名称" prop="release_name">
-          <el-input v-model="form.release_name" placeholder="请输入发布名称" />
+        <el-form-item
+          label="发布名称"
+          prop="release_name"
+        >
+          <el-input
+            v-model="form.release_name"
+            placeholder="请输入发布名称"
+          />
         </el-form-item>
-        <el-form-item label="版本号" prop="version_no">
-          <el-input v-model="form.version_no" placeholder="如 V1.0.0" />
+        <el-form-item
+          label="版本号"
+          prop="version_no"
+        >
+          <el-input
+            v-model="form.version_no"
+            placeholder="如 V1.0.0"
+          />
         </el-form-item>
-        <el-form-item label="计划发布日期" prop="release_date">
-          <el-date-picker v-model="form.release_date" type="datetime" placeholder="请选择日期" value-format="YYYY-MM-DDTHH:mm:ss" />
+        <el-form-item
+          label="计划发布日期"
+          prop="release_date"
+        >
+          <el-date-picker
+            v-model="form.release_date"
+            type="datetime"
+            placeholder="请选择日期"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submit">确定</el-button>
+        <el-button @click="showDialog = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="submit"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>

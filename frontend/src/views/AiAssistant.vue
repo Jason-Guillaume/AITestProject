@@ -1,10 +1,18 @@
 <template>
   <div class="page-wrap cyber-page">
-    <el-tabs v-model="activeTab" class="ai-tabs">
-      <el-tab-pane label="用例规范审查" name="review">
+    <el-tabs
+      v-model="activeTab"
+      class="ai-tabs"
+    >
+      <el-tab-pane
+        label="用例规范审查"
+        name="review"
+      >
         <div class="tab-content">
           <div class="section-card cyber-glass">
-            <h3 class="section-title">用例规范</h3>
+            <h3 class="section-title">
+              用例规范
+            </h3>
             <el-input
               v-model="specTemplate"
               type="textarea"
@@ -13,33 +21,63 @@
               class="spec-input"
             />
           </div>
-          <div class="section-card cyber-glass" style="margin-top:16px">
+          <div
+            class="section-card cyber-glass"
+            style="margin-top:16px"
+          >
             <div class="section-header">
-              <h3 class="section-title">用例规范规则</h3>
+              <h3 class="section-title">
+                用例规范规则
+              </h3>
             </div>
             <div class="rules-list">
-              <div class="rule-item" v-for="(rule, idx) in rules" :key="idx">
+              <div
+                v-for="(rule, idx) in rules"
+                :key="idx"
+                class="rule-item"
+              >
                 <span class="rule-label">规则{{ zh[idx] }}</span>
-                <el-input v-model="rules[idx]" placeholder="请输入规则内容" class="rule-input" />
-                <el-button circle size="small" type="danger" plain @click="removeRule(idx)">
+                <el-input
+                  v-model="rules[idx]"
+                  placeholder="请输入规则内容"
+                  class="rule-input"
+                />
+                <el-button
+                  circle
+                  size="small"
+                  type="danger"
+                  plain
+                  @click="removeRule(idx)"
+                >
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </div>
             </div>
-            <el-button type="primary" plain class="add-rule-btn" @click="addRule">
+            <el-button
+              type="primary"
+              plain
+              class="add-rule-btn"
+              @click="addRule"
+            >
               <el-icon><Plus /></el-icon> 新增规则
             </el-button>
           </div>
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="用例逻辑评审" name="logic">
+      <el-tab-pane
+        label="用例逻辑评审"
+        name="logic"
+      >
         <div class="tab-content empty-tip">
           <el-empty description="用例逻辑评审功能开发中" />
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="模型接入" name="model">
+      <el-tab-pane
+        label="模型接入"
+        name="model"
+      >
         <div class="tab-content">
           <ModelConfigForm />
         </div>

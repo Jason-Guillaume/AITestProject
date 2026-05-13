@@ -1,85 +1,283 @@
 <template>
   <div class="ai-quota-page">
-    <div class="panel-title">AI 配额策略</div>
-
-    <div class="toolbar">
-      <el-select v-model="filters.scope_type" placeholder="范围" clearable style="width: 140px">
-        <el-option label="项目" value="project" />
-        <el-option label="组织" value="org" />
-        <el-option label="用户" value="user" />
-      </el-select>
-      <el-input v-model="filters.project_id" placeholder="project_id" clearable style="width: 140px" />
-      <el-input v-model="filters.org_id" placeholder="org_id" clearable style="width: 120px" />
-      <el-input v-model="filters.user_id" placeholder="user_id" clearable style="width: 120px" />
-      <el-button type="primary" :loading="loading" @click="load">查询</el-button>
-      <el-button :disabled="loading" @click="resetFilters">重置</el-button>
-      <div class="spacer" />
-      <el-button type="success" @click="openCreate">新建策略</el-button>
+    <div class="panel-title">
+      AI 配额策略
     </div>
 
-    <el-table :data="items" v-loading="loading" size="small" class="admin-data-table" height="560">
-      <el-table-column prop="id" label="ID" width="80" align="center" />
-      <el-table-column prop="scope_type" label="范围" width="110" align="center">
+    <div class="toolbar">
+      <el-select
+        v-model="filters.scope_type"
+        placeholder="范围"
+        clearable
+        style="width: 140px"
+      >
+        <el-option
+          label="项目"
+          value="project"
+        />
+        <el-option
+          label="组织"
+          value="org"
+        />
+        <el-option
+          label="用户"
+          value="user"
+        />
+      </el-select>
+      <el-input
+        v-model="filters.project_id"
+        placeholder="project_id"
+        clearable
+        style="width: 140px"
+      />
+      <el-input
+        v-model="filters.org_id"
+        placeholder="org_id"
+        clearable
+        style="width: 120px"
+      />
+      <el-input
+        v-model="filters.user_id"
+        placeholder="user_id"
+        clearable
+        style="width: 120px"
+      />
+      <el-button
+        type="primary"
+        :loading="loading"
+        @click="load"
+      >
+        查询
+      </el-button>
+      <el-button
+        :disabled="loading"
+        @click="resetFilters"
+      >
+        重置
+      </el-button>
+      <div class="spacer" />
+      <el-button
+        type="success"
+        @click="openCreate"
+      >
+        新建策略
+      </el-button>
+    </div>
+
+    <el-table
+      v-loading="loading"
+      :data="items"
+      size="small"
+      class="admin-data-table"
+      height="560"
+    >
+      <el-table-column
+        prop="id"
+        label="ID"
+        width="80"
+        align="center"
+      />
+      <el-table-column
+        prop="scope_type"
+        label="范围"
+        width="110"
+        align="center"
+      >
         <template #default="{ row }">
-          <el-tag size="small" effect="dark" v-if="row.scope_type === 'project'">项目</el-tag>
-          <el-tag size="small" effect="dark" type="warning" v-else-if="row.scope_type === 'org'">组织</el-tag>
-          <el-tag size="small" effect="dark" type="info" v-else>用户</el-tag>
+          <el-tag
+            v-if="row.scope_type === 'project'"
+            size="small"
+            effect="dark"
+          >
+            项目
+          </el-tag>
+          <el-tag
+            v-else-if="row.scope_type === 'org'"
+            size="small"
+            effect="dark"
+            type="warning"
+          >
+            组织
+          </el-tag>
+          <el-tag
+            v-else
+            size="small"
+            effect="dark"
+            type="info"
+          >
+            用户
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="project" label="project_id" width="110" align="center" />
-      <el-table-column prop="org" label="org_id" width="100" align="center" />
-      <el-table-column prop="user" label="user_id" width="100" align="center" />
-      <el-table-column prop="daily_requests" label="每日上限" width="110" align="center" />
-      <el-table-column prop="max_concurrency" label="最大并发" width="110" align="center" />
-      <el-table-column prop="concurrency_ttl_seconds" label="TTL(秒)" width="100" align="center" />
-      <el-table-column prop="is_enabled" label="启用" width="80" align="center">
+      <el-table-column
+        prop="project"
+        label="project_id"
+        width="110"
+        align="center"
+      />
+      <el-table-column
+        prop="org"
+        label="org_id"
+        width="100"
+        align="center"
+      />
+      <el-table-column
+        prop="user"
+        label="user_id"
+        width="100"
+        align="center"
+      />
+      <el-table-column
+        prop="daily_requests"
+        label="每日上限"
+        width="110"
+        align="center"
+      />
+      <el-table-column
+        prop="max_concurrency"
+        label="最大并发"
+        width="110"
+        align="center"
+      />
+      <el-table-column
+        prop="concurrency_ttl_seconds"
+        label="TTL(秒)"
+        width="100"
+        align="center"
+      />
+      <el-table-column
+        prop="is_enabled"
+        label="启用"
+        width="80"
+        align="center"
+      >
         <template #default="{ row }">
-          <el-tag size="small" type="success" v-if="row.is_enabled">是</el-tag>
-          <el-tag size="small" type="info" v-else>否</el-tag>
+          <el-tag
+            v-if="row.is_enabled"
+            size="small"
+            type="success"
+          >
+            是
+          </el-tag>
+          <el-tag
+            v-else
+            size="small"
+            type="info"
+          >
+            否
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="allowed_actions" label="actions" min-width="200">
+      <el-table-column
+        prop="allowed_actions"
+        label="actions"
+        min-width="200"
+      >
         <template #default="{ row }">
           <span class="actions-cell">{{ formatActions(row.allowed_actions) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="notes" label="备注" min-width="140" show-overflow-tooltip />
-      <el-table-column label="操作" width="180" fixed="right" align="center">
+      <el-table-column
+        prop="notes"
+        label="备注"
+        min-width="140"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="操作"
+        width="180"
+        fixed="right"
+        align="center"
+      >
         <template #default="{ row }">
-          <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-          <el-button link type="danger" @click="remove(row)">删除</el-button>
+          <el-button
+            link
+            type="primary"
+            @click="openEdit(row)"
+          >
+            编辑
+          </el-button>
+          <el-button
+            link
+            type="danger"
+            @click="remove(row)"
+          >
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialog.visible" :title="dialog.title" width="640px" destroy-on-close>
-      <el-form :model="dialog.form" label-width="120px">
+    <el-dialog
+      v-model="dialog.visible"
+      :title="dialog.title"
+      width="640px"
+      destroy-on-close
+    >
+      <el-form
+        :model="dialog.form"
+        label-width="120px"
+      >
         <el-form-item label="范围(scope_type)">
-          <el-select v-model="dialog.form.scope_type" placeholder="请选择" style="width: 220px">
-            <el-option label="项目(project)" value="project" />
-            <el-option label="组织(org)" value="org" />
-            <el-option label="用户(user)" value="user" />
+          <el-select
+            v-model="dialog.form.scope_type"
+            placeholder="请选择"
+            style="width: 220px"
+          >
+            <el-option
+              label="项目(project)"
+              value="project"
+            />
+            <el-option
+              label="组织(org)"
+              value="org"
+            />
+            <el-option
+              label="用户(user)"
+              value="user"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="project_id">
-          <el-input v-model="dialog.form.project" placeholder="可空" />
+          <el-input
+            v-model="dialog.form.project"
+            placeholder="可空"
+          />
         </el-form-item>
         <el-form-item label="org_id">
-          <el-input v-model="dialog.form.org" placeholder="可空" />
+          <el-input
+            v-model="dialog.form.org"
+            placeholder="可空"
+          />
         </el-form-item>
         <el-form-item label="user_id">
-          <el-input v-model="dialog.form.user" placeholder="可空" />
+          <el-input
+            v-model="dialog.form.user"
+            placeholder="可空"
+          />
         </el-form-item>
         <el-form-item label="每日上限">
-          <el-input-number v-model="dialog.form.daily_requests" :min="0" :max="999999" />
+          <el-input-number
+            v-model="dialog.form.daily_requests"
+            :min="0"
+            :max="999999"
+          />
           <span class="hint">0 表示不限制</span>
         </el-form-item>
         <el-form-item label="最大并发">
-          <el-input-number v-model="dialog.form.max_concurrency" :min="0" :max="1000" />
+          <el-input-number
+            v-model="dialog.form.max_concurrency"
+            :min="0"
+            :max="1000"
+          />
           <span class="hint">0 表示不限制</span>
         </el-form-item>
         <el-form-item label="并发 TTL(秒)">
-          <el-input-number v-model="dialog.form.concurrency_ttl_seconds" :min="10" :max="3600" />
+          <el-input-number
+            v-model="dialog.form.concurrency_ttl_seconds"
+            :min="10"
+            :max="3600"
+          />
         </el-form-item>
         <el-form-item label="actions(逗号分隔)">
           <el-input
@@ -91,12 +289,24 @@
           <el-switch v-model="dialog.form.is_enabled" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="dialog.form.notes" maxlength="255" show-word-limit />
+          <el-input
+            v-model="dialog.form.notes"
+            maxlength="255"
+            show-word-limit
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="dialog.saving" @click="save">保存</el-button>
+        <el-button @click="dialog.visible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="dialog.saving"
+          @click="save"
+        >
+          保存
+        </el-button>
       </template>
     </el-dialog>
   </div>

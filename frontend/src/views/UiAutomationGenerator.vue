@@ -1,9 +1,14 @@
 <template>
   <div class="page-wrap cyber-page ui-automation-page">
-    <el-card class="sys-page-head" shadow="never">
+    <el-card
+      class="sys-page-head"
+      shadow="never"
+    >
       <div class="sys-page-head__row">
         <div>
-          <h2 class="sys-page-head__title">AI 脚本生成工作区</h2>
+          <h2 class="sys-page-head__title">
+            AI 脚本生成工作区
+          </h2>
           <p class="sys-page-head__sub">
             输入目标URL和测试场景描述，AI将自动生成基于Unittest框架的UI自动化测试脚本
           </p>
@@ -13,13 +18,20 @@
 
     <div class="split-layout">
       <!-- 左侧：输入区域 -->
-      <el-card class="input-pane" shadow="never">
+      <el-card
+        class="input-pane"
+        shadow="never"
+      >
         <div class="pane-header">
-          <h3 class="pane-title">输入配置</h3>
+          <h3 class="pane-title">
+            输入配置
+          </h3>
         </div>
 
         <div class="form-section">
-          <div class="form-label">目标 URL</div>
+          <div class="form-label">
+            目标 URL
+          </div>
           <el-input
             v-model="targetUrl"
             placeholder="https://example.com"
@@ -29,7 +41,9 @@
         </div>
 
         <div class="form-section">
-          <div class="form-label">场景步骤描述</div>
+          <div class="form-label">
+            场景步骤描述
+          </div>
           <el-input
             v-model="scenarioSteps"
             type="textarea"
@@ -44,8 +58,8 @@
             type="primary"
             :loading="loading"
             :disabled="!canGenerate"
-            @click="handleGenerate"
             class="generate-btn"
+            @click="handleGenerate"
           >
             <span v-if="loading">生成中...</span>
             <span v-else>生成脚本</span>
@@ -54,36 +68,67 @@
       </el-card>
 
       <!-- 右侧：输出区域 -->
-      <el-card class="output-pane" shadow="never">
+      <el-card
+        class="output-pane"
+        shadow="never"
+      >
         <div class="pane-header">
-          <h3 class="pane-title">生成结果</h3>
+          <h3 class="pane-title">
+            生成结果
+          </h3>
           <el-button
             v-if="generatedCode"
             size="small"
-            @click="handleCopyCode"
             class="copy-btn"
+            @click="handleCopyCode"
           >
             {{ copyButtonText }}
           </el-button>
         </div>
 
-        <div v-if="errorMessage" class="error-message">
-          <el-alert type="error" :closable="false" show-icon>
-            <template #title>{{ errorMessage }}</template>
+        <div
+          v-if="errorMessage"
+          class="error-message"
+        >
+          <el-alert
+            type="error"
+            :closable="false"
+            show-icon
+          >
+            <template #title>
+              {{ errorMessage }}
+            </template>
           </el-alert>
         </div>
 
-        <div v-if="!generatedCode && !errorMessage && !loading" class="empty-state">
-          <div class="empty-icon">📝</div>
-          <p class="empty-text">填写左侧信息后点击"生成脚本"开始</p>
+        <div
+          v-if="!generatedCode && !errorMessage && !loading"
+          class="empty-state"
+        >
+          <div class="empty-icon">
+            📝
+          </div>
+          <p class="empty-text">
+            填写左侧信息后点击"生成脚本"开始
+          </p>
         </div>
 
-        <div v-if="loading" class="loading-state">
-          <el-icon class="is-loading"><Loading /></el-icon>
-          <p class="loading-text">AI 正在生成测试脚本...</p>
+        <div
+          v-if="loading"
+          class="loading-state"
+        >
+          <el-icon class="is-loading">
+            <Loading />
+          </el-icon>
+          <p class="loading-text">
+            AI 正在生成测试脚本...
+          </p>
         </div>
 
-        <pre v-if="generatedCode" class="code-output">{{ generatedCode }}</pre>
+        <pre
+          v-if="generatedCode"
+          class="code-output"
+        >{{ generatedCode }}</pre>
       </el-card>
     </div>
   </div>
@@ -162,7 +207,7 @@ const handleCopyCode = async () => {
 .sys-page-head {
   margin-bottom: 16px;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(6, 182, 212, 0.3);
 
   &__row {
     display: flex;
@@ -196,7 +241,7 @@ const handleCopyCode = async () => {
 .input-pane,
 .output-pane {
   background: #0f172a;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(6, 182, 212, 0.2);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -215,7 +260,7 @@ const handleCopyCode = async () => {
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+  border-bottom: 1px solid rgba(6, 182, 212, 0.2);
 }
 
 .pane-title {
@@ -226,12 +271,12 @@ const handleCopyCode = async () => {
 }
 
 .copy-btn {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.3);
   color: #60a5fa;
 
   &:hover {
-    background: rgba(59, 130, 246, 0.2);
+    background: rgba(6, 182, 212, 0.2);
     border-color: #60a5fa;
   }
 }
@@ -251,11 +296,11 @@ const handleCopyCode = async () => {
 .textarea-field {
   :deep(.el-input__wrapper) {
     background: #1e293b;
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(6, 182, 212, 0.2);
     box-shadow: none;
 
     &:hover {
-      border-color: rgba(59, 130, 246, 0.4);
+      border-color: rgba(6, 182, 212, 0.4);
     }
   }
 
@@ -271,14 +316,14 @@ const handleCopyCode = async () => {
 
   :deep(.el-textarea__inner) {
     background: #1e293b;
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(6, 182, 212, 0.2);
     color: #e2e8f0;
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 13px;
     line-height: 1.6;
 
     &:hover {
-      border-color: rgba(59, 130, 246, 0.4);
+      border-color: rgba(6, 182, 212, 0.4);
     }
 
     &:focus {
@@ -297,13 +342,13 @@ const handleCopyCode = async () => {
   height: 44px;
   font-size: 16px;
   font-weight: 600;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
   border: none;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
 
   &:hover {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+    background: linear-gradient(135deg, #0891b2 0%, #1d4ed8 100%);
+    box-shadow: 0 6px 16px rgba(6, 182, 212, 0.4);
   }
 
   &:disabled {
@@ -358,7 +403,7 @@ const handleCopyCode = async () => {
 .code-output {
   flex: 1;
   background: #1e293b;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(6, 182, 212, 0.2);
   border-radius: 6px;
   padding: 16px;
   margin: 0;
@@ -381,11 +426,11 @@ const handleCopyCode = async () => {
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(59, 130, 246, 0.3);
+    background: rgba(6, 182, 212, 0.3);
     border-radius: 4px;
 
     &:hover {
-      background: rgba(59, 130, 246, 0.5);
+      background: rgba(6, 182, 212, 0.5);
     }
   }
 }

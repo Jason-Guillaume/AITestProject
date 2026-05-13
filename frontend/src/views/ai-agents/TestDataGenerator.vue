@@ -1,15 +1,24 @@
 <template>
   <div class="ai-agent-page">
     <div class="agent-header">
-      <div class="agent-icon">🎲</div>
+      <div class="agent-icon">
+        🎲
+      </div>
       <div class="agent-info">
-        <h1 class="agent-title">AI 测试数据生成智能体</h1>
-        <p class="agent-subtitle">根据数据模型和业务规则，智能生成符合真实场景的测试数据</p>
+        <h1 class="agent-title">
+          AI 测试数据生成智能体
+        </h1>
+        <p class="agent-subtitle">
+          根据数据模型和业务规则，智能生成符合真实场景的测试数据
+        </p>
       </div>
     </div>
 
     <div class="agent-content">
-      <el-card class="feature-card" shadow="never">
+      <el-card
+        class="feature-card"
+        shadow="never"
+      >
         <h3>功能特性</h3>
         <ul>
           <li>🎯 数据智能生成</li>
@@ -19,7 +28,10 @@
         </ul>
       </el-card>
 
-      <el-card class="work-area" shadow="never">
+      <el-card
+        class="work-area"
+        shadow="never"
+      >
         <h3>工作区</h3>
         <el-empty description="功能开发中，敬请期待..." />
       </el-card>

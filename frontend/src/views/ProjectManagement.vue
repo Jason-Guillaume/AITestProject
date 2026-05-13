@@ -11,7 +11,11 @@
           @keyup.enter="loadProjects"
         >
           <template #append>
-            <el-button type="primary" class="pm-search-btn" @click="loadProjects">
+            <el-button
+              type="primary"
+              class="pm-search-btn"
+              @click="loadProjects"
+            >
               <el-icon><Search /></el-icon>
             </el-button>
           </template>
@@ -58,14 +62,26 @@
         >
           彻底删除（{{ selectedIds.length }}）
         </el-button>
-        <el-dropdown v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0" @command="onBatchStatusCmd">
-          <el-button type="primary" class="pm-batch-btn">
-            批量改状态 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        <el-dropdown
+          v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0"
+          @command="onBatchStatusCmd"
+        >
+          <el-button
+            type="primary"
+            class="pm-batch-btn"
+          >
+            批量改状态 <el-icon class="el-icon--right">
+              <ArrowDown />
+            </el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="in_progress">设为进行中</el-dropdown-item>
-              <el-dropdown-item command="completed">设为已完成</el-dropdown-item>
+              <el-dropdown-item command="in_progress">
+                设为进行中
+              </el-dropdown-item>
+              <el-dropdown-item command="completed">
+                设为已完成
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -76,7 +92,13 @@
         >
           导出选中
         </el-button>
-        <el-button v-if="isSelectMode" class="pm-batch-btn" @click="exportFiltered">导出当前筛选</el-button>
+        <el-button
+          v-if="isSelectMode"
+          class="pm-batch-btn"
+          @click="exportFiltered"
+        >
+          导出当前筛选
+        </el-button>
       </div>
     </div>
 
@@ -89,19 +111,34 @@
         :class="'hero-card--' + t.variant"
         @click="createFromTemplate(t)"
       >
-        <button type="button" class="hero-card__fab" @click.stop="createFromTemplate(t)">
+        <button
+          type="button"
+          class="hero-card__fab"
+          @click.stop="createFromTemplate(t)"
+        >
           <el-icon><Plus /></el-icon>
         </button>
         <div class="hero-card__icon-wrap">
-          <el-icon class="hero-card__icon" :size="26"><component :is="t.icon" /></el-icon>
+          <el-icon
+            class="hero-card__icon"
+            :size="26"
+          >
+            <component :is="t.icon" />
+          </el-icon>
         </div>
-        <div class="hero-card__title">{{ t.name }}</div>
-        <div class="hero-card__desc">{{ t.desc }}</div>
+        <div class="hero-card__title">
+          {{ t.name }}
+        </div>
+        <div class="hero-card__desc">
+          {{ t.desc }}
+        </div>
       </div>
     </div>
 
     <!-- 项目列表：三列卡片 -->
-    <div class="pm-section-title">项目列表</div>
+    <div class="pm-section-title">
+      项目列表
+    </div>
     <div class="pm-card-grid">
       <div
         v-for="p in filteredProjects"
@@ -113,7 +150,11 @@
         }"
         @click="onProjectCardClick(p)"
       >
-        <div v-if="isSelectMode" class="pm-card__select" @click.stop>
+        <div
+          v-if="isSelectMode"
+          class="pm-card__select"
+          @click.stop
+        >
           <button
             type="button"
             class="pm-card__select-btn"
@@ -122,7 +163,12 @@
             :aria-label="selectedIds.includes(p.id) ? '取消选择' : '选择项目'"
             @click.stop="toggleSelected(p.id, !selectedIds.includes(p.id))"
           >
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              aria-hidden="true"
+            >
               <path
                 d="M20 6L9 17l-5-5"
                 fill="none"
@@ -136,18 +182,38 @@
         </div>
         <div class="pm-card__head">
           <div class="pm-card__head-left">
-            <span class="pm-card__code-icon" aria-hidden="true">&lt;/&gt;</span>
-            <span class="pm-card__name" :title="p.project_name">{{ p.project_name }}</span>
+            <span
+              class="pm-card__code-icon"
+              aria-hidden="true"
+            >&lt;/&gt;</span>
+            <span
+              class="pm-card__name"
+              :title="p.project_name"
+            >{{ p.project_name }}</span>
           </div>
-          <el-tag :type="statusFor(p).type" effect="plain" round size="small" class="pm-card__status">
+          <el-tag
+            :type="statusFor(p).type"
+            effect="plain"
+            round
+            size="small"
+            class="pm-card__status"
+          >
             {{ statusFor(p).label }}
           </el-tag>
         </div>
 
         <div class="pm-card__body">
           <div class="pm-card__thumb">
-            <img v-if="isHttpUrl(p.icon)" :src="p.icon" class="thumb-img" alt="" />
-            <div v-else class="thumb-placeholder thumb-placeholder--empty">
+            <img
+              v-if="isHttpUrl(p.icon)"
+              :src="p.icon"
+              class="thumb-img"
+              alt=""
+            >
+            <div
+              v-else
+              class="thumb-placeholder thumb-placeholder--empty"
+            >
               {{ initials(p.project_name) }}
             </div>
           </div>
@@ -172,17 +238,60 @@
         </div>
 
         <div class="pm-card__foot">
-          <el-button type="primary" link @click.stop="editProject(p)">编辑</el-button>
-          <el-button link type="primary" @click.stop="openReleaseDialog(p)">版本发布</el-button>
-          <el-button link @click.stop="enterProject(p)">详情</el-button>
-          <el-button v-if="!isRecycleMode" link type="danger" @click.stop="delProject(p)">删除</el-button>
-          <el-button v-else link type="success" @click.stop="restoreProject(p)">恢复</el-button>
-          <el-button v-if="isRecycleMode" link type="danger" @click.stop="hardDeleteProject(p)">彻底删除</el-button>
+          <el-button
+            type="primary"
+            link
+            @click.stop="editProject(p)"
+          >
+            编辑
+          </el-button>
+          <el-button
+            link
+            type="primary"
+            @click.stop="openReleaseDialog(p)"
+          >
+            版本发布
+          </el-button>
+          <el-button
+            link
+            @click.stop="enterProject(p)"
+          >
+            详情
+          </el-button>
+          <el-button
+            v-if="!isRecycleMode"
+            link
+            type="danger"
+            @click.stop="delProject(p)"
+          >
+            删除
+          </el-button>
+          <el-button
+            v-else
+            link
+            type="success"
+            @click.stop="restoreProject(p)"
+          >
+            恢复
+          </el-button>
+          <el-button
+            v-if="isRecycleMode"
+            link
+            type="danger"
+            @click.stop="hardDeleteProject(p)"
+          >
+            彻底删除
+          </el-button>
         </div>
       </div>
 
-      <div class="pm-card pm-card--add" @click="openCreate">
-        <el-icon class="pm-card--add__icon"><Plus /></el-icon>
+      <div
+        class="pm-card pm-card--add"
+        @click="openCreate"
+      >
+        <el-icon class="pm-card--add__icon">
+          <Plus />
+        </el-icon>
         <span>新建项目</span>
       </div>
     </div>
@@ -193,12 +302,32 @@
       width="520px"
       destroy-on-close
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
-        <el-form-item label="项目名称" prop="project_name">
-          <el-input v-model="form.project_name" placeholder="请输入项目名称" />
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="96px"
+      >
+        <el-form-item
+          label="项目名称"
+          prop="project_name"
+        >
+          <el-input
+            v-model="form.project_name"
+            placeholder="请输入项目名称"
+          />
         </el-form-item>
-        <el-form-item label="父项目" prop="parent">
-          <el-select v-model="form.parent" placeholder="无（顶级项目）" clearable filterable class="w-full">
+        <el-form-item
+          label="父项目"
+          prop="parent"
+        >
+          <el-select
+            v-model="form.parent"
+            placeholder="无（顶级项目）"
+            clearable
+            filterable
+            class="w-full"
+          >
             <el-option
               v-for="opt in parentOptions"
               :key="opt.id"
@@ -207,28 +336,53 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="封面图" prop="icon">
+        <el-form-item
+          label="封面图"
+          prop="icon"
+        >
           <div class="pm-cover-upload">
             <input
               type="file"
               accept="image/*"
               class="pm-cover-file"
               @change="onCoverFileChange"
-            />
+            >
 
-            <div class="pm-cover-preview" v-if="coverPreviewUrl || form.icon">
-              <img :src="coverPreviewUrl || form.icon" alt="封面预览" />
+            <div
+              v-if="coverPreviewUrl || form.icon"
+              class="pm-cover-preview"
+            >
+              <img
+                :src="coverPreviewUrl || form.icon"
+                alt="封面预览"
+              >
             </div>
 
-            <div class="pm-cover-preview pm-cover-preview--empty" v-else>
+            <div
+              v-else
+              class="pm-cover-preview pm-cover-preview--empty"
+            >
               <span>未上传</span>
             </div>
           </div>
         </el-form-item>
-        <el-form-item label="项目状态" prop="project_status">
-          <el-select v-model="form.project_status" placeholder="请选择" class="w-full">
-            <el-option :value="STATUS_IN_PROGRESS" label="进行中" />
-            <el-option :value="STATUS_COMPLETED" label="已完成" />
+        <el-form-item
+          label="项目状态"
+          prop="project_status"
+        >
+          <el-select
+            v-model="form.project_status"
+            placeholder="请选择"
+            class="w-full"
+          >
+            <el-option
+              :value="STATUS_IN_PROGRESS"
+              label="进行中"
+            />
+            <el-option
+              :value="STATUS_COMPLETED"
+              label="已完成"
+            />
           </el-select>
         </el-form-item>
         <el-form-item
@@ -245,13 +399,29 @@
             class="w-full"
           />
         </el-form-item>
-        <el-form-item label="项目描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入项目描述" />
+        <el-form-item
+          label="项目描述"
+          prop="description"
+        >
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入项目描述"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitProject">确定</el-button>
+        <el-button @click="showCreateDialog = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="submitProject"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
 
@@ -265,29 +435,68 @@
     >
       <div class="cyber-page pm-release-dialog__body">
         <div class="pm-release-toolbar">
-          <el-button type="primary" size="small" @click="openReleaseCreate">
+          <el-button
+            type="primary"
+            size="small"
+            @click="openReleaseCreate"
+          >
             <el-icon><Plus /></el-icon>
             新建版本
           </el-button>
-          <el-button text type="primary" size="small" @click="goReleasePlanPage">缺陷管理 · 发布计划（全部）</el-button>
+          <el-button
+            text
+            type="primary"
+            size="small"
+            @click="goReleasePlanPage"
+          >
+            缺陷管理 · 发布计划（全部）
+          </el-button>
         </div>
         <p class="pm-release-hint">
           此处创建的版本会写入发布计划表并绑定当前项目；测试计划「版本」下拉、顶栏当前项目筛选与此一致。
         </p>
         <el-table
-          :data="projectReleases"
           v-loading="releaseLoading"
+          :data="projectReleases"
           size="small"
           class="pm-release-table admin-data-table"
         >
-          <el-table-column prop="version_no" label="版本号" min-width="112" width="112" align="left" show-overflow-tooltip />
-          <el-table-column prop="release_name" label="发布名称" min-width="160" align="left" show-overflow-tooltip />
-          <el-table-column label="计划发布日期" min-width="176" width="176" align="center" class-name="col-datetime">
-            <template #default="{ row }">{{ formatReleaseDate(row.release_date) }}</template>
-          </el-table-column>
-          <el-table-column label="状态" width="104" align="center">
+          <el-table-column
+            prop="version_no"
+            label="版本号"
+            min-width="112"
+            width="112"
+            align="left"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="release_name"
+            label="发布名称"
+            min-width="160"
+            align="left"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            label="计划发布日期"
+            min-width="176"
+            width="176"
+            align="center"
+            class-name="col-datetime"
+          >
             <template #default="{ row }">
-              <el-tag :type="releaseStatusTag(row.status)" size="small">
+              {{ formatReleaseDate(row.release_date) }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="状态"
+            width="104"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-tag
+                :type="releaseStatusTag(row.status)"
+                size="small"
+              >
                 {{ releaseStatusLabel(row.status) }}
               </el-tag>
             </template>
@@ -295,7 +504,9 @@
         </el-table>
       </div>
       <template #footer>
-        <el-button @click="releaseDialogVisible = false">关闭</el-button>
+        <el-button @click="releaseDialogVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 
@@ -307,14 +518,34 @@
       append-to-body
       class="cyber-dialog-dark"
     >
-      <el-form ref="releaseFormRef" :model="releaseForm" :rules="releaseRules" label-width="108px">
-        <el-form-item label="发布名称" prop="release_name">
-          <el-input v-model="releaseForm.release_name" placeholder="如 电商 2026Q1 迭代" />
+      <el-form
+        ref="releaseFormRef"
+        :model="releaseForm"
+        :rules="releaseRules"
+        label-width="108px"
+      >
+        <el-form-item
+          label="发布名称"
+          prop="release_name"
+        >
+          <el-input
+            v-model="releaseForm.release_name"
+            placeholder="如 电商 2026Q1 迭代"
+          />
         </el-form-item>
-        <el-form-item label="版本号" prop="version_no">
-          <el-input v-model="releaseForm.version_no" placeholder="如 V1.0.0" />
+        <el-form-item
+          label="版本号"
+          prop="version_no"
+        >
+          <el-input
+            v-model="releaseForm.version_no"
+            placeholder="如 V1.0.0"
+          />
         </el-form-item>
-        <el-form-item label="计划发布日期" prop="release_date">
+        <el-form-item
+          label="计划发布日期"
+          prop="release_date"
+        >
           <el-date-picker
             v-model="releaseForm.release_date"
             type="datetime"
@@ -325,8 +556,16 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="releaseFormVisible = false">取消</el-button>
-        <el-button type="primary" :loading="releaseSaving" @click="submitReleaseCreate">确定</el-button>
+        <el-button @click="releaseFormVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="releaseSaving"
+          @click="submitReleaseCreate"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>

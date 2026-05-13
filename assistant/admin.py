@@ -9,6 +9,11 @@ from assistant.ui_element_models import (
     UITestCase,
     UIActionStep
 )
+from assistant.keyword_driven_models import (
+    KWElementLocator,
+    KWTestCase,
+    KWActionStep,
+)
 
 
 @admin.register(UIModule)
@@ -49,3 +54,27 @@ class UIActionStepAdmin(admin.ModelAdmin):
     list_filter = ['test_case', 'action_type', 'create_time']
     search_fields = ['description', 'test_data']
     ordering = ['test_case', 'sequence']
+
+
+@admin.register(KWElementLocator)
+class KWElementLocatorAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'project', 'locator_type', 'locator_expression', 'create_time']
+    list_filter = ['project', 'locator_type', 'create_time']
+    search_fields = ['name', 'locator_expression', 'description']
+    ordering = ['project', 'id']
+
+
+@admin.register(KWTestCase)
+class KWTestCaseAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'project', 'status', 'base_url', 'create_time']
+    list_filter = ['project', 'status', 'create_time']
+    search_fields = ['name', 'description']
+    ordering = ['project', 'id']
+
+
+@admin.register(KWActionStep)
+class KWActionStepAdmin(admin.ModelAdmin):
+    list_display = ['id', 'test_case', 'step_order', 'action_type', 'element', 'enabled', 'create_time']
+    list_filter = ['test_case', 'action_type', 'enabled', 'create_time']
+    search_fields = ['description', 'action_value']
+    ordering = ['test_case', 'step_order']

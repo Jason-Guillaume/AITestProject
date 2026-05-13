@@ -1,13 +1,23 @@
 <template>
   <div class="cyber-page admin-list-page load-monitor-page">
-    <el-card class="admin-list-card" shadow="never">
+    <el-card
+      class="admin-list-card"
+      shadow="never"
+    >
       <template #header>
         <span class="card-title">业务链路 k6 压测与实时监控</span>
         <span class="card-sub muted">WebSocket 推送 QPS / P95 / 错误率，ECharts 动态折线</span>
       </template>
 
-      <el-form :model="form" label-width="120px" class="start-form">
-        <el-form-item label="API 用例 ID" required>
+      <el-form
+        :model="form"
+        label-width="120px"
+        class="start-form"
+      >
+        <el-form-item
+          label="API 用例 ID"
+          required
+        >
           <el-input
             v-model="form.caseIdsText"
             type="textarea"
@@ -16,35 +26,76 @@
           />
         </el-form-item>
         <el-form-item label="目标 Base URL">
-          <el-input v-model="form.target_base_url" clearable placeholder="相对路径用例必填，如 https://api.example.com" />
+          <el-input
+            v-model="form.target_base_url"
+            clearable
+            placeholder="相对路径用例必填，如 https://api.example.com"
+          />
         </el-form-item>
         <el-form-item label="vus">
-          <el-input-number v-model="form.vus" :min="1" :max="500" />
+          <el-input-number
+            v-model="form.vus"
+            :min="1"
+            :max="500"
+          />
         </el-form-item>
         <el-form-item label="持续时间">
-          <el-input v-model="form.duration" placeholder="30s / 5m / 1h" style="width: 160px" />
+          <el-input
+            v-model="form.duration"
+            placeholder="30s / 5m / 1h"
+            style="width: 160px"
+          />
         </el-form-item>
         <el-form-item label="AI 生成脚本">
           <el-switch v-model="form.use_ai" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="starting" @click="onStart">启动压测</el-button>
-          <el-button :disabled="!wsConnected" @click="disconnectWs">断开实时通道</el-button>
+          <el-button
+            type="primary"
+            :loading="starting"
+            @click="onStart"
+          >
+            启动压测
+          </el-button>
+          <el-button
+            :disabled="!wsConnected"
+            @click="disconnectWs"
+          >
+            断开实时通道
+          </el-button>
         </el-form-item>
       </el-form>
 
-      <el-alert v-if="runId" type="info" show-icon :closable="false" class="mb-3">
+      <el-alert
+        v-if="runId"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb-3"
+      >
         run_id：<code>{{ runId }}</code>；状态：<strong>{{ sessionStatus }}</strong>
-        <span v-if="wsConnected" class="ws-ok"> · WebSocket 已连接</span>
+        <span
+          v-if="wsConnected"
+          class="ws-ok"
+        > · WebSocket 已连接</span>
       </el-alert>
 
       <div class="charts-row">
-        <div ref="chartQpsRef" class="chart-box" />
-        <div ref="chartP95Ref" class="chart-box" />
+        <div
+          ref="chartQpsRef"
+          class="chart-box"
+        />
+        <div
+          ref="chartP95Ref"
+          class="chart-box"
+        />
       </div>
 
       <el-collapse v-if="lastFinal">
-        <el-collapse-item title="最终 summary（k6 --summary-export）" name="1">
+        <el-collapse-item
+          title="最终 summary（k6 --summary-export）"
+          name="1"
+        >
           <pre class="json-pre">{{ JSON.stringify(lastFinal, null, 2) }}</pre>
         </el-collapse-item>
       </el-collapse>

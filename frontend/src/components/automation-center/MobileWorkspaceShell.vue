@@ -1,7 +1,12 @@
 <template>
   <div class="mobile-workspace-shell">
-    <p class="mobile-workspace-shell__badge">Layout · Mobile</p>
-    <el-empty description="设备会话、Node 编排与录制流将挂载于此区域" :image-size="64" />
+    <p class="mobile-workspace-shell__badge">
+      Layout · Mobile
+    </p>
+    <el-empty
+      description="设备会话、Node 编排与录制流将挂载于此区域"
+      :image-size="64"
+    />
     <p class="mobile-workspace-shell__hint">
       Telemetry 与 Run Output 仍使用下方共用面板；平台切换不销毁终端单例。
     </p>

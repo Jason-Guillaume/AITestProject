@@ -26,7 +26,9 @@ function onTreeNodeClick(data: HubTreeNode) {
 
 <template>
   <div class="tree-pane">
-    <div class="tree-panel-head">API · Node Explorer</div>
+    <div class="tree-panel-head">
+      API · Node Explorer
+    </div>
     <div class="script-tree-scroll">
       <el-tree
         class="script-resource-tree"

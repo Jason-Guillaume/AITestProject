@@ -14,7 +14,9 @@
         :disabled="Boolean(item.disabled)"
         @click="emit('action', item.key, row)"
       >
-        <el-icon v-if="!item.loading && item.icon"><component :is="item.icon" /></el-icon>
+        <el-icon v-if="!item.loading && item.icon">
+          <component :is="item.icon" />
+        </el-icon>
       </el-button>
     </el-tooltip>
 
@@ -23,7 +25,10 @@
       trigger="click"
       @command="handleOverflowCommand"
     >
-      <el-button circle class="table-action-group__btn table-action-group__btn--more">
+      <el-button
+        circle
+        class="table-action-group__btn table-action-group__btn--more"
+      >
         <el-icon><MoreFilled /></el-icon>
       </el-button>
       <template #dropdown>

@@ -5,7 +5,9 @@ const mobilePackageName = defineModel<string>('mobilePackageName', { required: t
 
 <template>
   <div class="params-drawer__body">
-    <p class="params-drawer__hint">移动端执行上下文（占位）；Telemetry 接通后由设备服务回填。</p>
+    <p class="params-drawer__hint">
+      移动端执行上下文（占位）；Telemetry 接通后由设备服务回填。
+    </p>
     <div class="params-drawer__row params-drawer__row--top">
       <span class="params-drawer__label">Device</span>
       <el-select
@@ -15,7 +17,10 @@ const mobilePackageName = defineModel<string>('mobilePackageName', { required: t
         disabled
         placeholder="选择设备（占位）"
       >
-        <el-option label="— 暂无设备 —" value="" />
+        <el-option
+          label="— 暂无设备 —"
+          value=""
+        />
       </el-select>
     </div>
     <div class="params-drawer__row params-drawer__row--top">

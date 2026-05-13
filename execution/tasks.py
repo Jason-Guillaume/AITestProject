@@ -4,7 +4,7 @@ import uuid
 from typing import Any, Dict
 
 from celery import shared_task
-from celery import group
+from celery import group, chord
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
@@ -298,7 +298,7 @@ def run_test_report_execute(
         )
         for cid in api_ids
     )
-    results = jobs.apply_async().get(disable_sync_subtasks=False)
+    results = jobs.apply_async().get()
 
     passed = 0
     failed = 0
@@ -437,7 +437,7 @@ def run_scheduled_task(
             )
             for cid in api_ids
         )
-        results = jobs.apply_async().get(disable_sync_subtasks=False)
+        results = jobs.apply_async().get()
         for r in results:
             if r.get("skipped"):
                 api_failed += 1

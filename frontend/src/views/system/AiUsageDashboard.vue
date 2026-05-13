@@ -1,19 +1,47 @@
 <template>
   <div class="page-wrap cyber-page sys-admin-page ai-usage-page">
-    <el-card class="sys-page-head" shadow="never">
+    <el-card
+      class="sys-page-head"
+      shadow="never"
+    >
       <div class="sys-page-head__row">
         <div>
-          <h2 class="sys-page-head__title">AI 用量与审计</h2>
-          <p class="sys-page-head__sub">查看近 N 天调用汇总与最近审计事件（仅系统管理员）。</p>
+          <h2 class="sys-page-head__title">
+            AI 用量与审计
+          </h2>
+          <p class="sys-page-head__sub">
+            查看近 N 天调用汇总与最近审计事件（仅系统管理员）。
+          </p>
         </div>
         <div class="sys-page-head__actions">
-          <el-select v-model="days" size="default" style="width: 140px" @change="loadSummary">
-            <el-option label="近 3 天" :value="3" />
-            <el-option label="近 7 天" :value="7" />
-            <el-option label="近 14 天" :value="14" />
-            <el-option label="近 30 天" :value="30" />
+          <el-select
+            v-model="days"
+            size="default"
+            style="width: 140px"
+            @change="loadSummary"
+          >
+            <el-option
+              label="近 3 天"
+              :value="3"
+            />
+            <el-option
+              label="近 7 天"
+              :value="7"
+            />
+            <el-option
+              label="近 14 天"
+              :value="14"
+            />
+            <el-option
+              label="近 30 天"
+              :value="30"
+            />
           </el-select>
-          <el-button size="default" :loading="loading" @click="reloadAll">
+          <el-button
+            size="default"
+            :loading="loading"
+            @click="reloadAll"
+          >
             <el-icon><Refresh /></el-icon>
             刷新
           </el-button>
@@ -21,87 +49,233 @@
       </div>
     </el-card>
 
-    <div class="summary-grid" v-loading="summaryLoading">
-      <el-card class="summary-card" shadow="never" v-for="row in summaryRows" :key="row.action">
-        <div class="summary-card__title">{{ actionLabel(row.action) }}</div>
+    <div
+      v-loading="summaryLoading"
+      class="summary-grid"
+    >
+      <el-card
+        v-for="row in summaryRows"
+        :key="row.action"
+        class="summary-card"
+        shadow="never"
+      >
+        <div class="summary-card__title">
+          {{ actionLabel(row.action) }}
+        </div>
         <div class="summary-card__numbers">
           <div class="summary-metric">
-            <div class="summary-metric__label">总计</div>
-            <div class="summary-metric__value">{{ row.total }}</div>
+            <div class="summary-metric__label">
+              总计
+            </div>
+            <div class="summary-metric__value">
+              {{ row.total }}
+            </div>
           </div>
           <div class="summary-metric">
-            <div class="summary-metric__label">成功</div>
-            <div class="summary-metric__value ok">{{ row.success }}</div>
+            <div class="summary-metric__label">
+              成功
+            </div>
+            <div class="summary-metric__value ok">
+              {{ row.success }}
+            </div>
           </div>
           <div class="summary-metric">
-            <div class="summary-metric__label">失败</div>
-            <div class="summary-metric__value bad">{{ row.failed }}</div>
+            <div class="summary-metric__label">
+              失败
+            </div>
+            <div class="summary-metric__value bad">
+              {{ row.failed }}
+            </div>
           </div>
         </div>
       </el-card>
-      <el-empty v-if="!summaryRows.length && !summaryLoading" description="暂无汇总数据" :image-size="80" />
+      <el-empty
+        v-if="!summaryRows.length && !summaryLoading"
+        description="暂无汇总数据"
+        :image-size="80"
+      />
     </div>
 
-    <el-card class="sys-table-card" shadow="never">
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
       <div class="chart-head">
-        <div class="chart-head__title">调用趋势（按天）</div>
-        <div class="chart-head__sub">展示各 action 的总调用量趋势。</div>
+        <div class="chart-head__title">
+          调用趋势（按天）
+        </div>
+        <div class="chart-head__sub">
+          展示各 action 的总调用量趋势。
+        </div>
       </div>
-      <div ref="trendChartEl" class="ai-usage-chart" v-loading="metricsLoading" />
+      <div
+        ref="trendChartEl"
+        v-loading="metricsLoading"
+        class="ai-usage-chart"
+      />
     </el-card>
 
-    <el-card class="sys-table-card" shadow="never">
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
       <div class="chart-head">
-        <div class="chart-head__title">P95 耗时趋势（按天）</div>
-        <div class="chart-head__sub">按 action 展示每天的 P95 耗时（ms）。</div>
+        <div class="chart-head__title">
+          P95 耗时趋势（按天）
+        </div>
+        <div class="chart-head__sub">
+          按 action 展示每天的 P95 耗时（ms）。
+        </div>
       </div>
-      <div ref="p95ChartEl" class="ai-usage-chart" v-loading="trendLoading" />
+      <div
+        ref="p95ChartEl"
+        v-loading="trendLoading"
+        class="ai-usage-chart"
+      />
     </el-card>
 
-    <el-card class="sys-table-card" shadow="never">
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
       <div class="chart-head">
-        <div class="chart-head__title">耗时分布（P50 / P95）</div>
-        <div class="chart-head__sub">按 action 统计近 N 天请求耗时分位数（基于最新样本抽样）。</div>
+        <div class="chart-head__title">
+          耗时分布（P50 / P95）
+        </div>
+        <div class="chart-head__sub">
+          按 action 统计近 N 天请求耗时分位数（基于最新样本抽样）。
+        </div>
       </div>
-      <el-table :data="latencyRows" v-loading="metricsLoading" class="admin-data-table sys-enterprise-table" border>
+      <el-table
+        v-loading="metricsLoading"
+        :data="latencyRows"
+        class="admin-data-table sys-enterprise-table"
+        border
+      >
         <template #empty>
-          <el-empty description="暂无耗时数据" :image-size="78" />
+          <el-empty
+            description="暂无耗时数据"
+            :image-size="78"
+          />
         </template>
-        <el-table-column prop="action" label="动作" min-width="180">
+        <el-table-column
+          prop="action"
+          label="动作"
+          min-width="180"
+        >
           <template #default="{ row }">
-            <el-tag size="small" type="info" effect="plain">{{ actionLabel(row.action) }}</el-tag>
+            <el-tag
+              size="small"
+              type="info"
+              effect="plain"
+            >
+              {{ actionLabel(row.action) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="total" label="样本量" width="90" align="center" />
-        <el-table-column prop="avg_ms" label="均值(ms)" width="110" align="center" />
-        <el-table-column prop="p50_ms" label="P50(ms)" width="110" align="center" />
-        <el-table-column prop="p95_ms" label="P95(ms)" width="110" align="center" />
-        <el-table-column prop="max_ms" label="最大(ms)" width="110" align="center" />
+        <el-table-column
+          prop="total"
+          label="样本量"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="avg_ms"
+          label="均值(ms)"
+          width="110"
+          align="center"
+        />
+        <el-table-column
+          prop="p50_ms"
+          label="P50(ms)"
+          width="110"
+          align="center"
+        />
+        <el-table-column
+          prop="p95_ms"
+          label="P95(ms)"
+          width="110"
+          align="center"
+        />
+        <el-table-column
+          prop="max_ms"
+          label="最大(ms)"
+          width="110"
+          align="center"
+        />
       </el-table>
     </el-card>
 
-    <el-card class="sys-table-card" shadow="never">
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
       <div class="chart-head">
-        <div class="chart-head__title">Top 失败原因</div>
-        <div class="chart-head__sub">近 N 天失败事件的错误码/摘要 TopN。</div>
+        <div class="chart-head__title">
+          Top 失败原因
+        </div>
+        <div class="chart-head__sub">
+          近 N 天失败事件的错误码/摘要 TopN。
+        </div>
       </div>
-      <el-table :data="topErrors" v-loading="errorsLoading" class="admin-data-table sys-enterprise-table" border>
+      <el-table
+        v-loading="errorsLoading"
+        :data="topErrors"
+        class="admin-data-table sys-enterprise-table"
+        border
+      >
         <template #empty>
-          <el-empty description="暂无失败数据" :image-size="78" />
+          <el-empty
+            description="暂无失败数据"
+            :image-size="78"
+          />
         </template>
-        <el-table-column prop="action" label="动作" min-width="160">
+        <el-table-column
+          prop="action"
+          label="动作"
+          min-width="160"
+        >
           <template #default="{ row }">
-            <el-tag size="small" type="info" effect="plain">{{ actionLabel(row.action) }}</el-tag>
+            <el-tag
+              size="small"
+              type="info"
+              effect="plain"
+            >
+              {{ actionLabel(row.action) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="count" label="次数" width="90" align="center" />
-        <el-table-column prop="max_latency_ms" label="最大耗时" width="110" align="center" />
-        <el-table-column prop="error_code" label="错误码" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="error_message" label="错误摘要" min-width="260" show-overflow-tooltip />
+        <el-table-column
+          prop="count"
+          label="次数"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="max_latency_ms"
+          label="最大耗时"
+          width="110"
+          align="center"
+        />
+        <el-table-column
+          prop="error_code"
+          label="错误码"
+          min-width="160"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="error_message"
+          label="错误摘要"
+          min-width="260"
+          show-overflow-tooltip
+        />
       </el-table>
     </el-card>
 
-    <el-card class="sys-filter-card" shadow="never">
+    <el-card
+      class="sys-filter-card"
+      shadow="never"
+    >
       <div class="sys-toolbar">
         <div class="sys-toolbar__left">
           <el-date-picker
@@ -125,11 +299,28 @@
             style="width: 260px"
             @change="loadEvents"
           >
-            <el-option v-for="a in actionOptions" :key="a.value" :label="a.label" :value="a.value" />
+            <el-option
+              v-for="a in actionOptions"
+              :key="a.value"
+              :label="a.label"
+              :value="a.value"
+            />
           </el-select>
-          <el-select v-model="filters.success" clearable placeholder="结果" style="width: 160px" @change="loadEvents">
-            <el-option label="成功" value="true" />
-            <el-option label="失败" value="false" />
+          <el-select
+            v-model="filters.success"
+            clearable
+            placeholder="结果"
+            style="width: 160px"
+            @change="loadEvents"
+          >
+            <el-option
+              label="成功"
+              value="true"
+            />
+            <el-option
+              label="失败"
+              value="false"
+            />
           </el-select>
           <el-input
             v-model="filters.user_id"
@@ -145,53 +336,167 @@
             style="width: 200px"
             @keyup.enter="loadEvents"
           />
-          <el-select v-model="pageSize" style="width: 160px" @change="loadEvents">
-            <el-option label="最近 50 条" :value="50" />
-            <el-option label="最近 100 条" :value="100" />
-            <el-option label="最近 200 条" :value="200" />
+          <el-select
+            v-model="pageSize"
+            style="width: 160px"
+            @change="loadEvents"
+          >
+            <el-option
+              label="最近 50 条"
+              :value="50"
+            />
+            <el-option
+              label="最近 100 条"
+              :value="100"
+            />
+            <el-option
+              label="最近 200 条"
+              :value="200"
+            />
           </el-select>
         </div>
         <div class="sys-toolbar__right">
-          <el-button size="default" :disabled="exporting" :loading="exporting" @click="exportCsv">
+          <el-button
+            size="default"
+            :disabled="exporting"
+            :loading="exporting"
+            @click="exportCsv"
+          >
             导出 CSV
           </el-button>
-          <el-button size="default" :loading="eventsLoading" @click="loadEvents">查询</el-button>
+          <el-button
+            size="default"
+            :loading="eventsLoading"
+            @click="loadEvents"
+          >
+            查询
+          </el-button>
         </div>
       </div>
     </el-card>
 
-    <el-card class="sys-table-card" shadow="never">
-      <el-table :data="events" v-loading="eventsLoading" class="admin-data-table sys-enterprise-table" border>
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
+      <el-table
+        v-loading="eventsLoading"
+        :data="events"
+        class="admin-data-table sys-enterprise-table"
+        border
+      >
         <template #empty>
-          <el-empty description="暂无审计事件" :image-size="86" />
+          <el-empty
+            description="暂无审计事件"
+            :image-size="86"
+          />
         </template>
-        <el-table-column prop="created_at" label="时间" width="176" align="center">
-          <template #default="{ row }">{{ fmtTime(row.created_at) }}</template>
-        </el-table-column>
-        <el-table-column prop="action" label="动作" min-width="160" show-overflow-tooltip>
+        <el-table-column
+          prop="created_at"
+          label="时间"
+          width="176"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag size="small" type="info" effect="plain">{{ actionLabel(row.action) }}</el-tag>
+            {{ fmtTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column prop="success" label="结果" width="90" align="center">
+        <el-table-column
+          prop="action"
+          label="动作"
+          min-width="160"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
-            <el-tag size="small" :type="row.success ? 'success' : 'danger'" effect="plain">
+            <el-tag
+              size="small"
+              type="info"
+              effect="plain"
+            >
+              {{ actionLabel(row.action) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="success"
+          label="结果"
+          width="90"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-tag
+              size="small"
+              :type="row.success ? 'success' : 'danger'"
+              effect="plain"
+            >
               {{ row.success ? "成功" : "失败" }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status_code" label="状态码" width="90" align="center" />
-        <el-table-column prop="user_id" label="用户" width="90" align="center" />
-        <el-table-column prop="model_used" label="模型" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="test_type" label="类型" width="120" align="center" />
-        <el-table-column prop="module_id" label="模块" width="90" align="center">
-          <template #default="{ row }">{{ row.module_id ?? "—" }}</template>
+        <el-table-column
+          prop="status_code"
+          label="状态码"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="user_id"
+          label="用户"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="model_used"
+          label="模型"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="test_type"
+          label="类型"
+          width="120"
+          align="center"
+        />
+        <el-table-column
+          prop="module_id"
+          label="模块"
+          width="90"
+          align="center"
+        >
+          <template #default="{ row }">
+            {{ row.module_id ?? "—" }}
+          </template>
         </el-table-column>
-        <el-table-column prop="latency_ms" label="耗时(ms)" width="110" align="center" />
-        <el-table-column prop="cases_count" label="条数" width="80" align="center" />
-        <el-table-column prop="error_code" label="错误码" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="error_message" label="错误摘要" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="endpoint" label="接口" min-width="200" show-overflow-tooltip />
+        <el-table-column
+          prop="latency_ms"
+          label="耗时(ms)"
+          width="110"
+          align="center"
+        />
+        <el-table-column
+          prop="cases_count"
+          label="条数"
+          width="80"
+          align="center"
+        />
+        <el-table-column
+          prop="error_code"
+          label="错误码"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="error_message"
+          label="错误摘要"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="endpoint"
+          label="接口"
+          min-width="200"
+          show-overflow-tooltip
+        />
       </el-table>
     </el-card>
   </div>

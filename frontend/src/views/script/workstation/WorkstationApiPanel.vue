@@ -1,7 +1,9 @@
 <template>
   <div class="layout sw-cyber">
     <aside class="sw-cyber-panel col-tree">
-      <div class="panel-head sw-glow-text">场景 / 集合</div>
+      <div class="panel-head sw-glow-text">
+        场景 / 集合
+      </div>
       <el-tree
         :key="wb.apiTreeKey"
         class="tree"
@@ -14,42 +16,105 @@
     </aside>
     <div class="col-main">
       <div class="sw-cyber-panel is-active editor-block">
-        <p class="path sw-glow-text">{{ scenarioLabel }}</p>
+        <p class="path sw-glow-text">
+          {{ scenarioLabel }}
+        </p>
         <div class="monaco-box">
           <Suspense v-if="showMonaco">
             <template #default>
-              <MonacoEditor v-model="yamlModel" language="yaml" />
+              <MonacoEditor
+                v-model="yamlModel"
+                language="yaml"
+              />
             </template>
             <template #fallback>
-              <div class="monaco-ph">加载编辑器组件…</div>
+              <div class="monaco-ph">
+                加载编辑器组件…
+              </div>
             </template>
           </Suspense>
-          <div v-else class="monaco-ph">准备编辑器…</div>
+          <div
+            v-else
+            class="monaco-ph"
+          >
+            准备编辑器…
+          </div>
         </div>
       </div>
-      <el-tabs v-model="wb.mainTab" class="tabs">
-        <el-tab-pane label="断言与延迟" name="report">
+      <el-tabs
+        v-model="wb.mainTab"
+        class="tabs"
+      >
+        <el-tab-pane
+          label="断言与延迟"
+          name="report"
+        >
           <div class="metrics sw-cyber-panel">
-            <div class="metric"><span class="k">最近运行</span><span class="v sw-glow-text">{{ wb.apiLatest.runAt }}</span></div>
-            <div class="metric"><span class="k">断言</span><span class="v sw-glow-text">{{ wb.apiLatest.checksPct }}%</span></div>
-            <div class="metric"><span class="k">P95</span><span class="v sw-glow-text">{{ wb.apiLatest.p95 }}ms</span></div>
+            <div class="metric">
+              <span class="k">最近运行</span><span class="v sw-glow-text">{{ wb.apiLatest.runAt }}</span>
+            </div>
+            <div class="metric">
+              <span class="k">断言</span><span class="v sw-glow-text">{{ wb.apiLatest.checksPct }}%</span>
+            </div>
+            <div class="metric">
+              <span class="k">P95</span><span class="v sw-glow-text">{{ wb.apiLatest.p95 }}ms</span>
+            </div>
           </div>
-          <div ref="chartMount" class="chart sw-cyber-panel" />
-          <el-table :data="wb.apiReportRows" class="tbl" :border="false" size="small">
-            <el-table-column prop="name" label="步骤" />
-            <el-table-column prop="latency" label="ms" width="72" />
-            <el-table-column prop="ok" label="OK" width="56" />
+          <div
+            ref="chartMount"
+            class="chart sw-cyber-panel"
+          />
+          <el-table
+            :data="wb.apiReportRows"
+            class="tbl"
+            :border="false"
+            size="small"
+          >
+            <el-table-column
+              prop="name"
+              label="步骤"
+            />
+            <el-table-column
+              prop="latency"
+              label="ms"
+              width="72"
+            />
+            <el-table-column
+              prop="ok"
+              label="OK"
+              width="56"
+            />
           </el-table>
         </el-tab-pane>
-        <el-tab-pane label="终端" name="terminal">
+        <el-tab-pane
+          label="终端"
+          name="terminal"
+        >
           <div class="term sw-cyber-panel">
-            <div v-for="(line, i) in wb.mockTerminalLines" :key="i" class="line">{{ line }}</div>
-            <div v-if="wb.mockTerminalLines.length === 0" class="idle">$ 等待「跑场景」</div>
+            <div
+              v-for="(line, i) in wb.mockTerminalLines"
+              :key="i"
+              class="line"
+            >
+              {{ line }}
+            </div>
+            <div
+              v-if="wb.mockTerminalLines.length === 0"
+              class="idle"
+            >
+              $ 等待「跑场景」
+            </div>
           </div>
         </el-tab-pane>
       </el-tabs>
       <div class="sw-cyber-panel actions">
-        <el-button class="ghost-btn accent" :icon="VideoPlay" @click="wb.runApiMock">跑场景</el-button>
+        <el-button
+          class="ghost-btn accent"
+          :icon="VideoPlay"
+          @click="wb.runApiMock"
+        >
+          跑场景
+        </el-button>
       </div>
     </div>
   </div>

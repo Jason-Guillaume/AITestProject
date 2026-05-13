@@ -1,17 +1,34 @@
 <template>
   <div class="page-wrap cyber-page admin-list-page">
-    <el-card class="admin-list-card" shadow="never">
+    <el-card
+      class="admin-list-card"
+      shadow="never"
+    >
       <div class="admin-toolbar-row">
         <div class="admin-toolbar-row__left">
-          <el-button type="primary" @click="showDialog = true">
+          <el-button
+            type="primary"
+            @click="showDialog = true"
+          >
             <el-icon><Plus /></el-icon> 新增测试计划
           </el-button>
-          <el-button class="filter-btn" :type="isRecycleMode ? 'warning' : ''" @click="toggleRecycleMode">
+          <el-button
+            class="filter-btn"
+            :type="isRecycleMode ? 'warning' : ''"
+            @click="toggleRecycleMode"
+          >
             {{ isRecycleMode ? '返回列表' : '回收站' }}
           </el-button>
-          <el-button class="filter-btn" :type="isSelectMode ? 'info' : ''" @click="toggleSelectMode">
+          <el-button
+            class="filter-btn"
+            :type="isSelectMode ? 'info' : ''"
+            @click="toggleSelectMode"
+          >
             {{ isSelectMode ? '取消选择' : '选择' }}
-            <span v-if="isSelectMode && selectedIds.length" style="margin-left: 6px">（{{ selectedIds.length }}）</span>
+            <span
+              v-if="isSelectMode && selectedIds.length"
+              style="margin-left: 6px"
+            >（{{ selectedIds.length }}）</span>
           </el-button>
           <el-button
             v-if="isSelectMode && !isRecycleMode && selectedIds.length > 0"
@@ -65,53 +82,169 @@
             clearable
             class="search-input"
           >
-            <template #suffix><el-icon><Search /></el-icon></template>
+            <template #suffix>
+              <el-icon><Search /></el-icon>
+            </template>
           </el-input>
         </div>
       </div>
 
       <div class="admin-table-panel">
         <el-table
-          :data="filteredList"
           v-loading="loading"
+          :data="filteredList"
           stripe
           border
           class="admin-data-table"
           size="default"
           @selection-change="onSelectionChange"
         >
-          <el-table-column v-if="isSelectMode" type="selection" width="44" fixed="left" />
-          <el-table-column prop="plan_name" label="测试计划名称" min-width="168" align="left">
+          <el-table-column
+            v-if="isSelectMode"
+            type="selection"
+            width="44"
+            fixed="left"
+          />
+          <el-table-column
+            prop="plan_name"
+            label="测试计划名称"
+            min-width="168"
+            align="left"
+          >
             <template #default="{ row }">
-              <el-button link type="primary" @click="router.push(`/test-plan/${row.id}`)">{{ row.plan_name }}</el-button>
+              <el-button
+                link
+                type="primary"
+                @click="router.push(`/test-plan/${row.id}`)"
+              >
+                {{ row.plan_name }}
+              </el-button>
             </template>
           </el-table-column>
-          <el-table-column prop="id" label="ID" min-width="88" width="88" align="left" />
-          <el-table-column prop="iteration" label="关联迭代" min-width="112" align="center" show-overflow-tooltip />
-          <el-table-column prop="version" label="版本号" min-width="104" width="104" align="center" />
-          <el-table-column prop="environment" label="测试环境" min-width="112" width="112" align="center" />
-          <el-table-column prop="req_count" label="需求数" min-width="104" width="104" align="center" />
-          <el-table-column prop="case_count" label="用例数" min-width="104" width="104" align="center" />
-          <el-table-column label="用例覆盖率" min-width="120" width="120" align="center">
-            <template #default="{ row }">{{ row.coverage_rate }}%</template>
-          </el-table-column>
-          <el-table-column label="计划状态" min-width="120" width="120" align="center">
+          <el-table-column
+            prop="id"
+            label="ID"
+            min-width="88"
+            width="88"
+            align="left"
+          />
+          <el-table-column
+            prop="iteration"
+            label="关联迭代"
+            min-width="112"
+            align="center"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="version"
+            label="版本号"
+            min-width="104"
+            width="104"
+            align="center"
+          />
+          <el-table-column
+            prop="environment"
+            label="测试环境"
+            min-width="112"
+            width="112"
+            align="center"
+          />
+          <el-table-column
+            prop="req_count"
+            label="需求数"
+            min-width="104"
+            width="104"
+            align="center"
+          />
+          <el-table-column
+            prop="case_count"
+            label="用例数"
+            min-width="104"
+            width="104"
+            align="center"
+          />
+          <el-table-column
+            label="用例覆盖率"
+            min-width="120"
+            width="120"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag :type="planTagType(row.plan_status)" size="small">{{ planLabel(row.plan_status) }}</el-tag>
+              {{ row.coverage_rate }}%
             </template>
           </el-table-column>
-          <el-table-column label="测试进度" min-width="140" align="center">
+          <el-table-column
+            label="计划状态"
+            min-width="120"
+            width="120"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-progress :percentage="Number(row.pass_rate)" :color="progressColor(row.pass_rate)" :show-text="false" />
+              <el-tag
+                :type="planTagType(row.plan_status)"
+                size="small"
+              >
+                {{ planLabel(row.plan_status) }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="defect_count" label="缺陷数" min-width="104" width="104" align="center" />
-          <el-table-column prop="testers_display" label="测试人员" min-width="136" align="center" show-overflow-tooltip />
-          <el-table-column label="操作" min-width="200" width="200" fixed="right" align="center">
+          <el-table-column
+            label="测试进度"
+            min-width="140"
+            align="center"
+          >
             <template #default="{ row }">
-              <div v-if="isRecycleMode" class="recycle-row-actions">
-                <el-button link type="success" size="small" :disabled="isSelectMode" @click="restoreRow(row)">恢复</el-button>
-                <el-button link type="danger" size="small" :disabled="isSelectMode" @click="hardDeleteRow(row)">彻底删除</el-button>
+              <el-progress
+                :percentage="Number(row.pass_rate)"
+                :color="progressColor(row.pass_rate)"
+                :show-text="false"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="defect_count"
+            label="缺陷数"
+            min-width="104"
+            width="104"
+            align="center"
+          />
+          <el-table-column
+            prop="testers_display"
+            label="测试人员"
+            min-width="136"
+            align="center"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            label="操作"
+            min-width="200"
+            width="200"
+            fixed="right"
+            align="center"
+          >
+            <template #default="{ row }">
+              <div
+                v-if="isRecycleMode"
+                class="recycle-row-actions"
+              >
+                <el-button
+                  link
+                  type="success"
+                  size="small"
+                  :disabled="isSelectMode"
+                  @click="restoreRow(row)"
+                >
+                  恢复
+                </el-button>
+                <el-button
+                  link
+                  type="danger"
+                  size="small"
+                  :disabled="isSelectMode"
+                  @click="hardDeleteRow(row)"
+                >
+                  彻底删除
+                </el-button>
               </div>
               <TableActionGroup
                 v-else
@@ -136,23 +269,68 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="showDialog" title="新增测试计划" width="500px" class="cyber-dialog-dark">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
-        <el-form-item label="计划名称" prop="plan_name">
-          <el-input v-model="form.plan_name" placeholder="请输入计划名称" />
+    <el-dialog
+      v-model="showDialog"
+      title="新增测试计划"
+      width="500px"
+      class="cyber-dialog-dark"
+    >
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="90px"
+      >
+        <el-form-item
+          label="计划名称"
+          prop="plan_name"
+        >
+          <el-input
+            v-model="form.plan_name"
+            placeholder="请输入计划名称"
+          />
         </el-form-item>
-        <el-form-item label="关联迭代" prop="iteration">
-          <el-input v-model="form.iteration" placeholder="如 迭代2" />
+        <el-form-item
+          label="关联迭代"
+          prop="iteration"
+        >
+          <el-input
+            v-model="form.iteration"
+            placeholder="如 迭代2"
+          />
         </el-form-item>
-        <el-form-item label="测试环境" prop="environment">
-          <el-select v-model="form.environment" placeholder="请选择">
-            <el-option label="TEST" value="TEST" />
-            <el-option label="PROD" value="PROD" />
+        <el-form-item
+          label="测试环境"
+          prop="environment"
+        >
+          <el-select
+            v-model="form.environment"
+            placeholder="请选择"
+          >
+            <el-option
+              label="TEST"
+              value="TEST"
+            />
+            <el-option
+              label="PROD"
+              value="PROD"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="版本" prop="version">
-          <el-select v-model="form.version" placeholder="请选择版本">
-            <el-option v-for="r in releases" :key="r.id" :label="r.version_no" :value="r.id" />
+        <el-form-item
+          label="版本"
+          prop="version"
+        >
+          <el-select
+            v-model="form.version"
+            placeholder="请选择版本"
+          >
+            <el-option
+              v-for="r in releases"
+              :key="r.id"
+              :label="r.version_no"
+              :value="r.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="测试人员">
@@ -174,16 +352,37 @@
           </el-select>
         </el-form-item>
         <el-form-item label="测试周期">
-          <el-date-picker v-model="form.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" />
+          <el-date-picker
+            v-model="form.dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            value-format="YYYY-MM-DD"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submit">确定</el-button>
+        <el-button @click="showDialog = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="submit"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="batchUpdateVisible" title="批量修改计划状态" width="420px" class="cyber-dialog-dark" destroy-on-close>
+    <el-dialog
+      v-model="batchUpdateVisible"
+      title="批量修改计划状态"
+      width="420px"
+      class="cyber-dialog-dark"
+      destroy-on-close
+    >
       <el-alert
         type="warning"
         :closable="false"
@@ -193,15 +392,29 @@
       />
       <el-form label-width="110px">
         <el-form-item label="目标状态">
-          <el-select v-model="batchStatus" placeholder="请选择">
-            <el-option label="未开始" :value="1" />
-            <el-option label="进行中" :value="2" />
-            <el-option label="已完成" :value="3" />
+          <el-select
+            v-model="batchStatus"
+            placeholder="请选择"
+          >
+            <el-option
+              label="未开始"
+              :value="1"
+            />
+            <el-option
+              label="进行中"
+              :value="2"
+            />
+            <el-option
+              label="已完成"
+              :value="3"
+            />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="batchUpdateVisible = false">取消</el-button>
+        <el-button @click="batchUpdateVisible = false">
+          取消
+        </el-button>
         <el-button
           type="primary"
           :loading="batchUpdating"

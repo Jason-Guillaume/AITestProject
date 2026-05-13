@@ -1,19 +1,30 @@
 <template>
   <div class="analysis-lab analysis-lab--cyber">
     <header class="analysis-lab__hero glass-panel">
-      <h1 class="analysis-lab__title">Analysis Lab</h1>
+      <h1 class="analysis-lab__title">
+        Analysis Lab
+      </h1>
       <p class="analysis-lab__lead">
         多态报告视图 · Node Step Flow · Media Evidence · AI Diagnostics（与指挥中心 Telemetry / Artifacts 联动）
       </p>
     </header>
     <section class="analysis-lab__grid">
-      <el-card class="analysis-lab__card" shadow="never">
-        <template #header>入口</template>
+      <el-card
+        class="analysis-lab__card"
+        shadow="never"
+      >
+        <template #header>
+          入口
+        </template>
         <p class="analysis-lab__hint">
           从自动化指挥中心一次 Telemetry 运行结束后，可使用
           <strong>[View Depth Report]</strong> 携带执行记录 ID 进入深度报告。
         </p>
-        <el-button type="primary" plain @click="$router.push('/analysis-lab/reports/demo')">
+        <el-button
+          type="primary"
+          plain
+          @click="$router.push('/analysis-lab/reports/demo')"
+        >
           打开示例多态布局（demo）
         </el-button>
       </el-card>

@@ -3,42 +3,96 @@
     <!-- 标题栏 -->
     <div class="detail-header">
       <div class="detail-header__left">
-        <h2 class="design-title">{{ detail.design_name || 'XXXX测试设计' }}</h2>
+        <h2 class="design-title">
+          {{ detail.design_name || 'XXXX测试设计' }}
+        </h2>
         <span class="update-tip">最近更新：{{ detail.updater_name }} {{ formatDate(detail.update_time) }}</span>
       </div>
       <div class="detail-header__right">
-        <el-button size="small" @click="router.push('/test-design')">
+        <el-button
+          size="small"
+          @click="router.push('/test-design')"
+        >
           <el-icon><EditPen /></el-icon> 编辑信息
         </el-button>
         <el-button size="small">
           <el-icon><CopyDocument /></el-icon> 复制
         </el-button>
-        <el-button size="small" type="danger" @click="removeDesign">
+        <el-button
+          size="small"
+          type="danger"
+          @click="removeDesign"
+        >
           <el-icon><Delete /></el-icon> 删除
         </el-button>
       </div>
     </div>
 
     <!-- Tabs -->
-    <el-tabs v-model="activeTab" class="detail-tabs">
-      <el-tab-pane label="设计测试内容" name="design">
+    <el-tabs
+      v-model="activeTab"
+      class="detail-tabs"
+    >
+      <el-tab-pane
+        label="设计测试内容"
+        name="design"
+      >
         <div class="design-toolbar">
           <div class="design-toolbar__left">
-            <el-button size="small"><el-icon><RefreshLeft /></el-icon></el-button>
-            <el-button size="small"><el-icon><RefreshRight /></el-icon></el-button>
-            <el-button size="small"><el-icon><Upload /></el-icon> 上传</el-button>
-            <el-button size="small"><el-icon><Download /></el-icon> 下载</el-button>
+            <el-button size="small">
+              <el-icon><RefreshLeft /></el-icon>
+            </el-button>
+            <el-button size="small">
+              <el-icon><RefreshRight /></el-icon>
+            </el-button>
+            <el-button size="small">
+              <el-icon><Upload /></el-icon> 上传
+            </el-button>
+            <el-button size="small">
+              <el-icon><Download /></el-icon> 下载
+            </el-button>
           </div>
           <div class="design-toolbar__right">
-            <el-input v-model="caseSearch" placeholder="请输入测试用例" clearable size="small" style="width:200px" />
-            <el-select v-model="aiModel" size="small" style="width:140px">
-              <el-option label="文心大模型5.0" value="wenxin" />
-              <el-option label="GPT-4o" value="gpt4o" />
+            <el-input
+              v-model="caseSearch"
+              placeholder="请输入测试用例"
+              clearable
+              size="small"
+              style="width:200px"
+            />
+            <el-select
+              v-model="aiModel"
+              size="small"
+              style="width:140px"
+            >
+              <el-option
+                label="文心大模型5.0"
+                value="wenxin"
+              />
+              <el-option
+                label="GPT-4o"
+                value="gpt4o"
+              />
             </el-select>
-            <el-button type="primary" size="small" @click="aiGenerate">AI生成用例</el-button>
-            <el-button size="small" @click="toPlan">转测试计划</el-button>
+            <el-button
+              type="primary"
+              size="small"
+              @click="aiGenerate"
+            >
+              AI生成用例
+            </el-button>
+            <el-button
+              size="small"
+              @click="toPlan"
+            >
+              转测试计划
+            </el-button>
             <el-dropdown size="small">
-              <el-button size="small">历史记录<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+              <el-button size="small">
+                历史记录<el-icon class="el-icon--right">
+                  <ArrowDown />
+                </el-icon>
+              </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item>查看历史版本</el-dropdown-item>
@@ -47,7 +101,11 @@
             </el-dropdown>
           </div>
         </div>
-        <el-checkbox v-model="onlyUnreviewed" label="只展示未归档用例" style="margin:8px 0" />
+        <el-checkbox
+          v-model="onlyUnreviewed"
+          label="只展示未归档用例"
+          style="margin:8px 0"
+        />
 
         <!-- 树形内容 -->
         <div class="tree-wrap">
@@ -60,11 +118,20 @@
           >
             <template #default="{ node, data }">
               <span class="tree-node">
-                <span class="node-tag" :class="`tag--${data.type}`">{{ typeLabel(data.type) }}</span>
+                <span
+                  class="node-tag"
+                  :class="`tag--${data.type}`"
+                >{{ typeLabel(data.type) }}</span>
                 <span class="node-label">{{ data.label }}</span>
                 <span class="node-actions">
-                  <el-icon class="node-icon" @click.stop="addChild(data)"><Plus /></el-icon>
-                  <el-icon class="node-icon" @click.stop="editNode(data)"><Edit /></el-icon>
+                  <el-icon
+                    class="node-icon"
+                    @click.stop="addChild(data)"
+                  ><Plus /></el-icon>
+                  <el-icon
+                    class="node-icon"
+                    @click.stop="editNode(data)"
+                  ><Edit /></el-icon>
                 </span>
               </span>
             </template>
@@ -72,11 +139,17 @@
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="评审测试设计" name="review">
+      <el-tab-pane
+        label="评审测试设计"
+        name="review"
+      >
         <el-empty description="暂无评审记录" />
       </el-tab-pane>
 
-      <el-tab-pane label="执行测试用例" name="execute">
+      <el-tab-pane
+        label="执行测试用例"
+        name="execute"
+      >
         <el-empty description="请先关联测试计划" />
       </el-tab-pane>
     </el-tabs>

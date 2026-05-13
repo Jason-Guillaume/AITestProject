@@ -2,16 +2,37 @@
   <div class="page-wrap defect-list--cyber cyber-page">
     <div class="page-toolbar defect-toolbar">
       <div class="defect-toolbar__actions">
-        <el-button type="default" size="default" @click="router.push('/defect/board')">任务看板</el-button>
-        <el-button type="primary" size="default" @click="router.push('/defect/detail')">
+        <el-button
+          type="default"
+          size="default"
+          @click="router.push('/defect/board')"
+        >
+          任务看板
+        </el-button>
+        <el-button
+          type="primary"
+          size="default"
+          @click="router.push('/defect/detail')"
+        >
           <el-icon><Plus /></el-icon> 新增缺陷
         </el-button>
-        <el-button class="filter-btn" :type="isRecycleMode ? 'warning' : ''" @click="toggleRecycleMode">
+        <el-button
+          class="filter-btn"
+          :type="isRecycleMode ? 'warning' : ''"
+          @click="toggleRecycleMode"
+        >
           {{ isRecycleMode ? '返回列表' : '回收站' }}
         </el-button>
-        <el-button class="filter-btn" :type="isSelectMode ? 'info' : ''" @click="toggleSelectMode">
+        <el-button
+          class="filter-btn"
+          :type="isSelectMode ? 'info' : ''"
+          @click="toggleSelectMode"
+        >
           {{ isSelectMode ? '取消选择' : '选择' }}
-          <span v-if="isSelectMode && selectedIds.length" style="margin-left: 6px">（{{ selectedIds.length }}）</span>
+          <span
+            v-if="isSelectMode && selectedIds.length"
+            style="margin-left: 6px"
+          >（{{ selectedIds.length }}）</span>
         </el-button>
 
         <el-button
@@ -43,22 +64,76 @@
         </el-button>
       </div>
       <div class="defect-toolbar__filters">
-        <el-select v-model="filters.severity" placeholder="严重程度" clearable size="default" class="filter-select filter-select--severity" @change="loadList">
-          <el-option label="致命" :value="1" />
-          <el-option label="严重" :value="2" />
-          <el-option label="一般" :value="3" />
-          <el-option label="建议" :value="4" />
+        <el-select
+          v-model="filters.severity"
+          placeholder="严重程度"
+          clearable
+          size="default"
+          class="filter-select filter-select--severity"
+          @change="loadList"
+        >
+          <el-option
+            label="致命"
+            :value="1"
+          />
+          <el-option
+            label="严重"
+            :value="2"
+          />
+          <el-option
+            label="一般"
+            :value="3"
+          />
+          <el-option
+            label="建议"
+            :value="4"
+          />
         </el-select>
-        <el-select v-model="filters.status" placeholder="缺陷状态" clearable size="default" class="filter-select filter-select--status" @change="loadList">
-          <el-option label="新缺陷" :value="1" />
-          <el-option label="处理中" :value="2" />
-          <el-option label="已拒绝" :value="3" />
-          <el-option label="已关闭" :value="4" />
+        <el-select
+          v-model="filters.status"
+          placeholder="缺陷状态"
+          clearable
+          size="default"
+          class="filter-select filter-select--status"
+          @change="loadList"
+        >
+          <el-option
+            label="新缺陷"
+            :value="1"
+          />
+          <el-option
+            label="处理中"
+            :value="2"
+          />
+          <el-option
+            label="已拒绝"
+            :value="3"
+          />
+          <el-option
+            label="已关闭"
+            :value="4"
+          />
         </el-select>
-        <el-select v-model="filters.priority" placeholder="优先级" clearable size="default" class="filter-select filter-select--priority" @change="loadList">
-          <el-option label="高" :value="1" />
-          <el-option label="中" :value="2" />
-          <el-option label="低" :value="3" />
+        <el-select
+          v-model="filters.priority"
+          placeholder="优先级"
+          clearable
+          size="default"
+          class="filter-select filter-select--priority"
+          @change="loadList"
+        >
+          <el-option
+            label="高"
+            :value="1"
+          />
+          <el-option
+            label="中"
+            :value="2"
+          />
+          <el-option
+            label="低"
+            :value="3"
+          />
         </el-select>
         <el-input
           v-model="filters.keyword"
@@ -68,47 +143,150 @@
           class="filter-search"
           @keyup.enter="loadList"
         >
-          <template #suffix><el-icon><Search /></el-icon></template>
+          <template #suffix>
+            <el-icon><Search /></el-icon>
+          </template>
         </el-input>
       </div>
     </div>
 
     <div class="table-card cyber-table-panel">
-      <el-table class="defect-table--cyber admin-data-table" :data="list" v-loading="loading" @selection-change="onSelectionChange">
+      <el-table
+        v-loading="loading"
+        class="defect-table--cyber admin-data-table"
+        :data="list"
+        @selection-change="onSelectionChange"
+      >
         <template #empty>
-          <el-empty description="暂无缺陷数据" :image-size="88" />
+          <el-empty
+            description="暂无缺陷数据"
+            :image-size="88"
+          />
         </template>
-        <el-table-column v-if="isSelectMode" type="selection" width="48" align="center" />
-        <el-table-column prop="defect_no" label="缺陷ID" min-width="100" width="100" align="left" />
-        <el-table-column prop="defect_name" label="缺陷名称" min-width="168" align="left" show-overflow-tooltip>
+        <el-table-column
+          v-if="isSelectMode"
+          type="selection"
+          width="48"
+          align="center"
+        />
+        <el-table-column
+          prop="defect_no"
+          label="缺陷ID"
+          min-width="100"
+          width="100"
+          align="left"
+        />
+        <el-table-column
+          prop="defect_name"
+          label="缺陷名称"
+          min-width="168"
+          align="left"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click="router.push(`/defect/detail/${row.id}`)">{{ row.defect_name }}</el-button>
+            <el-button
+              link
+              type="primary"
+              @click="router.push(`/defect/detail/${row.id}`)"
+            >
+              {{ row.defect_name }}
+            </el-button>
           </template>
         </el-table-column>
-        <el-table-column prop="release_version_no" label="发布版本" min-width="112" width="112" align="center" />
-        <el-table-column label="严重程度" width="90" align="center">
+        <el-table-column
+          prop="release_version_no"
+          label="发布版本"
+          min-width="112"
+          width="112"
+          align="center"
+        />
+        <el-table-column
+          label="严重程度"
+          width="90"
+          align="center"
+        >
           <template #default="{ row }">
             <span :class="`severity-${row.severity}`">{{ severityLabel(row.severity) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="优先级" width="70" align="center">
-          <template #default="{ row }">{{ priorityLabel(row.priority) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="90" align="center">
+        <el-table-column
+          label="优先级"
+          width="70"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+            {{ priorityLabel(row.priority) }}
           </template>
         </el-table-column>
-        <el-table-column prop="handler_name" label="处理人" min-width="104" width="104" align="center" show-overflow-tooltip />
-        <el-table-column prop="creator_name" label="创建人" min-width="104" width="104" align="center" show-overflow-tooltip />
-        <el-table-column label="创建时间" min-width="176" width="176" align="center" class-name="col-datetime">
-          <template #default="{ row }">{{ formatDate(row.create_time) }}</template>
+        <el-table-column
+          label="状态"
+          width="90"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-tag
+              :type="statusTagType(row.status)"
+              size="small"
+            >
+              {{ statusLabel(row.status) }}
+            </el-tag>
+          </template>
         </el-table-column>
-        <el-table-column v-if="isRecycleMode" label="操作" min-width="160" width="160" fixed="right" align="center">
+        <el-table-column
+          prop="handler_name"
+          label="处理人"
+          min-width="104"
+          width="104"
+          align="center"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="creator_name"
+          label="创建人"
+          min-width="104"
+          width="104"
+          align="center"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="创建时间"
+          min-width="176"
+          width="176"
+          align="center"
+          class-name="col-datetime"
+        >
+          <template #default="{ row }">
+            {{ formatDate(row.create_time) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="isRecycleMode"
+          label="操作"
+          min-width="160"
+          width="160"
+          fixed="right"
+          align="center"
+        >
           <template #default="{ row }">
             <div class="recycle-row-actions">
-              <el-button link type="success" size="small" :disabled="isSelectMode" @click="restoreRow(row)">恢复</el-button>
-              <el-button link type="danger" size="small" :disabled="isSelectMode" @click="hardDeleteRow(row)">彻底删除</el-button>
+              <el-button
+                link
+                type="success"
+                size="small"
+                :disabled="isSelectMode"
+                @click="restoreRow(row)"
+              >
+                恢复
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                size="small"
+                :disabled="isSelectMode"
+                @click="hardDeleteRow(row)"
+              >
+                彻底删除
+              </el-button>
             </div>
           </template>
         </el-table-column>

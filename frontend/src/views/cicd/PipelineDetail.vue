@@ -9,16 +9,31 @@
         </h1>
         <p class="cicd-detail__meta text-sm text-slate-400">
           ID {{ pipelineId }}
-          <template v-if="pipeline?.name"> · {{ pipeline.name }}</template>
+          <template v-if="pipeline?.name">
+            · {{ pipeline.name }}
+          </template>
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <el-button size="small" class="!bg-slate-800 !border-slate-600" @click="goBack">
-          <el-icon class="el-icon--left"><ArrowLeft /></el-icon>
+        <el-button
+          size="small"
+          class="!bg-slate-800 !border-slate-600"
+          @click="goBack"
+        >
+          <el-icon class="el-icon--left">
+            <ArrowLeft />
+          </el-icon>
           返回列表
         </el-button>
-        <el-button type="primary" size="small" :loading="triggering" @click="onTrigger">
-          <el-icon class="el-icon--left"><VideoPlay /></el-icon>
+        <el-button
+          type="primary"
+          size="small"
+          :loading="triggering"
+          @click="onTrigger"
+        >
+          <el-icon class="el-icon--left">
+            <VideoPlay />
+          </el-icon>
           立即执行
         </el-button>
       </div>
@@ -28,15 +43,27 @@
       v-loading="loading"
       class="rounded-xl border border-cyan-500/15 bg-gradient-to-br from-slate-950/95 via-slate-900/90 to-slate-950/95 p-4 shadow-[0_0_32px_rgba(0,0,0,0.45)]"
     >
-      <div v-if="!loading && !logText && !loadError" class="py-10">
-        <el-empty description="暂无运行日志：可先返回列表「立即执行」或确认远端 last_run / run 字段" :image-size="80" />
+      <div
+        v-if="!loading && !logText && !loadError"
+        class="py-10"
+      >
+        <el-empty
+          description="暂无运行日志：可先返回列表「立即执行」或确认远端 last_run / run 字段"
+          :image-size="80"
+        />
       </div>
-      <el-alert v-if="loadError" type="warning" :closable="false" show-icon class="mb-3" :title="loadError" />
+      <el-alert
+        v-if="loadError"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="mb-3"
+        :title="loadError"
+      />
       <pre
         v-if="logText"
         class="cicd-detail__log mt-0 max-h-[min(70vh,720px)] overflow-auto rounded-lg border border-slate-700/80 bg-slate-950/90 p-4 text-[13px] leading-relaxed text-slate-200 shadow-inner"
-        >{{ logText }}</pre
-      >
+      >{{ logText }}</pre>
     </section>
   </div>
 </template>

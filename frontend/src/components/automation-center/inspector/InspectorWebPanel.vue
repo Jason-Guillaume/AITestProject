@@ -1,7 +1,9 @@
 <template>
   <div class="inspector-web-panel">
     <section class="inspector-block">
-      <h4 class="inspector-block__h">Browser Config</h4>
+      <h4 class="inspector-block__h">
+        Browser Config
+      </h4>
       <el-select
         :model-value="browserType"
         size="small"
@@ -9,13 +11,24 @@
         :disabled="executeLoading"
         @update:model-value="emit('update:browserType', $event)"
       >
-        <el-option label="Chrome" value="chrome" />
-        <el-option label="Edge" value="edge" />
-        <el-option label="Firefox" value="firefox" />
+        <el-option
+          label="Chrome"
+          value="chrome"
+        />
+        <el-option
+          label="Edge"
+          value="edge"
+        />
+        <el-option
+          label="Firefox"
+          value="firefox"
+        />
       </el-select>
     </section>
     <section class="inspector-block">
-      <h4 class="inspector-block__h">Headless</h4>
+      <h4 class="inspector-block__h">
+        Headless
+      </h4>
       <div class="inspector-web-panel__row">
         <span class="inspector-web-panel__hint">Telemetry 浏览器进程形态</span>
         <el-switch
@@ -31,8 +44,12 @@
     </section>
     <el-divider class="inspector-divider" />
     <section class="inspector-block inspector-block--element-tools">
-      <h4 class="inspector-block__h">元素校验工具</h4>
-      <p class="inspector-block__desc">选择器探测（对接 DOM / POM 前为占位）。</p>
+      <h4 class="inspector-block__h">
+        元素校验工具
+      </h4>
+      <p class="inspector-block__desc">
+        选择器探测（对接 DOM / POM 前为占位）。
+      </p>
       <el-input
         :model-value="elementProbeSelector"
         size="small"

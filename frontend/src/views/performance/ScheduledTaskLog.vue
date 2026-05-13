@@ -1,6 +1,9 @@
 <template>
   <div class="cyber-page admin-list-page scheduled-task-log-page">
-    <el-card class="admin-list-card" shadow="never">
+    <el-card
+      class="admin-list-card"
+      shadow="never"
+    >
       <div class="admin-toolbar-row">
         <div class="admin-toolbar-row__left">
           <el-select
@@ -23,10 +26,22 @@
             placeholder="按状态筛选"
             style="width: 160px"
           >
-            <el-option label="执行中" value="running" />
-            <el-option label="成功" value="success" />
-            <el-option label="失败" value="failed" />
-            <el-option label="部分成功" value="partial" />
+            <el-option
+              label="执行中"
+              value="running"
+            />
+            <el-option
+              label="成功"
+              value="success"
+            />
+            <el-option
+              label="失败"
+              value="failed"
+            />
+            <el-option
+              label="部分成功"
+              value="partial"
+            />
           </el-select>
           <el-input
             v-model="filters.message"
@@ -35,8 +50,19 @@
             style="width: 220px"
             @keyup.enter="onSearch"
           />
-          <el-button type="primary" :loading="loading" @click="onSearch">查询</el-button>
-          <el-button :disabled="loading" @click="onReset">重置</el-button>
+          <el-button
+            type="primary"
+            :loading="loading"
+            @click="onSearch"
+          >
+            查询
+          </el-button>
+          <el-button
+            :disabled="loading"
+            @click="onReset"
+          >
+            重置
+          </el-button>
           <el-button
             type="danger"
             plain
@@ -55,7 +81,12 @@
           >
             按筛选清理
           </el-button>
-          <el-button type="success" plain :disabled="rows.length === 0" @click="exportCurrentRowsJson">
+          <el-button
+            type="success"
+            plain
+            :disabled="rows.length === 0"
+            @click="exportCurrentRowsJson"
+          >
             导出当前页 JSON
           </el-button>
         </div>
@@ -69,23 +100,71 @@
         class="admin-data-table"
         @selection-change="onSelectionChange"
       >
-        <el-table-column type="selection" width="44" fixed="left" />
-        <el-table-column prop="id" label="日志ID" width="90" align="center" />
-        <el-table-column prop="scheduled_task" label="任务ID" width="100" align="center" />
-        <el-table-column prop="trigger_time" label="触发时间" min-width="170" />
-        <el-table-column prop="start_time" label="开始时间" min-width="170" />
-        <el-table-column prop="end_time" label="结束时间" min-width="170" />
-        <el-table-column label="状态" width="110" align="center">
+        <el-table-column
+          type="selection"
+          width="44"
+          fixed="left"
+        />
+        <el-table-column
+          prop="id"
+          label="日志ID"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="scheduled_task"
+          label="任务ID"
+          width="100"
+          align="center"
+        />
+        <el-table-column
+          prop="trigger_time"
+          label="触发时间"
+          min-width="170"
+        />
+        <el-table-column
+          prop="start_time"
+          label="开始时间"
+          min-width="170"
+        />
+        <el-table-column
+          prop="end_time"
+          label="结束时间"
+          min-width="170"
+        />
+        <el-table-column
+          label="状态"
+          width="110"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)" effect="dark">
+            <el-tag
+              :type="statusTagType(row.status)"
+              effect="dark"
+            >
               {{ statusText(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="message" label="执行摘要" min-width="220" show-overflow-tooltip />
-        <el-table-column label="明细" width="100" align="center">
+        <el-table-column
+          prop="message"
+          label="执行摘要"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="明细"
+          width="100"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDetail(row)">查看</el-button>
+            <el-button
+              link
+              type="primary"
+              @click="openDetail(row)"
+            >
+              查看
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -110,7 +189,9 @@
     >
       <pre class="detail-json-pre">{{ detailJsonText }}</pre>
       <template #footer>
-        <el-button @click="detailDialogVisible = false">关闭</el-button>
+        <el-button @click="detailDialogVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
   </div>

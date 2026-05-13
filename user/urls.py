@@ -6,6 +6,7 @@ from .views import (
     CaptchaRecognizeAPIView,
     UserRegisterAPIView,
     UserLoginAPIView,
+    LogoutAPIView,
     CurrentUserAPIView,
     UserViewSet,
     OrganizationViewSet,
@@ -35,6 +36,7 @@ urlpatterns = [
     path("captcha/recognize/", CaptchaRecognizeAPIView.as_view(), name="captcha-recognize"),
     path("register/", UserRegisterAPIView.as_view(), name="register"),
     path("login/", UserLoginAPIView.as_view(), name="login"),
+    path("logout/", LogoutAPIView.as_view(), name="logout"),
     path("me/", CurrentUserAPIView.as_view(), name="current-user"),
     path("me/profile/", UserProfileAPIView.as_view(), name="user-profile"),
     path(

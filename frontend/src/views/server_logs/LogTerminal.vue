@@ -1,9 +1,18 @@
 <template>
-  <div class="log-terminal" :class="{ 'log-terminal--connected': connected }">
+  <div
+    class="log-terminal"
+    :class="{ 'log-terminal--connected': connected }"
+  >
     <div class="log-terminal__toolbar">
       <div class="log-terminal__left">
-        <span class="log-terminal__path" title="当前日志路径">{{ displayPath }}</span>
-        <span class="log-terminal__mode" :class="`is-${mode}`">
+        <span
+          class="log-terminal__path"
+          title="当前日志路径"
+        >{{ displayPath }}</span>
+        <span
+          class="log-terminal__mode"
+          :class="`is-${mode}`"
+        >
           {{ mode === 'live' ? '实时' : '历史' }}
         </span>
       </div>
@@ -42,8 +51,20 @@
         >
           搜索
         </el-button>
-        <el-button size="small" class="log-terminal__btn" @click="copyPath">复制路径</el-button>
-        <el-button size="small" class="log-terminal__btn" @click="clearScreen">清屏</el-button>
+        <el-button
+          size="small"
+          class="log-terminal__btn"
+          @click="copyPath"
+        >
+          复制路径
+        </el-button>
+        <el-button
+          size="small"
+          class="log-terminal__btn"
+          @click="clearScreen"
+        >
+          清屏
+        </el-button>
         <el-switch
           v-model="autoScroll"
           size="small"
@@ -59,7 +80,10 @@
       @scroll.passive="onScroll"
       @mouseup="onTextSelect"
     >
-      <div class="log-terminal__spacer" :style="{ height: topSpacer + 'px' }" />
+      <div
+        class="log-terminal__spacer"
+        :style="{ height: topSpacer + 'px' }"
+      />
       <div
         v-for="(line, idx) in visibleSlice"
         :key="startIndex + idx"
@@ -68,13 +92,24 @@
       >
         <span v-html="formatLine(line)" />
       </div>
-      <div class="log-terminal__spacer" :style="{ height: bottomSpacer + 'px' }" />
+      <div
+        class="log-terminal__spacer"
+        :style="{ height: bottomSpacer + 'px' }"
+      />
     </div>
 
-    <div v-if="statusMsg" class="log-terminal__status">{{ statusMsg }}</div>
+    <div
+      v-if="statusMsg"
+      class="log-terminal__status"
+    >
+      {{ statusMsg }}
+    </div>
 
     <teleport to="body">
-      <transition-group name="fade" tag="div">
+      <transition-group
+        name="fade"
+        tag="div"
+      >
         <button
           v-if="fabVisible && selectionText"
           key="ai-diagnose"
@@ -109,13 +144,34 @@
       class="log-terminal-drawer"
       append-to-body
     >
-      <el-tabs v-model="drawerTab" class="log-terminal__tabs">
-        <el-tab-pane label="AI 诊断" name="analyze">
-          <div v-if="aiLoading" class="log-terminal__ai-loading">分析中，请稍候…</div>
-          <div v-else class="log-terminal__md" v-html="renderedMarkdown" />
+      <el-tabs
+        v-model="drawerTab"
+        class="log-terminal__tabs"
+      >
+        <el-tab-pane
+          label="AI 诊断"
+          name="analyze"
+        >
+          <div
+            v-if="aiLoading"
+            class="log-terminal__ai-loading"
+          >
+            分析中，请稍候…
+          </div>
+          <div
+            v-else
+            class="log-terminal__md"
+            v-html="renderedMarkdown"
+          />
         </el-tab-pane>
-        <el-tab-pane label="AI 工单草稿" name="ticket">
-          <LogAutoTicketDraft :server-id="serverId" :anchor-text="lastAnchor" />
+        <el-tab-pane
+          label="AI 工单草稿"
+          name="ticket"
+        >
+          <LogAutoTicketDraft
+            :server-id="serverId"
+            :anchor-text="lastAnchor"
+          />
         </el-tab-pane>
       </el-tabs>
     </el-drawer>

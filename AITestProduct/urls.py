@@ -5,8 +5,11 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from assistant.analysis_lab_views import AnalysisLabReportDetailsAPIView
+from common import health as common_health
 
 urlpatterns = [
+    path("health/", common_health.health_check),
+    path("readiness/", common_health.readiness_check),
     path("admin/", admin.site.urls),
     # 按照模块分发到各个子应用的 urls.py 中
     path("api/sys/", include("user.sys_urls")),

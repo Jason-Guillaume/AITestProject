@@ -6,42 +6,98 @@
   import Particles from "@tsparticles/vue3";
   import { loadSlim } from "@tsparticles/slim";
   createApp(App).use(Particles, { init: async (engine) => { await loadSlim(engine); } })
+
+  OPTIMIZE: tsparticles 仅在登录/注册页用作背景粒子动画，可考虑替换为纯 CSS 动画
+  （如 animated gradient + floating dots via CSS keyframes），以移除 3 个依赖并减小打包体积。
 -->
 <template>
   <div class="login-page">
     <!-- 全屏粒子神经网络背景 -->
-    <div class="login-page__particles" aria-hidden="true">
-      <vue-particles id="login-tsparticles" :options="particleOptions" />
+    <div
+      class="login-page__particles"
+      aria-hidden="true"
+    >
+      <vue-particles
+        id="login-tsparticles"
+        :options="particleOptions"
+      />
     </div>
 
     <!-- 氛围光斑 -->
-    <div class="login-page__glow login-page__glow--1" aria-hidden="true" />
-    <div class="login-page__glow login-page__glow--2" aria-hidden="true" />
+    <div
+      class="login-page__glow login-page__glow--1"
+      aria-hidden="true"
+    />
+    <div
+      class="login-page__glow login-page__glow--2"
+      aria-hidden="true"
+    />
 
     <div class="login-page__content">
       <!-- 左侧：科技标签 + 装饰（大屏显示） -->
-      <aside class="login-hero" aria-hidden="true">
+      <aside
+        class="login-hero"
+        aria-hidden="true"
+      >
         <div class="login-hero__brain-wrap">
-          <svg class="login-hero__brain" viewBox="0 0 320 280" xmlns="http://www.w3.org/2000/svg">
+          <svg
+            class="login-hero__brain"
+            viewBox="0 0 320 280"
+            xmlns="http://www.w3.org/2000/svg"
+          >
             <defs>
-              <linearGradient id="brainLine" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.9" />
-                <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.5" />
+              <linearGradient
+                id="brainLine"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="100%"
+              >
+                <stop
+                  offset="0%"
+                  stop-color="#22d3ee"
+                  stop-opacity="0.9"
+                />
+                <stop
+                  offset="100%"
+                  stop-color="#06b6d4"
+                  stop-opacity="0.5"
+                />
               </linearGradient>
-              <filter id="brainGlow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="2" result="b" />
+              <filter
+                id="brainGlow"
+                x="-50%"
+                y="-50%"
+                width="200%"
+                height="200%"
+              >
+                <feGaussianBlur
+                  stdDeviation="2"
+                  result="b"
+                />
                 <feMerge>
                   <feMergeNode in="b" />
                   <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
             </defs>
-            <g fill="none" stroke="url(#brainLine)" stroke-width="0.8" filter="url(#brainGlow)" opacity="0.85">
+            <g
+              fill="none"
+              stroke="url(#brainLine)"
+              stroke-width="0.8"
+              filter="url(#brainGlow)"
+              opacity="0.85"
+            >
               <path
                 d="M160 40 C210 20 260 60 270 110 C285 170 240 230 160 248 C80 230 35 170 50 110 C60 60 110 20 160 40Z"
               />
               <path d="M160 48 L160 232 M90 100 L230 100 M75 160 L245 160 M110 70 L210 210 M210 70 L110 210" />
-              <circle cx="160" cy="130" r="28" stroke-width="1.2" />
+              <circle
+                cx="160"
+                cy="130"
+                r="28"
+                stroke-width="1.2"
+              />
             </g>
             <text
               x="160"
@@ -60,7 +116,11 @@
 
         <ul class="login-hero__labels">
           <li class="login-hero__label login-hero__label--1">
-            <FileSearch class="login-hero__label-icon" :size="14" stroke-width="2" />
+            <FileSearch
+              class="login-hero__label-icon"
+              :size="14"
+              stroke-width="2"
+            />
             <span>DEMAND ANALYSIS</span>
           </li>
           <li class="login-hero__label login-hero__label--2">
@@ -73,7 +133,11 @@
             <span>INTELLIGENT ANALYSIS</span>
           </li>
           <li class="login-hero__label login-hero__label--5">
-            <RefreshCw class="login-hero__label-icon" :size="14" stroke-width="2" />
+            <RefreshCw
+              class="login-hero__label-icon"
+              :size="14"
+              stroke-width="2"
+            />
             <span>CONTINUOUS FEEDBACK</span>
           </li>
         </ul>
@@ -81,18 +145,55 @@
 
       <!-- 右侧玻璃拟态登录卡片 -->
       <div class="login-card-shell">
-        <div class="glass-card" :class="{ 'glass-card--visible': mounted }">
+        <div
+          class="glass-card"
+          :class="{ 'glass-card--visible': mounted }"
+        >
           <header class="glass-card__header">
-            <div class="glass-card__logo" aria-hidden="true">
-              <svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg">
+            <div
+              class="glass-card__logo"
+              aria-hidden="true"
+            >
+              <svg
+                viewBox="0 0 56 56"
+                xmlns="http://www.w3.org/2000/svg"
+              >
                 <defs>
-                  <linearGradient id="atRing" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#22d3ee" />
-                    <stop offset="100%" stop-color="#3b82f6" />
+                  <linearGradient
+                    id="atRing"
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                  >
+                    <stop
+                      offset="0%"
+                      stop-color="#22d3ee"
+                    />
+                    <stop
+                      offset="100%"
+                      stop-color="#06b6d4"
+                    />
                   </linearGradient>
                 </defs>
-                <circle cx="28" cy="28" r="26" fill="none" stroke="url(#atRing)" stroke-width="1.5" opacity="0.9" />
-                <circle cx="28" cy="28" r="22" fill="none" stroke="url(#atRing)" stroke-width="0.6" opacity="0.35" />
+                <circle
+                  cx="28"
+                  cy="28"
+                  r="26"
+                  fill="none"
+                  stroke="url(#atRing)"
+                  stroke-width="1.5"
+                  opacity="0.9"
+                />
+                <circle
+                  cx="28"
+                  cy="28"
+                  r="22"
+                  fill="none"
+                  stroke="url(#atRing)"
+                  stroke-width="0.6"
+                  opacity="0.35"
+                />
                 <text
                   x="28"
                   y="34"
@@ -106,10 +207,16 @@
                 </text>
               </svg>
             </div>
-            <h1 class="glass-card__brand">AITesta</h1>
-            <p class="glass-card__tagline">全流程 AI 测试平台</p>
+            <h1 class="glass-card__brand">
+              AITesta
+            </h1>
+            <p class="glass-card__tagline">
+              全流程 AI 测试平台
+            </p>
             <div class="glass-card__divider" />
-            <h2 class="glass-card__title">登录</h2>
+            <h2 class="glass-card__title">
+              登录
+            </h2>
           </header>
 
           <el-form
@@ -120,7 +227,10 @@
             label-position="top"
             @submit.prevent
           >
-            <el-form-item prop="username" class="glass-form__item">
+            <el-form-item
+              prop="username"
+              class="glass-form__item"
+            >
               <el-input
                 v-model="form.username"
                 size="large"
@@ -130,11 +240,18 @@
                 class="glass-input"
               >
                 <template #prefix>
-                  <User class="glass-input__icon" :size="18" stroke-width="2" />
+                  <User
+                    class="glass-input__icon"
+                    :size="18"
+                    stroke-width="2"
+                  />
                 </template>
               </el-input>
             </el-form-item>
-            <el-form-item prop="password" class="glass-form__item">
+            <el-form-item
+              prop="password"
+              class="glass-form__item"
+            >
               <el-input
                 v-model="form.password"
                 type="password"
@@ -147,18 +264,32 @@
                 @keyup.enter="handleSubmit"
               >
                 <template #prefix>
-                  <Lock class="glass-input__icon" :size="18" stroke-width="2" />
+                  <Lock
+                    class="glass-input__icon"
+                    :size="18"
+                    stroke-width="2"
+                  />
                 </template>
               </el-input>
             </el-form-item>
 
             <div class="glass-form__row">
               <label class="glass-check">
-                <input v-model="rememberMe" type="checkbox" class="glass-check__input" />
+                <input
+                  v-model="rememberMe"
+                  type="checkbox"
+                  class="glass-check__input"
+                >
                 <span class="glass-check__box" />
                 <span class="glass-check__text">记住我</span>
               </label>
-              <button type="button" class="glass-link" @click="onForgotPassword">忘记密码？</button>
+              <button
+                type="button"
+                class="glass-link"
+                @click="onForgotPassword"
+              >
+                忘记密码？
+              </button>
             </div>
 
             <el-form-item class="glass-form__submit">
@@ -177,11 +308,20 @@
 
           <footer class="glass-card__footer">
             <span class="glass-card__footer-muted">没有账号？</span>
-            <button type="button" class="glass-link glass-link--strong" @click="goRegister">立即注册</button>
+            <button
+              type="button"
+              class="glass-link glass-link--strong"
+              @click="goRegister"
+            >
+              立即注册
+            </button>
           </footer>
 
           <!-- 顶部装饰：极简 tech 图标条 -->
-          <div class="glass-card__tech-strip" aria-hidden="true">
+          <div
+            class="glass-card__tech-strip"
+            aria-hidden="true"
+          >
             <span class="glass-card__tech-dot" />
             <span class="glass-card__tech-dot" />
             <span class="glass-card__tech-dot" />
@@ -239,7 +379,7 @@ const particleOptions = {
     },
   },
   particles: {
-    color: { value: ["#22d3ee", "#38bdf8", "#67e8f9", "#818cf8"] },
+    color: { value: ["#22d3ee", "#38bdf8", "#67e8f9", "#22d3ee"] },
     links: {
       enable: true,
       distance: 130,
@@ -388,7 +528,7 @@ function onAvatarImgError(e) {
     height: min(45vw, 380px);
     bottom: 5%;
     right: 10%;
-    background: radial-gradient(circle, rgba(59, 130, 246, 0.4) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.4) 0%, transparent 70%);
     animation: floatGlow 18s ease-in-out infinite reverse;
   }
 }
@@ -760,7 +900,7 @@ function onAvatarImgError(e) {
 }
 
 .glass-check__input:checked + .glass-check__box {
-  background: linear-gradient(135deg, #22d3ee, #3b82f6);
+  background: linear-gradient(135deg, #22d3ee, #06b6d4);
   border-color: rgba(34, 211, 238, 0.8);
   box-shadow: 0 0 12px rgba(34, 211, 238, 0.35);
 }
@@ -798,10 +938,10 @@ function onAvatarImgError(e) {
   color: #f8fafc !important;
   border: none !important;
   border-radius: 12px;
-  background: linear-gradient(105deg, #2563eb 0%, #0891b2 45%, #22d3ee 100%) !important;
+  background: linear-gradient(105deg, #0891b2 0%, #0e7490 45%, #22d3ee 100%) !important;
   box-shadow:
     0 0 20px rgba(34, 211, 238, 0.35),
-    0 0 40px rgba(59, 130, 246, 0.15),
+    0 0 40px rgba(6, 182, 212, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
   transition:
     transform 0.25s ease,
@@ -813,10 +953,10 @@ function onAvatarImgError(e) {
 .neon-btn.el-button--primary:focus {
   transform: translateY(-2px);
   filter: brightness(1.08);
-  background: linear-gradient(105deg, #3b82f6 0%, #0e7490 42%, #67e8f9 100%) !important;
+  background: linear-gradient(105deg, #06b6d4 0%, #0e7490 42%, #67e8f9 100%) !important;
   box-shadow:
     0 0 32px rgba(34, 211, 238, 0.55),
-    0 0 56px rgba(59, 130, 246, 0.25),
+    0 0 56px rgba(6, 182, 212, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
 }
 

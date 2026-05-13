@@ -1,36 +1,84 @@
 <template>
   <div class="page-wrap cyber-page admin-list-page sys-admin-page">
-    <el-card class="sys-filter-card" shadow="never">
+    <el-card
+      class="sys-filter-card"
+      shadow="never"
+    >
       <div class="sys-toolbar">
-        <div class="sys-toolbar__title">角色与权限</div>
-        <el-button type="primary" size="default" :loading="loading" @click="openCreateDialog">
+        <div class="sys-toolbar__title">
+          角色与权限
+        </div>
+        <el-button
+          type="primary"
+          size="default"
+          :loading="loading"
+          @click="openCreateDialog"
+        >
           新增角色
         </el-button>
       </div>
     </el-card>
 
-    <el-card class="sys-table-card" shadow="never">
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
       <el-table
-        :data="rows"
         v-loading="loading"
+        :data="rows"
         class="admin-data-table sys-enterprise-table"
         row-key="id"
       >
         <template #empty>
-          <el-empty description="暂无角色数据" :image-size="88" />
+          <el-empty
+            description="暂无角色数据"
+            :image-size="88"
+          />
         </template>
-        <el-table-column prop="id" label="ID" min-width="88" width="88" align="left" />
-        <el-table-column prop="name" label="角色名称" min-width="200" align="left" show-overflow-tooltip />
-        <el-table-column label="关联用户数" min-width="120" width="120" align="center">
+        <el-table-column
+          prop="id"
+          label="ID"
+          min-width="88"
+          width="88"
+          align="left"
+        />
+        <el-table-column
+          prop="name"
+          label="角色名称"
+          min-width="200"
+          align="left"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="关联用户数"
+          min-width="120"
+          width="120"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag type="info" size="small" effect="plain" class="linked-count-tag">
+            <el-tag
+              type="info"
+              size="small"
+              effect="plain"
+              class="linked-count-tag"
+            >
               {{ linkedUsersCount(row.id) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="260" width="260" fixed="right" align="center">
+        <el-table-column
+          label="操作"
+          min-width="260"
+          width="260"
+          fixed="right"
+          align="center"
+        >
           <template #default="{ row }">
-            <TableActionGroup :row="row" :actions="roleTableActions" @action="handleRoleTableAction" />
+            <TableActionGroup
+              :row="row"
+              :actions="roleTableActions"
+              @action="handleRoleTableAction"
+            />
           </template>
         </el-table-column>
       </el-table>
@@ -43,14 +91,33 @@
       destroy-on-close
       class="cyber-dialog-dark"
     >
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="90px">
-        <el-form-item label="角色名" prop="name">
-          <el-input v-model="form.name" placeholder="请输入角色名" />
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="90px"
+      >
+        <el-form-item
+          label="角色名"
+          prop="name"
+        >
+          <el-input
+            v-model="form.name"
+            placeholder="请输入角色名"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSubmit">确定</el-button>
+        <el-button @click="dialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="handleSubmit"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
 
@@ -62,7 +129,9 @@
       class="cyber-drawer-dark perm-drawer"
       destroy-on-close
     >
-      <p class="perm-drawer__hint">权限分配功能暂未开放（当前仅展示权限树，保存入口已禁用）。</p>
+      <p class="perm-drawer__hint">
+        权限分配功能暂未开放（当前仅展示权限树，保存入口已禁用）。
+      </p>
       <el-tree
         ref="permTreeRef"
         :data="permissionTreeMock"
@@ -73,8 +142,15 @@
         :default-checked-keys="mockCheckedKeys"
       />
       <div class="perm-drawer__footer">
-        <el-button @click="permDrawerVisible = false">取消</el-button>
-        <el-button type="primary" disabled>保存（暂未开放）</el-button>
+        <el-button @click="permDrawerVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          disabled
+        >
+          保存（暂未开放）
+        </el-button>
       </div>
     </el-drawer>
   </div>
@@ -219,7 +295,7 @@ async function load() {
     await buildUserGroupCounts();
   } catch (e) {
     ElMessage.error("获取角色失败");
-    // eslint-disable-next-line no-console
+     
     console.error(e);
   } finally {
     loading.value = false;
@@ -238,7 +314,7 @@ async function delRow(row) {
     await load();
   } catch (e) {
     ElMessage.error("删除失败");
-    // eslint-disable-next-line no-console
+     
     console.error(e);
   }
 }
@@ -261,7 +337,7 @@ async function handleSubmit() {
       await load();
     } catch (e) {
       ElMessage.error("提交失败");
-      // eslint-disable-next-line no-console
+       
       console.error(e);
     } finally {
       saving.value = false;

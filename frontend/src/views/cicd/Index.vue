@@ -14,18 +14,48 @@
 
       <div class="cicd-hub__toolbar flex flex-wrap items-center gap-3">
         <div class="flex flex-wrap items-center gap-2">
-          <el-tag v-if="healthChecked" :type="healthOk ? 'success' : 'danger'" size="small" effect="dark" round>
+          <el-tag
+            v-if="healthChecked"
+            :type="healthOk ? 'success' : 'danger'"
+            size="small"
+            effect="dark"
+            round
+          >
             {{ healthOk ? '编排服务在线' : '编排服务不可用' }}
           </el-tag>
-          <el-tag v-else type="info" size="small" effect="dark" round>探测中…</el-tag>
+          <el-tag
+            v-else
+            type="info"
+            size="small"
+            effect="dark"
+            round
+          >
+            探测中…
+          </el-tag>
         </div>
-        <div class="hidden sm:block h-6 w-px bg-slate-600/80 shrink-0" aria-hidden="true" />
-        <el-button type="primary" size="small" :loading="loading" @click="loadAll">
-          <el-icon class="el-icon--left"><Refresh /></el-icon>
+        <div
+          class="hidden sm:block h-6 w-px bg-slate-600/80 shrink-0"
+          aria-hidden="true"
+        />
+        <el-button
+          type="primary"
+          size="small"
+          :loading="loading"
+          @click="loadAll"
+        >
+          <el-icon class="el-icon--left">
+            <Refresh />
+          </el-icon>
           刷新
         </el-button>
-        <el-button size="small" class="!bg-slate-800 !border-slate-600" @click="router.push('/pipelines')">
-          <el-icon class="el-icon--left"><Link /></el-icon>
+        <el-button
+          size="small"
+          class="!bg-slate-800 !border-slate-600"
+          @click="router.push('/pipelines')"
+        >
+          <el-icon class="el-icon--left">
+            <Link />
+          </el-icon>
           Django 流水线列表
         </el-button>
         <el-input
@@ -37,7 +67,9 @@
           @keyup.enter="noop"
         >
           <template #prefix>
-            <el-icon class="text-slate-400"><Search /></el-icon>
+            <el-icon class="text-slate-400">
+              <Search />
+            </el-icon>
           </template>
         </el-input>
       </div>
@@ -57,25 +89,63 @@
           @row-click="onRowClick"
         >
           <template #empty>
-            <el-empty description="暂无流水线数据或服务未连通" :image-size="72" />
+            <el-empty
+              description="暂无流水线数据或服务未连通"
+              :image-size="72"
+            />
           </template>
-          <el-table-column prop="id" label="ID" width="88" align="center" />
-          <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="branch" label="分支" width="130" show-overflow-tooltip />
-          <el-table-column prop="repo_url" label="仓库" min-width="200" show-overflow-tooltip>
+          <el-table-column
+            prop="id"
+            label="ID"
+            width="88"
+            align="center"
+          />
+          <el-table-column
+            prop="name"
+            label="名称"
+            min-width="160"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="branch"
+            label="分支"
+            width="130"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="repo_url"
+            label="仓库"
+            min-width="200"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">
               {{ row.repo_url || row.repo || '—' }}
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="128" align="center">
+          <el-table-column
+            label="状态"
+            width="128"
+            align="center"
+          >
             <template #default="{ row }">
               <span :class="['cicd-neon', neonStatusClass(row.status)]">{{ statusLabel(row.status) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="最近运行" width="172" align="center">
-            <template #default="{ row }">{{ formatDate(row.last_run_at || row.updated_at) }}</template>
+          <el-table-column
+            label="最近运行"
+            width="172"
+            align="center"
+          >
+            <template #default="{ row }">
+              {{ formatDate(row.last_run_at || row.updated_at) }}
+            </template>
           </el-table-column>
-          <el-table-column label="操作" width="140" fixed="right" align="center">
+          <el-table-column
+            label="操作"
+            width="140"
+            fixed="right"
+            align="center"
+          >
             <template #default="{ row }">
               <el-button
                 type="primary"
@@ -85,7 +155,9 @@
                 :loading="runningId === row.id"
                 @click.stop="onRun(row)"
               >
-                <el-icon class="el-icon--left"><VideoPlay /></el-icon>
+                <el-icon class="el-icon--left">
+                  <VideoPlay />
+                </el-icon>
                 立即执行
               </el-button>
             </template>

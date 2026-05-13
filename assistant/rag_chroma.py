@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from typing import Any
 
 from django.conf import settings
@@ -15,8 +16,7 @@ logger = logging.getLogger(__name__)
 _COLLECTION = "aitesta_test_cases"
 _ID_PREFIX = "case_"
 
-_chroma_client = None
-_collection = None
+_chroma_local = threading.local()
 
 try:
     import chromadb
@@ -38,24 +38,26 @@ def _chroma_path() -> str:
 
 def get_collection():
     """懒加载 Chroma collection；不可用时返回 None。"""
-    global _chroma_client, _collection
     if not CHROMADB_AVAILABLE:
         return None
-    if _collection is not None:
-        return _collection
+    col = getattr(_chroma_local, 'collection', None)
+    if col is not None:
+        return col
     try:
-        _chroma_client = chromadb.PersistentClient(
+        client = chromadb.PersistentClient(
             path=_chroma_path(),
             settings=ChromaSettings(anonymized_telemetry=False),
         )
-        _collection = _chroma_client.get_or_create_collection(
+        col = client.get_or_create_collection(
             name=_COLLECTION,
             metadata={"hnsw:space": "cosine"},
         )
-    except Exception as e:  # pragma: no cover
+        _chroma_local.client = client
+        _chroma_local.collection = col
+    except Exception as e:
         logger.exception("ChromaDB 初始化失败: %s", e)
-        _collection = None
-    return _collection
+        _chroma_local.collection = None
+    return getattr(_chroma_local, 'collection', None)
 
 
 def _doc_id(case_id: int) -> str:

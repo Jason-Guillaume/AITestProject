@@ -105,7 +105,9 @@ async function onTreeContextCommand(cmd: string, data: HubTreeNode) {
 
 <template>
   <div class="tree-pane">
-    <div class="tree-panel-head">Web · Node Explorer</div>
+    <div class="tree-panel-head">
+      Web · Node Explorer
+    </div>
     <div class="script-tree-scroll">
       <el-tree
         :key="treeKey"

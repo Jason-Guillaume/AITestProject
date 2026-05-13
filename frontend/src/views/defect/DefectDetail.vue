@@ -3,46 +3,141 @@
     <div class="detail-layout">
       <!-- 左侧表单 -->
       <div class="form-panel glass-panel">
-        <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" label-position="left">
+        <el-form
+          ref="formRef"
+          :model="form"
+          :rules="rules"
+          label-width="90px"
+          label-position="left"
+        >
           <el-form-item label="缺陷ID">
-            <el-input :value="form.defect_no || '系统自动生成'" disabled />
+            <el-input
+              :value="form.defect_no || '系统自动生成'"
+              disabled
+            />
           </el-form-item>
           <el-form-item label="发现版本">
-            <el-select v-model="form.release_version" placeholder="请选择" style="width:100%">
-              <el-option v-for="r in releases" :key="r.id" :label="r.version_no" :value="r.id" />
+            <el-select
+              v-model="form.release_version"
+              placeholder="请选择"
+              style="width:100%"
+            >
+              <el-option
+                v-for="r in releases"
+                :key="r.id"
+                :label="r.version_no"
+                :value="r.id"
+              />
             </el-select>
           </el-form-item>
           <el-form-item label="模块">
-            <el-select v-model="form.module" placeholder="请选择" clearable style="width:100%">
-              <el-option v-for="m in modules" :key="m.id" :label="m.name" :value="m.id" />
+            <el-select
+              v-model="form.module"
+              placeholder="请选择"
+              clearable
+              style="width:100%"
+            >
+              <el-option
+                v-for="m in modules"
+                :key="m.id"
+                :label="m.name"
+                :value="m.id"
+              />
             </el-select>
           </el-form-item>
-          <el-form-item label="优先级" prop="priority">
-            <el-select v-model="form.priority" placeholder="请选择" style="width:100%">
-              <el-option label="高" :value="1" />
-              <el-option label="中" :value="2" />
-              <el-option label="低" :value="3" />
+          <el-form-item
+            label="优先级"
+            prop="priority"
+          >
+            <el-select
+              v-model="form.priority"
+              placeholder="请选择"
+              style="width:100%"
+            >
+              <el-option
+                label="高"
+                :value="1"
+              />
+              <el-option
+                label="中"
+                :value="2"
+              />
+              <el-option
+                label="低"
+                :value="3"
+              />
             </el-select>
           </el-form-item>
-          <el-form-item label="严重程度" prop="severity">
-            <el-select v-model="form.severity" placeholder="请选择" style="width:100%">
-              <el-option label="致命" :value="1" />
-              <el-option label="严重" :value="2" />
-              <el-option label="一般" :value="3" />
-              <el-option label="建议" :value="4" />
+          <el-form-item
+            label="严重程度"
+            prop="severity"
+          >
+            <el-select
+              v-model="form.severity"
+              placeholder="请选择"
+              style="width:100%"
+            >
+              <el-option
+                label="致命"
+                :value="1"
+              />
+              <el-option
+                label="严重"
+                :value="2"
+              />
+              <el-option
+                label="一般"
+                :value="3"
+              />
+              <el-option
+                label="建议"
+                :value="4"
+              />
             </el-select>
           </el-form-item>
-          <el-form-item v-if="isEdit" label="状态" prop="status">
-            <el-select v-model="form.status" placeholder="请选择" style="width:100%">
-              <el-option label="新缺陷" :value="1" />
-              <el-option label="处理中" :value="2" />
-              <el-option label="已拒绝" :value="3" />
-              <el-option label="已关闭" :value="4" />
+          <el-form-item
+            v-if="isEdit"
+            label="状态"
+            prop="status"
+          >
+            <el-select
+              v-model="form.status"
+              placeholder="请选择"
+              style="width:100%"
+            >
+              <el-option
+                label="新缺陷"
+                :value="1"
+              />
+              <el-option
+                label="处理中"
+                :value="2"
+              />
+              <el-option
+                label="已拒绝"
+                :value="3"
+              />
+              <el-option
+                label="已关闭"
+                :value="4"
+              />
             </el-select>
           </el-form-item>
-          <el-form-item label="处理人" prop="handler">
-            <el-select v-model="form.handler" placeholder="请选择" style="width:100%">
-              <el-option v-for="u in users" :key="u.id" :label="u.real_name || u.username" :value="u.id" />
+          <el-form-item
+            label="处理人"
+            prop="handler"
+          >
+            <el-select
+              v-model="form.handler"
+              placeholder="请选择"
+              style="width:100%"
+            >
+              <el-option
+                v-for="u in users"
+                :key="u.id"
+                :label="u.real_name || u.username"
+                :value="u.id"
+              />
             </el-select>
           </el-form-item>
           <el-form-item label="附件">
@@ -55,12 +150,21 @@
               class="defect-upload"
             >
               <div class="upload-inner">
-                <el-icon class="upload-inner__icon"><UploadFilled /></el-icon>
-                <div class="upload-inner__hint">点击或将文件拖拽上传</div>
-                <div class="upload-inner__meta">支持格式：doc,docx,xls,xlsx,pdf，单个文件不能超过20MB</div>
+                <el-icon class="upload-inner__icon">
+                  <UploadFilled />
+                </el-icon>
+                <div class="upload-inner__hint">
+                  点击或将文件拖拽上传
+                </div>
+                <div class="upload-inner__meta">
+                  支持格式：doc,docx,xls,xlsx,pdf，单个文件不能超过20MB
+                </div>
               </div>
             </el-upload>
-            <div v-if="attachmentName" class="attachment-name">
+            <div
+              v-if="attachmentName"
+              class="attachment-name"
+            >
               <el-icon><Paperclip /></el-icon> {{ attachmentName }}
             </div>
           </el-form-item>
@@ -68,26 +172,58 @@
 
         <!-- 底部按钮 -->
         <div class="form-actions">
-          <el-button type="primary" :loading="saving" @click="submit(isEdit ? 'save' : 'create')">{{ isEdit ? '保存' : '创建' }}</el-button>
-          <el-button v-if="!isEdit" :loading="saving" @click="submit('create_continue')">提交并继续创建</el-button>
-          <el-button v-if="!isEdit" @click="submit('draft')">暂存</el-button>
-          <el-button @click="router.push('/defect/list')">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="saving"
+            @click="submit(isEdit ? 'save' : 'create')"
+          >
+            {{ isEdit ? '保存' : '创建' }}
+          </el-button>
+          <el-button
+            v-if="!isEdit"
+            :loading="saving"
+            @click="submit('create_continue')"
+          >
+            提交并继续创建
+          </el-button>
+          <el-button
+            v-if="!isEdit"
+            @click="submit('draft')"
+          >
+            暂存
+          </el-button>
+          <el-button @click="router.push('/defect/list')">
+            取消
+          </el-button>
         </div>
       </div>
 
       <!-- 右侧内容区 -->
       <div class="content-panel glass-panel">
-        <el-form-item label="缺陷名称" label-width="80px" class="name-item">
-          <el-input v-model="form.defect_name" placeholder="请输入" class="defect-name-input" />
+        <el-form-item
+          label="缺陷名称"
+          label-width="80px"
+          class="name-item"
+        >
+          <el-input
+            v-model="form.defect_name"
+            placeholder="请输入"
+            class="defect-name-input"
+          />
         </el-form-item>
-        <div class="content-label">缺陷内容</div>
+        <div class="content-label">
+          缺陷内容
+        </div>
         <div class="rich-editor">
           <div class="editor-toolbar">
             <el-button-group size="small">
               <el-button><b>B</b></el-button>
               <el-button><i>I</i></el-button>
             </el-button-group>
-            <el-button-group size="small" style="margin-left:4px">
+            <el-button-group
+              size="small"
+              style="margin-left:4px"
+            >
               <el-button>有序列表</el-button>
               <el-button>无序列表</el-button>
             </el-button-group>
@@ -99,7 +235,9 @@
             placeholder="请输入文字"
             class="editor-textarea"
           />
-          <div class="editor-footer">{{ form.defect_content?.length || 0 }}字</div>
+          <div class="editor-footer">
+            {{ form.defect_content?.length || 0 }}字
+          </div>
         </div>
       </div>
     </div>

@@ -41,7 +41,29 @@ export default defineConfig(({ mode }) => {
             if (norm.includes("node_modules/element-plus")) {
               return "element-plus";
             }
+            if (norm.includes("node_modules/@xterm")) {
+              return "xterm";
+            }
+            if (norm.includes("node_modules/markdown-it")) {
+              return "markdown-it";
+            }
+            if (norm.includes("node_modules/prismjs")) {
+              return "prismjs";
+            }
+            if (norm.includes("node_modules/tsparticles") || norm.includes("node_modules/@tsparticles")) {
+              return "tsparticles";
+            }
+            if (norm.includes("node_modules/lucide-vue-next")) {
+              return "lucide";
+            }
           },
+        },
+      },
+      minify: "terser",
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
         },
       },
     },

@@ -32,29 +32,60 @@ function onCommand(cmd) {
     popper-class="explorer-node-context-popper"
     @command="onCommand"
   >
-    <span v-contextmenu-block-native class="explorer-node-context-trigger">
+    <span
+      v-contextmenu-block-native
+      class="explorer-node-context-trigger"
+    >
       <slot />
     </span>
     <template #dropdown>
       <el-dropdown-menu class="explorer-node-context-menu">
-        <el-dropdown-item v-if="variant !== 'folder'" command="new-node" :disabled="disableNew">
-          <el-icon class="explorer-node-context-menu__icon"><DocumentAdd /></el-icon>
+        <el-dropdown-item
+          v-if="variant !== 'folder'"
+          command="new-node"
+          :disabled="disableNew"
+        >
+          <el-icon class="explorer-node-context-menu__icon">
+            <DocumentAdd />
+          </el-icon>
           新建 Node
         </el-dropdown-item>
-        <el-dropdown-item command="new-folder" :disabled="disableNew">
-          <el-icon class="explorer-node-context-menu__icon"><FolderAdd /></el-icon>
+        <el-dropdown-item
+          command="new-folder"
+          :disabled="disableNew"
+        >
+          <el-icon class="explorer-node-context-menu__icon">
+            <FolderAdd />
+          </el-icon>
           {{ variant === 'folder' ? '新建子文件夹' : '新建文件夹' }}
         </el-dropdown-item>
-        <el-dropdown-item divided command="rename" :disabled="disableRename">
-          <el-icon class="explorer-node-context-menu__icon"><EditPen /></el-icon>
+        <el-dropdown-item
+          divided
+          command="rename"
+          :disabled="disableRename"
+        >
+          <el-icon class="explorer-node-context-menu__icon">
+            <EditPen />
+          </el-icon>
           重命名
         </el-dropdown-item>
-        <el-dropdown-item command="copy-path" :disabled="disableCopyPath">
-          <el-icon class="explorer-node-context-menu__icon"><Link /></el-icon>
+        <el-dropdown-item
+          command="copy-path"
+          :disabled="disableCopyPath"
+        >
+          <el-icon class="explorer-node-context-menu__icon">
+            <Link />
+          </el-icon>
           复制路径
         </el-dropdown-item>
-        <el-dropdown-item command="delete" :disabled="disableDelete" class="is-danger">
-          <el-icon class="explorer-node-context-menu__icon"><Delete /></el-icon>
+        <el-dropdown-item
+          command="delete"
+          :disabled="disableDelete"
+          class="is-danger"
+        >
+          <el-icon class="explorer-node-context-menu__icon">
+            <Delete />
+          </el-icon>
           {{ variant === 'folder' ? '删除文件夹' : '删除' }}
         </el-dropdown-item>
       </el-dropdown-menu>

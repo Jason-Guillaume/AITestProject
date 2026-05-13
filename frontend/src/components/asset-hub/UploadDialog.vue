@@ -144,30 +144,65 @@ function onConfirm() {
     append-to-body
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <p v-if="hintRelPath" class="upload-dialog__hint">
+    <p
+      v-if="hintRelPath"
+      class="upload-dialog__hint"
+    >
       物理路径：<code>{{ hintRelPath }}</code>
     </p>
-    <el-form label-position="top" class="upload-dialog__form">
-      <el-form-item label="名称（系统别名）" required>
-        <el-input v-model="form.displayName" placeholder="如 Playwright 登录流" maxlength="128" show-word-limit clearable />
+    <el-form
+      label-position="top"
+      class="upload-dialog__form"
+    >
+      <el-form-item
+        label="名称（系统别名）"
+        required
+      >
+        <el-input
+          v-model="form.displayName"
+          placeholder="如 Playwright 登录流"
+          maxlength="128"
+          show-word-limit
+          clearable
+        />
       </el-form-item>
 
-      <el-form-item label="语言 / 技术栈" required>
+      <el-form-item
+        label="语言 / 技术栈"
+        required
+      >
         <el-radio-group v-model="form.techStack">
-          <el-radio-button label="PYTHON">Python</el-radio-button>
-          <el-radio-button label="JAVA">Java</el-radio-button>
+          <el-radio-button label="PYTHON">
+            Python
+          </el-radio-button>
+          <el-radio-button label="JAVA">
+            Java
+          </el-radio-button>
         </el-radio-group>
-        <p class="upload-dialog__sub">拖拽 .py / .java 时会自动切换技术栈</p>
+        <p class="upload-dialog__sub">
+          拖拽 .py / .java 时会自动切换技术栈
+        </p>
       </el-form-item>
 
-      <el-form-item label="设计模式" required>
+      <el-form-item
+        label="设计模式"
+        required
+      >
         <el-radio-group v-model="form.designMode">
-          <el-radio-button label="POM">POM 模式</el-radio-button>
-          <el-radio-button label="LINEAR">线性脚本</el-radio-button>
+          <el-radio-button label="POM">
+            POM 模式
+          </el-radio-button>
+          <el-radio-button label="LINEAR">
+            线性脚本
+          </el-radio-button>
         </el-radio-group>
       </el-form-item>
 
-      <el-form-item v-if="form.designMode === 'POM'" label="ZIP 内执行入口" required>
+      <el-form-item
+        v-if="form.designMode === 'POM'"
+        label="ZIP 内执行入口"
+        required
+      >
         <el-input
           v-model="form.pomEntryPath"
           placeholder="解压后相对工程根的路径，如 tests/login_flow.py"
@@ -185,20 +220,26 @@ function onConfirm() {
           :before-upload="beforeUpload"
           @change="onFileChange"
         >
-          <el-icon class="upload-dialog__upload-ico"><Upload /></el-icon>
+          <el-icon class="upload-dialog__upload-ico">
+            <Upload />
+          </el-icon>
           <div>拖拽到此处，或点击选择本地物理文件</div>
           <template #tip>
-            <span class="upload-dialog__tip"
-              >将提交到服务端并写入工作台工程（UI 自动化）；线性请传 .py，POM 请传 .zip。Java 请使用工作台导入。</span
-            >
+            <span class="upload-dialog__tip">将提交到服务端并写入工作台工程（UI 自动化）；线性请传 .py，POM 请传 .zip。Java 请使用工作台导入。</span>
           </template>
         </el-upload>
       </el-form-item>
     </el-form>
 
     <template #footer>
-      <el-button @click="close">取消</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="onConfirm">
+      <el-button @click="close">
+        取消
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="submitLoading"
+        @click="onConfirm"
+      >
         {{ mode === 'create' ? '确认登记' : '保存初始化' }}
       </el-button>
     </template>

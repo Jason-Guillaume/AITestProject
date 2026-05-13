@@ -10,8 +10,15 @@
           'is-expanded': isExpanded,
         }"
       >
-        <div class="module-tree-rail" aria-label="模块目录快捷栏">
-          <el-tooltip :content="isExpanded ? '收起模块树' : '展开模块树'" placement="right" :show-after="200">
+        <div
+          class="module-tree-rail"
+          aria-label="模块目录快捷栏"
+        >
+          <el-tooltip
+            :content="isExpanded ? '收起模块树' : '展开模块树'"
+            placement="right"
+            :show-after="200"
+          >
             <el-button
               class="module-tree-rail__expand-btn"
               :class="{ 'is-expanded': isExpanded }"
@@ -20,10 +27,16 @@
               :aria-expanded="isExpanded"
               @click.stop="toggleModuleTreeExpanded"
             >
-              <el-icon :size="20"><DArrowLeft v-if="isExpanded" /><DArrowRight v-else /></el-icon>
+              <el-icon :size="20">
+                <DArrowLeft v-if="isExpanded" /><DArrowRight v-else />
+              </el-icon>
             </el-button>
           </el-tooltip>
-          <el-tooltip content="模块目录" placement="right" :show-after="200">
+          <el-tooltip
+            content="模块目录"
+            placement="right"
+            :show-after="200"
+          >
             <button
               type="button"
               class="module-tree-rail__btn"
@@ -31,27 +44,41 @@
               :aria-expanded="isExpanded"
               @click.stop="openModuleTreePanel"
             >
-              <el-icon :size="20"><FolderOpened /></el-icon>
+              <el-icon :size="20">
+                <FolderOpened />
+              </el-icon>
             </button>
           </el-tooltip>
-          <el-tooltip content="全部用例" placement="right" :show-after="200">
+          <el-tooltip
+            content="全部用例"
+            placement="right"
+            :show-after="200"
+          >
             <button
               type="button"
               class="module-tree-rail__btn"
               :disabled="!currentProjectId"
               @click.stop="clearModuleFilter"
             >
-              <el-icon :size="20"><List /></el-icon>
+              <el-icon :size="20">
+                <List />
+              </el-icon>
             </button>
           </el-tooltip>
-          <el-tooltip content="新建模块" placement="right" :show-after="200">
+          <el-tooltip
+            content="新建模块"
+            placement="right"
+            :show-after="200"
+          >
             <button
               type="button"
               class="module-tree-rail__btn"
               :disabled="!currentProjectId"
               @click.stop="openNewModuleDialog"
             >
-              <el-icon :size="20"><Plus /></el-icon>
+              <el-icon :size="20">
+                <Plus />
+              </el-icon>
             </button>
           </el-tooltip>
         </div>
@@ -60,7 +87,10 @@
           class="module-tree-slide"
           :class="{ 'is-open': isExpanded }"
         >
-          <el-card class="tc-card tc-card--tree admin-list-card tc-tree-panel" shadow="never">
+          <el-card
+            class="tc-card tc-card--tree admin-list-card tc-tree-panel"
+            shadow="never"
+          >
             <div class="tree-panel__head">
               <div
                 class="tree-panel__all-cases"
@@ -71,11 +101,17 @@
                 @click="clearModuleFilter"
                 @keydown.enter.prevent="clearModuleFilter"
               >
-                <el-icon class="tree-panel__all-icon"><List /></el-icon>
+                <el-icon class="tree-panel__all-icon">
+                  <List />
+                </el-icon>
                 <span class="tree-panel__all-label">全部用例</span>
               </div>
               <div class="tree-panel__head-actions">
-                <el-tooltip content="新建模块" placement="bottom" :show-after="400">
+                <el-tooltip
+                  content="新建模块"
+                  placement="bottom"
+                  :show-after="400"
+                >
                   <el-button
                     class="tree-panel__icon-btn"
                     text
@@ -84,7 +120,9 @@
                     :disabled="!currentProjectId"
                     @click="openNewModuleDialog"
                   >
-                    <el-icon :size="18"><Plus /></el-icon>
+                    <el-icon :size="18">
+                      <Plus />
+                    </el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip
@@ -99,13 +137,18 @@
                     size="small"
                     @click="onTreePanelFoldClick"
                   >
-                    <el-icon :size="18"><DArrowLeft v-if="isModuleDockWideLayout" /><Fold v-else /></el-icon>
+                    <el-icon :size="18">
+                      <DArrowLeft v-if="isModuleDockWideLayout" /><Fold v-else />
+                    </el-icon>
                   </el-button>
                 </el-tooltip>
               </div>
             </div>
             <div class="tc-card__tree-body tree-panel__body">
-              <div v-if="!currentProjectId" class="module-tree-empty">
+              <div
+                v-if="!currentProjectId"
+                class="module-tree-empty"
+              >
                 请先在顶部选择项目，再管理模块与用例。
               </div>
               <el-tree
@@ -118,8 +161,8 @@
                 :expand-on-click-node="false"
                 node-key="id"
                 :current-node-key="selectedModuleKey"
-                @node-click="onModuleClick"
                 class="module-el-tree tree-panel-tree"
+                @node-click="onModuleClick"
               >
                 <template #default="{ data }">
                   <div class="module-node-row">
@@ -148,7 +191,10 @@
                   </div>
                 </template>
               </el-tree>
-              <div v-else class="module-tree-empty">
+              <div
+                v-else
+                class="module-tree-empty"
+              >
                 当前项目下暂无模块，请点击工具栏 <strong>+</strong> 新建模块。
               </div>
             </div>
@@ -158,260 +204,416 @@
 
       <div class="testcase-main-shell">
         <!-- 右侧：主内容卡片（遮罩在其后，以便叠在表格上形成分层） -->
-        <el-card class="tc-card tc-card--main admin-list-card" shadow="never">
-        <!-- 单行工具栏：左侧全部操作按钮，右侧搜索 -->
-        <div class="admin-toolbar-row case-toolbar--single">
-          <div class="admin-toolbar-row__left">
-            <el-tag
-              v-if="activeTestCaseTypeLabel"
-              type="info"
-              effect="plain"
-              class="testcase-route-type-tag"
-            >
-              {{ activeTestCaseTypeLabel }}
-            </el-tag>
-            <el-button type="primary" :disabled="isRecycleMode" @click="openAiGenerateDialog">
-              <el-icon><MagicStick /></el-icon> AI生成测试用例
-            </el-button>
-            <el-button
-              :type="isRecycleMode ? 'info' : 'warning'"
-              plain
-              @click="toggleRecycleMode"
-            >
-              {{ isRecycleMode ? '返回用例列表' : '回收站' }}
-            </el-button>
-            <el-button :disabled="isRecycleMode" @click="openNewCaseDialog">
-              <el-icon><Plus /></el-icon> 新增测试用例
-            </el-button>
-            <el-button :disabled="isRecycleMode" @click="toPlan">
-              <el-icon><Tickets /></el-icon> 转测试计划
-            </el-button>
-            <el-button
-              v-if="!isRecycleMode"
-              type="success"
-              :disabled="selectedCaseIds.length === 0"
-              :loading="isExecuting"
-              @click="batchExecuteCases"
-            >
-              <el-icon><VideoPlay /></el-icon> 批量执行
-            </el-button>
-            <el-button
-              v-if="!isRecycleMode"
-              type="danger"
-              :disabled="selectedCaseIds.length === 0"
-              :loading="isDeleting"
-              @click="batchDeleteCases"
-            >
-              <el-icon><Delete /></el-icon> 批量删除
-            </el-button>
-            <el-button
-              v-if="isRecycleMode"
-              type="success"
-              :disabled="selectedCaseIds.length === 0"
-              :loading="isExecuting"
-              @click="batchRestoreCases"
-            >
-              恢复选中
-            </el-button>
-            <el-button
-              v-if="isRecycleMode"
-              type="danger"
-              :disabled="selectedCaseIds.length === 0"
-              :loading="isDeleting"
-              @click="batchHardDeleteCases"
-            >
-              彻底删除选中
-            </el-button>
-            <span v-if="selectedCaseIds.length > 0" class="case-toolbar__selection-hint">
-              已选 {{ selectedCaseIds.length }} 项
-            </span>
-          </div>
-          <div class="admin-toolbar-row__right">
-            <el-input
-              v-model="searchKw"
-              placeholder="请输入用例名称"
-              clearable
-              class="search-input case-toolbar-search"
-            >
-              <template #suffix><el-icon><Search /></el-icon></template>
-            </el-input>
-          </div>
-        </div>
-
-        <div
-          v-loading="isTableLoading"
-          class="admin-table-panel case-table-panel case-table-panel--master"
+        <el-card
+          class="tc-card tc-card--main admin-list-card"
+          shadow="never"
         >
-          <div v-if="!isTableLoading && caseList.length === 0" class="case-table-empty-state">
-            <el-empty description="当前条件下暂无测试用例">
-              <template #default>
-                <p class="case-empty-hint">
-                  在左侧选择模块或使用「全部用例」，也可通过 AI 根据需求一键生成结构化用例并导入列表。
-                </p>
-                <el-button
-                  v-if="!isRecycleMode"
-                  type="primary"
-                  :disabled="!currentProjectId"
+          <!-- 单行工具栏：左侧全部操作按钮，右侧搜索 -->
+          <div class="admin-toolbar-row case-toolbar--single">
+            <div class="admin-toolbar-row__left">
+              <el-tag
+                v-if="activeTestCaseTypeLabel"
+                type="info"
+                effect="plain"
+                class="testcase-route-type-tag"
+              >
+                {{ activeTestCaseTypeLabel }}
+              </el-tag>
+              <el-button
+                type="primary"
+                :disabled="isRecycleMode"
+                @click="openAiGenerateDialog"
+              >
+                <el-icon><MagicStick /></el-icon> AI生成测试用例
+              </el-button>
+              <el-button
+                :type="isRecycleMode ? 'info' : 'warning'"
+                plain
+                @click="toggleRecycleMode"
+              >
+                {{ isRecycleMode ? '返回用例列表' : '回收站' }}
+              </el-button>
+              <el-button
+                :disabled="isRecycleMode"
+                @click="openNewCaseDialog"
+              >
+                <el-icon><Plus /></el-icon> 新增测试用例
+              </el-button>
+              <el-button
+                :disabled="isRecycleMode"
+                @click="toPlan"
+              >
+                <el-icon><Tickets /></el-icon> 转测试计划
+              </el-button>
+              <el-button
+                v-if="!isRecycleMode"
+                type="success"
+                :disabled="selectedCaseIds.length === 0"
+                :loading="isExecuting"
+                @click="batchExecuteCases"
+              >
+                <el-icon><VideoPlay /></el-icon> 批量执行
+              </el-button>
+              <el-button
+                v-if="!isRecycleMode"
+                type="danger"
+                :disabled="selectedCaseIds.length === 0"
+                :loading="isDeleting"
+                @click="batchDeleteCases"
+              >
+                <el-icon><Delete /></el-icon> 批量删除
+              </el-button>
+              <el-button
+                v-if="isRecycleMode"
+                type="success"
+                :disabled="selectedCaseIds.length === 0"
+                :loading="isExecuting"
+                @click="batchRestoreCases"
+              >
+                恢复选中
+              </el-button>
+              <el-button
+                v-if="isRecycleMode"
+                type="danger"
+                :disabled="selectedCaseIds.length === 0"
+                :loading="isDeleting"
+                @click="batchHardDeleteCases"
+              >
+                彻底删除选中
+              </el-button>
+              <span
+                v-if="selectedCaseIds.length > 0"
+                class="case-toolbar__selection-hint"
+              >
+                已选 {{ selectedCaseIds.length }} 项
+              </span>
+            </div>
+            <div class="admin-toolbar-row__right">
+              <el-input
+                v-model="searchKw"
+                placeholder="请输入用例名称"
+                clearable
+                class="search-input case-toolbar-search"
+              >
+                <template #suffix>
+                  <el-icon><Search /></el-icon>
+                </template>
+              </el-input>
+            </div>
+          </div>
+
+          <div
+            v-loading="isTableLoading"
+            class="admin-table-panel case-table-panel case-table-panel--master"
+          >
+            <div
+              v-if="!isTableLoading && caseList.length === 0"
+              class="case-table-empty-state"
+            >
+              <div class="empty-illustration">
+                <div class="empty-hex-group">
+                  <div class="empty-hex empty-hex--1" />
+                  <div class="empty-hex empty-hex--2" />
+                  <div class="empty-hex empty-hex--3" />
+                  <div class="empty-hex empty-hex--4" />
+                  <div class="empty-hex empty-hex--5" />
+                </div>
+                <div class="empty-circuit-lines">
+                  <span class="circuit-line circuit-line--1" />
+                  <span class="circuit-line circuit-line--2" />
+                  <span class="circuit-line circuit-line--3" />
+                </div>
+                <div class="empty-dot empty-dot--1" />
+                <div class="empty-dot empty-dot--2" />
+                <div class="empty-dot empty-dot--3" />
+                <div class="empty-glow" />
+              </div>
+
+              <h3 class="empty-title">
+                还没有测试用例
+              </h3>
+              <p class="empty-subtitle">
+                从零开始太麻烦？让 AI 根据需求文档一键生成结构化用例
+              </p>
+
+              <el-button
+                v-if="!isRecycleMode"
+                class="empty-cta-btn"
+                :disabled="!currentProjectId"
+                @click="openAiGenerateDialog"
+              >
+                <el-icon class="el-icon--left">
+                  <MagicStick />
+                </el-icon>
+                ✨ 立即使用 AI 生成第一个用例
+              </el-button>
+              <p
+                v-if="!currentProjectId && !isRecycleMode"
+                class="empty-cta-tip"
+              >
+                请先在左侧选择一个项目
+              </p>
+
+              <div class="empty-quick-links">
+                <div
+                  class="empty-quick-card"
+                  @click="router.push('/dashboard')"
+                >
+                  <div class="quick-card-icon">
+                    📋
+                  </div>
+                  <div class="quick-card-body">
+                    <span class="quick-card-title">查看演示模板</span>
+                    <span class="quick-card-desc">浏览预置的测试用例模板</span>
+                  </div>
+                </div>
+                <div
+                  class="empty-quick-card"
+                  @click="openQuickLink('https://docs.aite.studio/quickstart')"
+                >
+                  <div class="quick-card-icon">
+                    📖
+                  </div>
+                  <div class="quick-card-body">
+                    <span class="quick-card-title">阅读快速上手文档</span>
+                    <span class="quick-card-desc">5 分钟掌握核心流程</span>
+                  </div>
+                </div>
+                <div
+                  class="empty-quick-card"
                   @click="openAiGenerateDialog"
                 >
-                  <el-icon class="el-icon--left"><MagicStick /></el-icon>
-                  AI 一键生成
-                </el-button>
-              </template>
-            </el-empty>
-          </div>
-          <div v-else class="case-table-scroll">
-            <el-table
-              ref="caseTableRef"
-              :data="caseList"
-              table-layout="fixed"
-              :highlight-current-row="isRecycleMode"
-              :row-class-name="caseRowClassName"
-              stripe
-              border
-              size="default"
-              style="width: 100%"
-              class="case-table admin-data-table case-table--fluid case-table--thin"
-              row-key="id"
-              @selection-change="onCaseSelectionChange"
+                  <div class="quick-card-icon">
+                    🤖
+                  </div>
+                  <div class="quick-card-body">
+                    <span class="quick-card-title">探索 AI 能力</span>
+                    <span class="quick-card-desc">了解 AI 如何辅助测试</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              v-else
+              class="case-table-scroll"
             >
-              <el-table-column type="selection" width="44" fixed="left" align="center" />
-              <el-table-column
-                label="编号"
-                width="100"
-                fixed="left"
-                align="left"
-                show-overflow-tooltip
+              <el-table
+                ref="caseTableRef"
+                :data="caseList"
+                table-layout="fixed"
+                :highlight-current-row="isRecycleMode"
+                :row-class-name="caseRowClassName"
+                stripe
+                border
+                size="default"
+                style="width: 100%"
+                class="case-table admin-data-table case-table--fluid case-table--thin"
+                row-key="id"
+                @selection-change="onCaseSelectionChange"
               >
-                <template #default="{ row }">
-                  <span class="case-display-id">{{ formatCaseDisplayId(row) }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="用例名称"
-                min-width="250"
-                align="left"
-                show-overflow-tooltip
-                class-name="col-case-name"
-              >
-                <template #default="{ row }">
-                  <el-button
-                    link
-                    type="primary"
-                    class="case-name-link case-name-link--master"
-                    @click.stop="openCaseDetailDrawer(row)"
-                  >
-                    {{ row.case_name }}
-                  </el-button>
-                </template>
-              </el-table-column>
-              <el-table-column label="等级" width="76" align="center">
-                <template #default="{ row }">
-                  <el-tag
-                    v-if="row.level === 'P0'"
-                    size="small"
-                    effect="dark"
-                    class="tc-tag-p0 tc-tag-p0--vivid"
-                  >
-                    {{ row.level }}
-                  </el-tag>
-                  <el-tag
-                    v-else-if="row.level === 'P1'"
-                    size="small"
-                    effect="dark"
-                    class="tc-tag-p1 tc-tag-p1--vivid"
-                  >
-                    {{ row.level }}
-                  </el-tag>
-                  <el-tag v-else size="small" effect="plain" class="tc-tag-level-muted">
-                    {{ row.level }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="有效性" width="80" align="center">
-                <template #default="{ row }">
-                  <el-tag
-                    v-if="!row.is_valid"
-                    type="danger"
-                    size="small"
-                    effect="dark"
-                    class="tc-tag-invalid"
-                  >
-                    无效
-                  </el-tag>
-                  <span v-else class="tc-text-valid">有效</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="更新人"
-                width="100"
-                align="center"
-                show-overflow-tooltip
-              >
-                <template #default="{ row }">{{ row.updater_name || row.creator_name || '—' }}</template>
-              </el-table-column>
-              <el-table-column
-                label="操作"
-                width="160"
-                fixed="right"
-                align="center"
-                class-name="col-actions-pinned"
-              >
-                <template #default="{ row }">
-                  <template v-if="!isRecycleMode">
-                    <div class="case-row-actions case-row-actions--compact">
-                      <el-tooltip v-if="effectiveCaseTestType(row) === 'api'" content="完整执行控制台" placement="top">
+                <el-table-column
+                  type="selection"
+                  width="44"
+                  fixed="left"
+                  align="center"
+                />
+                <el-table-column
+                  label="编号"
+                  width="100"
+                  fixed="left"
+                  align="left"
+                  show-overflow-tooltip
+                >
+                  <template #default="{ row }">
+                    <span class="case-display-id">{{ formatCaseDisplayId(row) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="用例名称"
+                  min-width="250"
+                  align="left"
+                  show-overflow-tooltip
+                  class-name="col-case-name"
+                >
+                  <template #default="{ row }">
+                    <el-button
+                      link
+                      type="primary"
+                      class="case-name-link case-name-link--master"
+                      @click.stop="openCaseDetailDrawer(row)"
+                    >
+                      {{ row.case_name }}
+                    </el-button>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="等级"
+                  width="76"
+                  align="center"
+                >
+                  <template #default="{ row }">
+                    <el-tag
+                      v-if="row.level === 'P0'"
+                      size="small"
+                      effect="dark"
+                      class="tc-tag-p0 tc-tag-p0--vivid"
+                    >
+                      {{ row.level }}
+                    </el-tag>
+                    <el-tag
+                      v-else-if="row.level === 'P1'"
+                      size="small"
+                      effect="dark"
+                      class="tc-tag-p1 tc-tag-p1--vivid"
+                    >
+                      {{ row.level }}
+                    </el-tag>
+                    <el-tag
+                      v-else
+                      size="small"
+                      effect="plain"
+                      class="tc-tag-level-muted"
+                    >
+                      {{ row.level }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="有效性"
+                  width="80"
+                  align="center"
+                >
+                  <template #default="{ row }">
+                    <el-tag
+                      v-if="!row.is_valid"
+                      type="danger"
+                      size="small"
+                      effect="dark"
+                      class="tc-tag-invalid"
+                    >
+                      无效
+                    </el-tag>
+                    <span
+                      v-else
+                      class="tc-text-valid"
+                    >有效</span>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="更新人"
+                  width="100"
+                  align="center"
+                  show-overflow-tooltip
+                >
+                  <template #default="{ row }">
+                    {{ row.updater_name || row.creator_name || '—' }}
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  label="操作"
+                  width="160"
+                  fixed="right"
+                  align="center"
+                  class-name="col-actions-pinned"
+                >
+                  <template #default="{ row }">
+                    <template v-if="!isRecycleMode">
+                      <div class="case-row-actions case-row-actions--compact">
+                        <el-tooltip
+                          v-if="effectiveCaseTestType(row) === 'api'"
+                          content="完整执行控制台"
+                          placement="top"
+                        >
+                          <el-button
+                            link
+                            type="warning"
+                            class="case-action-icon"
+                            @click="openApiConsole(row)"
+                          >
+                            <el-icon><Lightning /></el-icon>
+                          </el-button>
+                        </el-tooltip>
+                        <el-tooltip
+                          content="编辑"
+                          placement="top"
+                        >
+                          <el-button
+                            link
+                            type="primary"
+                            class="case-action-icon"
+                            @click="editCase(row)"
+                          >
+                            <el-icon><EditPen /></el-icon>
+                          </el-button>
+                        </el-tooltip>
+                        <el-dropdown
+                          trigger="click"
+                          @command="(cmd) => handleRowMoreCommand(cmd, row)"
+                        >
+                          <el-button
+                            link
+                            type="primary"
+                            size="small"
+                            class="more-dropdown-btn"
+                          >
+                            <el-icon><ArrowDown /></el-icon>
+                          </el-button>
+                          <template #dropdown>
+                            <el-dropdown-menu>
+                              <el-dropdown-item command="copy">
+                                复制
+                              </el-dropdown-item>
+                              <el-dropdown-item command="rollback">
+                                版本回溯
+                              </el-dropdown-item>
+                              <el-dropdown-item
+                                command="delete"
+                                divided
+                              >
+                                删除
+                              </el-dropdown-item>
+                            </el-dropdown-menu>
+                          </template>
+                        </el-dropdown>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <div class="case-row-actions case-row-actions--recycle">
                         <el-button
                           link
-                          type="warning"
-                          class="case-action-icon"
-                          @click="openApiConsole(row)"
+                          type="success"
+                          size="small"
+                          @click="restoreCase(row)"
                         >
-                          <el-icon><Lightning /></el-icon>
+                          恢复
                         </el-button>
-                      </el-tooltip>
-                      <el-tooltip content="编辑" placement="top">
-                        <el-button link type="primary" class="case-action-icon" @click="editCase(row)">
-                          <el-icon><EditPen /></el-icon>
+                        <el-button
+                          link
+                          type="danger"
+                          size="small"
+                          @click="hardDeleteCase(row)"
+                        >
+                          彻底删除
                         </el-button>
-                      </el-tooltip>
-                      <el-dropdown trigger="click" @command="(cmd) => handleRowMoreCommand(cmd, row)">
-                        <el-button link type="primary" size="small" class="more-dropdown-btn">
-                          <el-icon><ArrowDown /></el-icon>
-                        </el-button>
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item command="copy">复制</el-dropdown-item>
-                            <el-dropdown-item command="rollback">版本回溯</el-dropdown-item>
-                            <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
-                    </div>
+                      </div>
+                    </template>
                   </template>
-                  <template v-else>
-                    <div class="case-row-actions case-row-actions--recycle">
-                      <el-button link type="success" size="small" @click="restoreCase(row)">恢复</el-button>
-                      <el-button link type="danger" size="small" @click="hardDeleteCase(row)">彻底删除</el-button>
-                    </div>
-                  </template>
-                </template>
-              </el-table-column>
-            </el-table>
+                </el-table-column>
+              </el-table>
+            </div>
           </div>
-        </div>
 
-        <div class="pagination-wrap">
-          <el-pagination
-            v-model:current-page="currentPage"
-            :page-size="PAGE_SIZE"
-            :total="totalCount"
-            layout="total, prev, pager, next, jumper"
-            size="large"
-            background
-            @current-change="onPaginationCurrentChange"
-          />
-        </div>
+          <div class="pagination-wrap">
+            <el-pagination
+              v-model:current-page="currentPage"
+              :page-size="PAGE_SIZE"
+              :total="totalCount"
+              layout="total, prev, pager, next, jumper"
+              size="large"
+              background
+              @current-change="onPaginationCurrentChange"
+            />
+          </div>
         </el-card>
         <Transition name="module-tree-flyout-backdrop-fade">
           <div
@@ -450,7 +652,14 @@
             >
               有效
             </el-tag>
-            <el-tag v-else type="danger" size="small" effect="dark">无效</el-tag>
+            <el-tag
+              v-else
+              type="danger"
+              size="small"
+              effect="dark"
+            >
+              无效
+            </el-tag>
             <span class="tc-drawer-status-text">{{ reviewLabel(caseDetailRow.review_status) }}</span>
             <span class="tc-drawer-status-text">{{
               caseDetailRow.archive_status === 2 ? '已归档' : '未归档'
@@ -463,25 +672,44 @@
           size="small"
           class="case-detail-desc"
         >
-          <el-descriptions-item label="归属模块" label-class-name="case-detail-desc__label">
+          <el-descriptions-item
+            label="归属模块"
+            label-class-name="case-detail-desc__label"
+          >
             <span class="case-detail-text">{{ moduleLabel(caseDetailRow) }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="用例名称" label-class-name="case-detail-desc__label">
+          <el-descriptions-item
+            label="用例名称"
+            label-class-name="case-detail-desc__label"
+          >
             <span class="case-detail-text">{{ caseDetailRow.case_name }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="业务编号" label-class-name="case-detail-desc__label">
+          <el-descriptions-item
+            label="业务编号"
+            label-class-name="case-detail-desc__label"
+          >
             <span class="case-detail-text">{{
               caseDetailRow.case_number != null ? String(caseDetailRow.case_number) : '—'
             }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="等级" label-class-name="case-detail-desc__label">
+          <el-descriptions-item
+            label="等级"
+            label-class-name="case-detail-desc__label"
+          >
             <span class="case-detail-text">{{ caseDetailRow.level }}</span>
           </el-descriptions-item>
         </el-descriptions>
 
         <template v-if="resolvedDrawerType === 'api' && caseDetailRow">
-          <div class="case-detail-section-title">接口执行与调试</div>
-          <el-skeleton v-if="!drawerHeavyContentMounted" :rows="5" animated class="case-drawer-api-skeleton" />
+          <div class="case-detail-section-title">
+            接口执行与调试
+          </div>
+          <el-skeleton
+            v-if="!drawerHeavyContentMounted"
+            :rows="5"
+            animated
+            class="case-drawer-api-skeleton"
+          />
           <CaseDrawerApiPanel
             v-else
             ref="drawerApiPanelRef"
@@ -492,8 +720,14 @@
         </template>
 
         <template v-else-if="resolvedDrawerType === 'ui-automation'">
-          <div class="case-detail-section-title">UI 自动化</div>
-          <el-skeleton v-if="!drawerHeavyContentMounted" :rows="3" animated />
+          <div class="case-detail-section-title">
+            UI 自动化
+          </div>
+          <el-skeleton
+            v-if="!drawerHeavyContentMounted"
+            :rows="3"
+            animated
+          />
           <el-descriptions
             v-else
             :column="1"
@@ -501,7 +735,10 @@
             size="small"
             class="case-detail-desc case-detail-desc--typed"
           >
-            <el-descriptions-item label="包名 / Package" label-class-name="case-detail-desc__label">
+            <el-descriptions-item
+              label="包名 / Package"
+              label-class-name="case-detail-desc__label"
+            >
               <span class="case-detail-text">{{ drawerStr(caseDetailRow.app_under_test) }}</span>
             </el-descriptions-item>
             <el-descriptions-item
@@ -520,8 +757,14 @@
         </template>
 
         <template v-else-if="resolvedDrawerType === 'performance'">
-          <div class="case-detail-section-title">性能测试</div>
-          <el-skeleton v-if="!drawerHeavyContentMounted" :rows="3" animated />
+          <div class="case-detail-section-title">
+            性能测试
+          </div>
+          <el-skeleton
+            v-if="!drawerHeavyContentMounted"
+            :rows="3"
+            animated
+          />
           <el-descriptions
             v-else
             :column="1"
@@ -529,19 +772,28 @@
             size="small"
             class="case-detail-desc case-detail-desc--typed"
           >
-            <el-descriptions-item label="并发数" label-class-name="case-detail-desc__label">
+            <el-descriptions-item
+              label="并发数"
+              label-class-name="case-detail-desc__label"
+            >
               <span class="case-detail-text">{{
                 caseDetailRow.concurrency != null ? String(caseDetailRow.concurrency) : '—'
               }}</span>
             </el-descriptions-item>
-            <el-descriptions-item label="持续时间(s)" label-class-name="case-detail-desc__label">
+            <el-descriptions-item
+              label="持续时间(s)"
+              label-class-name="case-detail-desc__label"
+            >
               <span class="case-detail-text">{{
                 caseDetailRow.duration_seconds != null
                   ? String(caseDetailRow.duration_seconds)
                   : '—'
               }}</span>
             </el-descriptions-item>
-            <el-descriptions-item label="目标 RPS" label-class-name="case-detail-desc__label">
+            <el-descriptions-item
+              label="目标 RPS"
+              label-class-name="case-detail-desc__label"
+            >
               <span class="case-detail-text">{{
                 caseDetailRow.target_rps != null ? String(caseDetailRow.target_rps) : '—'
               }}</span>
@@ -550,8 +802,14 @@
         </template>
 
         <template v-else-if="drawerExtraFields.length">
-          <div class="case-detail-section-title">扩展信息</div>
-          <el-skeleton v-if="!drawerHeavyContentMounted" :rows="4" animated />
+          <div class="case-detail-section-title">
+            扩展信息
+          </div>
+          <el-skeleton
+            v-if="!drawerHeavyContentMounted"
+            :rows="4"
+            animated
+          />
           <el-descriptions
             v-else
             :column="1"
@@ -565,12 +823,17 @@
               :label="f.label"
               label-class-name="case-detail-desc__label"
             >
-              <pre v-if="isDrawerTailFieldPreformatted(f)" class="case-detail-pre">{{ f.value }}</pre>
-              <span v-else class="case-detail-text">{{ f.value }}</span>
+              <pre
+                v-if="isDrawerTailFieldPreformatted(f)"
+                class="case-detail-pre"
+              >{{ f.value }}</pre>
+              <span
+                v-else
+                class="case-detail-text"
+              >{{ f.value }}</span>
             </el-descriptions-item>
           </el-descriptions>
         </template>
-
       </template>
       <template #footer>
         <div class="case-detail-drawer-footer">
@@ -584,17 +847,35 @@
               >
                 保存并执行
               </el-button>
-              <el-button @click="openExecutionLogsDialog">查看测试日志</el-button>
-              <el-button type="success" plain @click="onDrawerReportHook">回填报告…</el-button>
+              <el-button @click="openExecutionLogsDialog">
+                查看测试日志
+              </el-button>
+              <el-button
+                type="success"
+                plain
+                @click="onDrawerReportHook"
+              >
+                回填报告…
+              </el-button>
             </template>
             <template v-else>
-              <el-button type="primary" @click="editFromDrawer">编辑用例</el-button>
-              <el-button :disabled="!caseDetailRow.id" @click="onDrawerRecordExec">
+              <el-button
+                type="primary"
+                @click="editFromDrawer"
+              >
+                编辑用例
+              </el-button>
+              <el-button
+                :disabled="!caseDetailRow.id"
+                @click="onDrawerRecordExec"
+              >
                 记录执行
               </el-button>
             </template>
           </template>
-          <el-button @click="caseDetailDrawerVisible = false">关闭</el-button>
+          <el-button @click="caseDetailDrawerVisible = false">
+            关闭
+          </el-button>
         </div>
       </template>
     </el-drawer>
@@ -615,19 +896,55 @@
         stripe
         @row-click="onExecutionLogRowClick"
       >
-        <el-table-column prop="id" label="ID" width="72" />
-        <el-table-column label="状态" width="100" align="center">
+        <el-table-column
+          prop="id"
+          label="ID"
+          width="72"
+        />
+        <el-table-column
+          label="状态"
+          width="100"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag :type="row.is_passed ? 'success' : 'danger'" size="small">
+            <el-tag
+              :type="row.is_passed ? 'success' : 'danger'"
+              size="small"
+            >
               {{ row.is_passed ? '通过' : '未通过' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="response_status_code" label="HTTP" width="80" align="center" />
-        <el-table-column prop="duration_ms" label="耗时ms" width="88" align="right" />
-        <el-table-column prop="trace_id" label="trace_id" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="create_time" label="时间" width="160" show-overflow-tooltip />
-        <el-table-column label="修订建议" width="100" align="center" fixed="right">
+        <el-table-column
+          prop="response_status_code"
+          label="HTTP"
+          width="80"
+          align="center"
+        />
+        <el-table-column
+          prop="duration_ms"
+          label="耗时ms"
+          width="88"
+          align="right"
+        />
+        <el-table-column
+          prop="trace_id"
+          label="trace_id"
+          min-width="120"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="create_time"
+          label="时间"
+          width="160"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="修订建议"
+          width="100"
+          align="center"
+          fixed="right"
+        >
           <template #default="{ row }">
             <el-button
               v-if="!row.is_passed"
@@ -639,12 +956,17 @@
             >
               AI
             </el-button>
-            <span v-else style="color: rgba(148, 163, 184, 0.6)">—</span>
+            <span
+              v-else
+              style="color: rgba(148, 163, 184, 0.6)"
+            >—</span>
           </template>
         </el-table-column>
       </el-table>
       <template #footer>
-        <el-button @click="executionLogsDialogVisible = false">关闭</el-button>
+        <el-button @click="executionLogsDialogVisible = false">
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 
@@ -657,16 +979,53 @@
       @closed="resetCaseFixSuggestDialogState"
     >
       <template v-if="caseFixSuggestResult">
-        <el-alert type="info" :closable="false" show-icon class="mb-3" title="请人工审核后再修改用例；模型可能遗漏上下文。" />
-        <div class="case-fix-summary">{{ caseFixSuggestResult.summary }}</div>
-        <div class="panel-subtitle">建议步骤</div>
-        <el-table :data="caseFixSuggestResult.suggested_steps || []" size="small" border stripe max-height="260">
-          <el-table-column type="index" label="#" width="48" />
-          <el-table-column prop="step_desc" label="步骤描述" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="expected_result" label="预期" min-width="140" show-overflow-tooltip />
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          class="mb-3"
+          title="请人工审核后再修改用例；模型可能遗漏上下文。"
+        />
+        <div class="case-fix-summary">
+          {{ caseFixSuggestResult.summary }}
+        </div>
+        <div class="panel-subtitle">
+          建议步骤
+        </div>
+        <el-table
+          :data="caseFixSuggestResult.suggested_steps || []"
+          size="small"
+          border
+          stripe
+          max-height="260"
+        >
+          <el-table-column
+            type="index"
+            label="#"
+            width="48"
+          />
+          <el-table-column
+            prop="step_desc"
+            label="步骤描述"
+            min-width="200"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="expected_result"
+            label="预期"
+            min-width="140"
+            show-overflow-tooltip
+          />
         </el-table>
-        <div class="panel-subtitle" style="margin-top: 12px">风险提示</div>
-        <div class="case-fix-risks">{{ caseFixSuggestResult.risks }}</div>
+        <div
+          class="panel-subtitle"
+          style="margin-top: 12px"
+        >
+          风险提示
+        </div>
+        <div class="case-fix-risks">
+          {{ caseFixSuggestResult.risks }}
+        </div>
       </template>
       <template #footer>
         <el-button
@@ -674,15 +1033,20 @@
           plain
           :disabled="
             !caseFixSuggestResult?.suggested_steps?.length ||
-            !caseFixSuggestExecutionLogId ||
-            !caseDetailRow?.id
+              !caseFixSuggestExecutionLogId ||
+              !caseDetailRow?.id
           "
           :loading="caseFixSuggestApplyLoading"
           @click="applyCaseFixSuggestedSteps"
         >
           一键替换全部步骤
         </el-button>
-        <el-button type="primary" @click="caseFixSuggestResultVisible = false">关闭</el-button>
+        <el-button
+          type="primary"
+          @click="caseFixSuggestResultVisible = false"
+        >
+          关闭
+        </el-button>
       </template>
     </el-dialog>
 
@@ -708,42 +1072,106 @@
         stripe
         style="margin-top: 12px;"
       >
-        <el-table-column label="选择" width="70" align="center">
+        <el-table-column
+          label="选择"
+          width="70"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-radio :model-value="selectedRollbackVersionId" :label="row.id" @change="selectedRollbackVersionId = row.id">
+            <el-radio
+              :model-value="selectedRollbackVersionId"
+              :label="row.id"
+              @change="selectedRollbackVersionId = row.id"
+            >
               &nbsp;
             </el-radio>
           </template>
         </el-table-column>
-        <el-table-column prop="version_label" label="版本标签" width="130" />
-        <el-table-column prop="snapshot_no" label="序号" width="80" />
-        <el-table-column label="发布版本" width="120">
-          <template #default="{ row }">{{ row.release_version_no || "-" }}</template>
-        </el-table-column>
-        <el-table-column label="创建人" width="120">
-          <template #default="{ row }">{{ row.creator_name || "-" }}</template>
-        </el-table-column>
-        <el-table-column label="创建时间" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">{{ formatDate(row.create_time) }}</template>
-        </el-table-column>
-        <el-table-column label="快照用例名" min-width="180" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.snapshot_case_name || "-" }}</template>
-        </el-table-column>
-        <el-table-column label="步骤数" width="84" align="center">
-          <template #default="{ row }">{{ row.snapshot_step_count ?? 0 }}</template>
-        </el-table-column>
-        <el-table-column label="快照 API 地址" min-width="220" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.snapshot_api_url || "-" }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="90" align="center">
+        <el-table-column
+          prop="version_label"
+          label="版本标签"
+          width="130"
+        />
+        <el-table-column
+          prop="snapshot_no"
+          label="序号"
+          width="80"
+        />
+        <el-table-column
+          label="发布版本"
+          width="120"
+        >
           <template #default="{ row }">
-            <TableActionGroup :row="row" :actions="rollbackSnapshotActions" @action="handleRollbackSnapshotAction" />
+            {{ row.release_version_no || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="创建人"
+          width="120"
+        >
+          <template #default="{ row }">
+            {{ row.creator_name || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="创建时间"
+          min-width="160"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ formatDate(row.create_time) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="快照用例名"
+          min-width="180"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ row.snapshot_case_name || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="步骤数"
+          width="84"
+          align="center"
+        >
+          <template #default="{ row }">
+            {{ row.snapshot_step_count ?? 0 }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="快照 API 地址"
+          min-width="220"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ row.snapshot_api_url || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          width="90"
+          align="center"
+        >
+          <template #default="{ row }">
+            <TableActionGroup
+              :row="row"
+              :actions="rollbackSnapshotActions"
+              @action="handleRollbackSnapshotAction"
+            />
           </template>
         </el-table-column>
       </el-table>
       <template #footer>
-        <el-button @click="rollbackDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="rollbackSubmitting" @click="submitRollbackFromDialog">
+        <el-button @click="rollbackDialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="rollbackSubmitting"
+          @click="submitRollbackFromDialog"
+        >
           确认回溯
         </el-button>
       </template>
@@ -758,7 +1186,11 @@
       destroy-on-close
     >
       <template v-if="rollbackSnapshotDetailRow">
-        <el-descriptions :column="1" border size="small">
+        <el-descriptions
+          :column="1"
+          border
+          size="small"
+        >
           <el-descriptions-item label="版本标签">
             {{ rollbackSnapshotDetailRow.version_label || "-" }}
           </el-descriptions-item>
@@ -776,27 +1208,78 @@
           </el-descriptions-item>
         </el-descriptions>
 
-        <div class="case-detail-section-title">步骤详情</div>
-        <el-table :data="rollbackSnapshotSteps" size="small" border stripe>
-          <el-table-column prop="step_number" label="#" width="66" align="center" />
-          <el-table-column prop="step_desc" label="步骤描述" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="expected_result" label="预期结果" min-width="220" show-overflow-tooltip />
+        <div class="case-detail-section-title">
+          步骤详情
+        </div>
+        <el-table
+          :data="rollbackSnapshotSteps"
+          size="small"
+          border
+          stripe
+        >
+          <el-table-column
+            prop="step_number"
+            label="#"
+            width="66"
+            align="center"
+          />
+          <el-table-column
+            prop="step_desc"
+            label="步骤描述"
+            min-width="180"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="expected_result"
+            label="预期结果"
+            min-width="220"
+            show-overflow-tooltip
+          />
         </el-table>
 
-        <div class="case-detail-section-title">当前差异</div>
-        <el-empty v-if="rollbackSnapshotDiffRows.length === 0" description="与当前用例一致（或无可对比字段）" />
-        <el-table v-else :data="rollbackSnapshotDiffRows" size="small" border stripe>
-          <el-table-column prop="field" label="字段" width="150" />
-          <el-table-column prop="current" label="当前值" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="snapshot" label="快照值" min-width="180" show-overflow-tooltip />
+        <div class="case-detail-section-title">
+          当前差异
+        </div>
+        <el-empty
+          v-if="rollbackSnapshotDiffRows.length === 0"
+          description="与当前用例一致（或无可对比字段）"
+        />
+        <el-table
+          v-else
+          :data="rollbackSnapshotDiffRows"
+          size="small"
+          border
+          stripe
+        >
+          <el-table-column
+            prop="field"
+            label="字段"
+            width="150"
+          />
+          <el-table-column
+            prop="current"
+            label="当前值"
+            min-width="180"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="snapshot"
+            label="快照值"
+            min-width="180"
+            show-overflow-tooltip
+          />
         </el-table>
 
-        <div class="case-detail-section-title">子类型数据</div>
+        <div class="case-detail-section-title">
+          子类型数据
+        </div>
         <pre class="case-detail-pre">{{ rollbackSnapshotSubtypeText }}</pre>
       </template>
       <template #footer>
         <div class="case-detail-drawer-footer">
-          <el-button @click="rollbackSnapshotDetailVisible = false">关闭</el-button>
+          <el-button @click="rollbackSnapshotDetailVisible = false">
+            关闭
+          </el-button>
         </div>
       </template>
     </el-drawer>
@@ -810,9 +1293,22 @@
       destroy-on-close
       @closed="resetModuleForm"
     >
-      <el-form ref="moduleFormRef" :model="newModuleForm" :rules="moduleFormRules" label-width="88px">
-        <el-form-item label="模块名称" prop="name">
-          <el-input v-model="newModuleForm.name" placeholder="例如：登录页、订单流程" maxlength="100" show-word-limit />
+      <el-form
+        ref="moduleFormRef"
+        :model="newModuleForm"
+        :rules="moduleFormRules"
+        label-width="88px"
+      >
+        <el-form-item
+          label="模块名称"
+          prop="name"
+        >
+          <el-input
+            v-model="newModuleForm.name"
+            placeholder="例如：登录页、订单流程"
+            maxlength="100"
+            show-word-limit
+          />
         </el-form-item>
         <el-form-item label="上级模块">
           <el-select
@@ -832,8 +1328,16 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showModuleDialog = false">取消</el-button>
-        <el-button type="primary" :loading="moduleSaving" @click="submitNewModule">确定</el-button>
+        <el-button @click="showModuleDialog = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="moduleSaving"
+          @click="submitNewModule"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
 
@@ -844,89 +1348,245 @@
       :width="caseDialogWidth"
       class="cyber-dialog-dark"
     >
-      <el-form ref="formRef" :model="caseForm" :rules="caseRules" label-width="108px">
-        <el-form-item label="用例名称" prop="case_name">
-          <el-input v-model="caseForm.case_name" placeholder="请输入用例名称" />
+      <el-form
+        ref="formRef"
+        :model="caseForm"
+        :rules="caseRules"
+        label-width="108px"
+      >
+        <el-form-item
+          label="用例名称"
+          prop="case_name"
+        >
+          <el-input
+            v-model="caseForm.case_name"
+            placeholder="请输入用例名称"
+          />
         </el-form-item>
-        <el-form-item label="等级" prop="level">
-          <el-select v-model="caseForm.level" placeholder="请选择">
-            <el-option v-for="l in ['P0','P1','P2','P3']" :key="l" :label="l" :value="l" />
+        <el-form-item
+          label="等级"
+          prop="level"
+        >
+          <el-select
+            v-model="caseForm.level"
+            placeholder="请选择"
+          >
+            <el-option
+              v-for="l in ['P0','P1','P2','P3']"
+              :key="l"
+              :label="l"
+              :value="l"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="所属模块" prop="module">
-          <el-select v-model="caseForm.module" placeholder="请选择模块" clearable filterable>
-            <el-option v-for="m in flatModules" :key="m.id" :label="m.name" :value="m.id" />
+        <el-form-item
+          label="所属模块"
+          prop="module"
+        >
+          <el-select
+            v-model="caseForm.module"
+            placeholder="请选择模块"
+            clearable
+            filterable
+          >
+            <el-option
+              v-for="m in flatModules"
+              :key="m.id"
+              :label="m.name"
+              :value="m.id"
+            />
           </el-select>
         </el-form-item>
         <template v-if="activeTestCaseType === 'api'">
-          <el-form-item label="API 地址" prop="api_url">
-            <el-input v-model="caseForm.api_url" placeholder="https://..." />
+          <el-form-item
+            label="API 地址"
+            prop="api_url"
+          >
+            <el-input
+              v-model="caseForm.api_url"
+              placeholder="https://..."
+            />
           </el-form-item>
-          <el-form-item label="HTTP 方法" prop="api_method">
-            <el-select v-model="caseForm.api_method" placeholder="方法" style="width: 100%">
-              <el-option v-for="m in ['GET','POST','PUT','PATCH','DELETE','HEAD']" :key="m" :label="m" :value="m" />
+          <el-form-item
+            label="HTTP 方法"
+            prop="api_method"
+          >
+            <el-select
+              v-model="caseForm.api_method"
+              placeholder="方法"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="m in ['GET','POST','PUT','PATCH','DELETE','HEAD']"
+                :key="m"
+                :label="m"
+                :value="m"
+              />
             </el-select>
           </el-form-item>
-          <el-form-item label="请求头 JSON" prop="api_headers_text">
+          <el-form-item
+            label="请求头 JSON"
+            prop="api_headers_text"
+          >
             <el-input
               v-model="caseForm.api_headers_text"
               type="textarea"
               :rows="3"
-              placeholder='例如 {"Content-Type":"application/json"}'
+              placeholder="例如 {&quot;Content-Type&quot;:&quot;application/json&quot;}"
             />
           </el-form-item>
-          <el-form-item label="请求体" prop="api_body">
-            <el-input v-model="caseForm.api_body" type="textarea" :rows="4" placeholder="可选" />
+          <el-form-item
+            label="请求体"
+            prop="api_body"
+          >
+            <el-input
+              v-model="caseForm.api_body"
+              type="textarea"
+              :rows="4"
+              placeholder="可选"
+            />
           </el-form-item>
-          <el-form-item label="期望状态码" prop="api_expected_status">
-            <el-input-number v-model="caseForm.api_expected_status" :min="100" :max="599" controls-position="right" />
+          <el-form-item
+            label="期望状态码"
+            prop="api_expected_status"
+          >
+            <el-input-number
+              v-model="caseForm.api_expected_status"
+              :min="100"
+              :max="599"
+              controls-position="right"
+            />
           </el-form-item>
         </template>
         <template v-else-if="activeTestCaseType === 'performance'">
-          <el-form-item label="并发数" prop="concurrency">
-            <el-input-number v-model="caseForm.concurrency" :min="1" :max="999999" controls-position="right" />
+          <el-form-item
+            label="并发数"
+            prop="concurrency"
+          >
+            <el-input-number
+              v-model="caseForm.concurrency"
+              :min="1"
+              :max="999999"
+              controls-position="right"
+            />
           </el-form-item>
-          <el-form-item label="持续时间(s)" prop="duration_seconds">
-            <el-input-number v-model="caseForm.duration_seconds" :min="1" :max="86400" controls-position="right" />
+          <el-form-item
+            label="持续时间(s)"
+            prop="duration_seconds"
+          >
+            <el-input-number
+              v-model="caseForm.duration_seconds"
+              :min="1"
+              :max="86400"
+              controls-position="right"
+            />
           </el-form-item>
-          <el-form-item label="目标 RPS" prop="target_rps">
-            <el-input-number v-model="caseForm.target_rps" :min="1" :max="9999999" controls-position="right" />
+          <el-form-item
+            label="目标 RPS"
+            prop="target_rps"
+          >
+            <el-input-number
+              v-model="caseForm.target_rps"
+              :min="1"
+              :max="9999999"
+              controls-position="right"
+            />
           </el-form-item>
         </template>
         <template v-else-if="activeTestCaseType === 'security'">
-          <el-form-item label="攻击面说明" prop="attack_surface">
-            <el-input v-model="caseForm.attack_surface" type="textarea" :rows="2" placeholder="范围、入口等" />
+          <el-form-item
+            label="攻击面说明"
+            prop="attack_surface"
+          >
+            <el-input
+              v-model="caseForm.attack_surface"
+              type="textarea"
+              :rows="2"
+              placeholder="范围、入口等"
+            />
           </el-form-item>
-          <el-form-item label="工具/模板" prop="tool_preset">
-            <el-input v-model="caseForm.tool_preset" placeholder="扫描器或脚本模板" />
+          <el-form-item
+            label="工具/模板"
+            prop="tool_preset"
+          >
+            <el-input
+              v-model="caseForm.tool_preset"
+              placeholder="扫描器或脚本模板"
+            />
           </el-form-item>
-          <el-form-item label="风险等级" prop="risk_level">
-            <el-select v-model="caseForm.risk_level" placeholder="可选" clearable style="width: 100%">
-              <el-option label="高" value="高" />
-              <el-option label="中" value="中" />
-              <el-option label="低" value="低" />
+          <el-form-item
+            label="风险等级"
+            prop="risk_level"
+          >
+            <el-select
+              v-model="caseForm.risk_level"
+              placeholder="可选"
+              clearable
+              style="width: 100%"
+            >
+              <el-option
+                label="高"
+                value="高"
+              />
+              <el-option
+                label="中"
+                value="中"
+              />
+              <el-option
+                label="低"
+                value="低"
+              />
             </el-select>
           </el-form-item>
         </template>
         <template v-else-if="activeTestCaseType === 'ui-automation'">
-          <el-form-item label="应用/包名" prop="app_under_test">
-            <el-input v-model="caseForm.app_under_test" placeholder="包名或应用标识" />
+          <el-form-item
+            label="应用/包名"
+            prop="app_under_test"
+          >
+            <el-input
+              v-model="caseForm.app_under_test"
+              placeholder="包名或应用标识"
+            />
           </el-form-item>
-          <el-form-item label="主定位符" prop="primary_locator">
-            <el-input v-model="caseForm.primary_locator" placeholder="xpath / accessibility id 等" />
+          <el-form-item
+            label="主定位符"
+            prop="primary_locator"
+          >
+            <el-input
+              v-model="caseForm.primary_locator"
+              placeholder="xpath / accessibility id 等"
+            />
           </el-form-item>
-          <el-form-item label="自动化框架" prop="automation_framework">
-            <el-input v-model="caseForm.automation_framework" placeholder="如 Appium、Playwright" />
+          <el-form-item
+            label="自动化框架"
+            prop="automation_framework"
+          >
+            <el-input
+              v-model="caseForm.automation_framework"
+              placeholder="如 Appium、Playwright"
+            />
           </el-form-item>
         </template>
       </el-form>
       <template #footer>
-        <el-button @click="showDialog = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submitCase">确定</el-button>
+        <el-button @click="showDialog = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="submitCase"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
 
-    <ApiExecuteConsoleDialog v-model="apiConsoleVisible" :case-row="apiConsoleCaseRow" />
+    <ApiExecuteConsoleDialog
+      v-model="apiConsoleVisible"
+      :case-row="apiConsoleCaseRow"
+    />
 
     <TestCaseModal
       v-model="showAiGenerateDialog"
@@ -1266,6 +1926,10 @@ const showAiGenerateDialog = ref(false)
 function openAiGenerateDialog() {
   loadModules()
   showAiGenerateDialog.value = true
+}
+
+function openQuickLink(url: string) {
+  window.open(url, '_blank')
 }
 
 function onAiGenerateImported() {
@@ -3056,18 +3720,259 @@ onUnmounted(() => {
 .case-table-empty-state {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 280px;
-  padding: 24px 16px;
+  min-height: 420px;
+  padding: 48px 24px 40px;
 }
 
-.case-empty-hint {
-  max-width: 420px;
-  margin: 0 auto 16px;
+.empty-illustration {
+  position: relative;
+  width: 180px;
+  height: 140px;
+  margin-bottom: 28px;
+}
+
+.empty-hex-group {
+  position: absolute;
+  inset: 0;
+}
+
+.empty-hex {
+  position: absolute;
+  border: 1.5px solid rgba(0, 216, 255, 0.25);
+  border-radius: 4px;
+  transform: rotate(45deg);
+  animation: emptyHexFloat 6s ease-in-out infinite;
+}
+
+.empty-hex--1 {
+  width: 48px;
+  height: 48px;
+  top: 10px;
+  left: 66px;
+  border-color: rgba(0, 216, 255, 0.4);
+  animation-delay: 0s;
+}
+
+.empty-hex--2 {
+  width: 32px;
+  height: 32px;
+  top: 4px;
+  left: 30px;
+  border-color: rgba(34, 211, 238, 0.3);
+  animation-delay: -1.5s;
+}
+
+.empty-hex--3 {
+  width: 28px;
+  height: 28px;
+  top: 50px;
+  left: 120px;
+  border-color: rgba(34, 211, 238, 0.3);
+  animation-delay: -3s;
+}
+
+.empty-hex--4 {
+  width: 20px;
+  height: 20px;
+  top: 80px;
+  left: 50px;
+  border-color: rgba(0, 216, 255, 0.2);
+  animation-delay: -4s;
+}
+
+.empty-hex--5 {
+  width: 16px;
+  height: 16px;
+  top: 24px;
+  left: 110px;
+  border-color: rgba(34, 211, 238, 0.2);
+  animation-delay: -2s;
+}
+
+@keyframes emptyHexFloat {
+  0%, 100% { transform: rotate(45deg) translateY(0); opacity: 1; }
+  50% { transform: rotate(45deg) translateY(-8px); opacity: 0.7; }
+}
+
+.empty-circuit-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.circuit-line {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 216, 255, 0.35), transparent);
+  animation: circuitPulse 4s ease-in-out infinite;
+}
+
+.circuit-line--1 {
+  width: 80px;
+  top: 34px;
+  left: 20px;
+  animation-delay: 0s;
+}
+
+.circuit-line--2 {
+  width: 60px;
+  top: 64px;
+  left: 70px;
+  animation-delay: -1.3s;
+}
+
+.circuit-line--3 {
+  width: 50px;
+  top: 90px;
+  left: 40px;
+  animation-delay: -2.6s;
+}
+
+@keyframes circuitPulse {
+  0%, 100% { opacity: 0.3; transform: scaleX(1); }
+  50% { opacity: 1; transform: scaleX(1.15); }
+}
+
+.empty-dot {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(0, 216, 255, 0.6);
+  animation: dotBlink 3s ease-in-out infinite;
+}
+
+.empty-dot--1 { top: 32px; left: 18px; animation-delay: 0s; }
+.empty-dot--2 { top: 62px; left: 132px; animation-delay: -1s; background: rgba(34, 211, 238, 0.5); }
+.empty-dot--3 { top: 92px; left: 92px; animation-delay: -2s; }
+
+@keyframes dotBlink {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.5); }
+}
+
+.empty-glow {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 216, 255, 0.08) 0%, transparent 70%);
+  animation: glowPulse 5s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+.empty-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.92);
+  letter-spacing: 0.02em;
+}
+
+.empty-subtitle {
+  margin: 0 0 28px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(148, 163, 184, 0.8);
+  max-width: 380px;
+  text-align: center;
+}
+
+.empty-cta-btn {
+  height: 44px !important;
+  padding: 0 32px !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #00d8ff, #22d3ee) !important;
+  border: none !important;
+  box-shadow: 0 4px 20px rgba(0, 216, 255, 0.35), 0 0 0 1px rgba(0, 216, 255, 0.15) !important;
+  transition: all 0.25s ease !important;
+}
+
+.empty-cta-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px rgba(0, 216, 255, 0.45), 0 0 0 1px rgba(0, 216, 255, 0.25) !important;
+}
+
+.empty-cta-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.empty-cta-btn:disabled {
+  background: rgba(0, 216, 255, 0.2) !important;
+  box-shadow: none !important;
+  opacity: 0.6;
+}
+
+.empty-cta-tip {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.6);
+}
+
+.empty-quick-links {
+  display: flex;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.empty-quick-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 180px;
+}
+
+.empty-quick-card:hover {
+  background: rgba(0, 216, 255, 0.08);
+  border-color: rgba(0, 216, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.quick-card-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(0, 216, 255, 0.1);
+}
+
+.quick-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quick-card-title {
   font-size: 13px;
-  line-height: 1.55;
-  color: rgba(148, 163, 184, 0.95);
+  font-weight: 500;
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.quick-card-desc {
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.6);
 }
 
 .case-table--thin {

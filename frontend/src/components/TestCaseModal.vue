@@ -16,7 +16,10 @@
           'ai-gen-rag-strip--info': !aiGenRagLinked,
         }"
       >
-        <span class="ai-gen-rag-strip__dot" aria-hidden="true" />
+        <span
+          class="ai-gen-rag-strip__dot"
+          aria-hidden="true"
+        />
         <span class="ai-gen-rag-strip__text">
           {{
             aiGenRagLinked
@@ -28,8 +31,13 @@
 
       <div class="ai-gen-modal-scroll">
         <div class="ai-gen-input-block">
-          <div class="ai-gen-label">模块范围（可选）</div>
-          <el-form-item label-width="0" class="ai-gen-module-row ai-gen-module-row--top">
+          <div class="ai-gen-label">
+            模块范围（可选）
+          </div>
+          <el-form-item
+            label-width="0"
+            class="ai-gen-module-row ai-gen-module-row--top"
+          >
             <el-select
               v-model="aiImportModule"
               placeholder="不选则使用左侧树当前选中的模块做向量检索"
@@ -38,7 +46,12 @@
               style="width: 320px"
               :disabled="aiGenerating"
             >
-              <el-option v-for="m in flatModules" :key="m.id" :label="m.name" :value="m.id" />
+              <el-option
+                v-for="m in flatModules"
+                :key="m.id"
+                :label="m.name"
+                :value="m.id"
+              />
             </el-select>
             <div class="ai-gen-module-hint">
               选定模块后，生成时<strong>仅在该模块内</strong>检索相似用例（RAG 去重）；导入时若某行无
@@ -69,9 +82,7 @@
           <template v-if="effectiveTestType === 'api'">
             <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">
               接口定义（可选）
-              <span class="ai-gen-optional-hint"
-                >粘贴 OpenAPI/Swagger JSON、YAML 片段或 cURL；写入 ext_config.api_spec 并启用接口增强提示词</span
-              >
+              <span class="ai-gen-optional-hint">粘贴 OpenAPI/Swagger JSON、YAML 片段或 cURL；写入 ext_config.api_spec 并启用接口增强提示词</span>
             </div>
             <el-input
               v-model="aiApiSpec"
@@ -84,7 +95,9 @@
           </template>
 
           <template v-else-if="effectiveTestType === 'functional'">
-            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">业务流程 / 前置条件（可选）</div>
+            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">
+              业务流程 / 前置条件（可选）
+            </div>
             <el-input
               v-model="aiFunctionalFlow"
               type="textarea"
@@ -95,7 +108,9 @@
           </template>
 
           <template v-else-if="effectiveTestType === 'ui-automation'">
-            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">页面元素 / 定位符（可选）</div>
+            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">
+              页面元素 / 定位符（可选）
+            </div>
             <el-input
               v-model="aiUiLocators"
               type="textarea"
@@ -106,7 +121,9 @@
           </template>
 
           <template v-else-if="effectiveTestType === 'performance'">
-            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">性能指标（可选）</div>
+            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">
+              性能指标（可选）
+            </div>
             <el-input
               v-model="aiPerfMetrics"
               type="textarea"
@@ -117,7 +134,9 @@
           </template>
 
           <template v-else-if="effectiveTestType === 'security'">
-            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">漏洞类型 vulnerability_type（多选）</div>
+            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">
+              漏洞类型 vulnerability_type（多选）
+            </div>
             <el-select
               v-model="aiSecurityVulnTypes"
               multiple
@@ -135,13 +154,27 @@
                 :value="o.value"
               />
             </el-select>
-            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">风险等级 risk_level</div>
-            <el-radio-group v-model="aiSecurityRiskLevel" size="small" :disabled="aiGenerating">
-              <el-radio-button label="高">高</el-radio-button>
-              <el-radio-button label="中">中</el-radio-button>
-              <el-radio-button label="低">低</el-radio-button>
+            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">
+              风险等级 risk_level
+            </div>
+            <el-radio-group
+              v-model="aiSecurityRiskLevel"
+              size="small"
+              :disabled="aiGenerating"
+            >
+              <el-radio-button label="高">
+                高
+              </el-radio-button>
+              <el-radio-button label="中">
+                中
+              </el-radio-button>
+              <el-radio-button label="低">
+                低
+              </el-radio-button>
             </el-radio-group>
-            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">扫描范围（可选）</div>
+            <div class="ai-gen-label ai-gen-label--sub ai-gen-label--mt">
+              扫描范围（可选）
+            </div>
             <el-input
               v-model="aiSecurityScanScope"
               type="textarea"
@@ -171,24 +204,49 @@
         </div>
       </div>
 
-      <div v-if="aiGenerating && !aiStreamText" class="ai-gen-skeleton-wrap">
-        <el-skeleton animated :rows="8" />
-        <div class="ai-gen-thinking-hint">{{ aiLoadingHint || 'AI 正在思考中…' }}</div>
+      <div
+        v-if="aiGenerating && !aiStreamText"
+        class="ai-gen-skeleton-wrap"
+      >
+        <el-skeleton
+          animated
+          :rows="8"
+        />
+        <div class="ai-gen-thinking-hint">
+          {{ aiLoadingHint || 'AI 正在思考中…' }}
+        </div>
       </div>
 
-      <div v-if="aiPhase1Analysis" class="ai-gen-phase1-card">
-        <div class="ai-gen-label">Phase 1 分析结果</div>
+      <div
+        v-if="aiPhase1Analysis"
+        class="ai-gen-phase1-card"
+      >
+        <div class="ai-gen-label">
+          Phase 1 分析结果
+        </div>
         <div class="ai-gen-phase1-module">
           推导模块：<strong>{{ aiPhase1Analysis.module_name || '通用功能模块' }}</strong>
         </div>
         <ul class="ai-gen-phase1-points">
-          <li v-for="(p, idx) in aiPhase1Analysis.key_test_points" :key="`${idx}-${p}`">
+          <li
+            v-for="(p, idx) in aiPhase1Analysis.key_test_points"
+            :key="`${idx}-${p}`"
+          >
             {{ p }}
           </li>
         </ul>
-        <div v-if="aiPhase1Override" class="ai-gen-phase1-edit">
-          <div class="ai-gen-label ai-gen-label--sub">可编辑（用于本次生成）</div>
-          <el-input v-model="aiPhase1Override.module_name" placeholder="模块名" :disabled="aiGenerating" />
+        <div
+          v-if="aiPhase1Override"
+          class="ai-gen-phase1-edit"
+        >
+          <div class="ai-gen-label ai-gen-label--sub">
+            可编辑（用于本次生成）
+          </div>
+          <el-input
+            v-model="aiPhase1Override.module_name"
+            placeholder="模块名"
+            :disabled="aiGenerating"
+          />
           <el-input
             v-model="aiPhase1OverridePointsText"
             type="textarea"
@@ -199,14 +257,30 @@
         </div>
       </div>
 
-      <div v-if="aiGenerating || aiStreamText" class="ai-gen-stream-block">
-        <div class="ai-gen-label">模型输出（实时）</div>
-        <pre class="ai-gen-stream-pre">{{ aiStreamText }}<span v-if="aiGenerating" class="ai-gen-stream-cursor">▍</span></pre>
+      <div
+        v-if="aiGenerating || aiStreamText"
+        class="ai-gen-stream-block"
+      >
+        <div class="ai-gen-label">
+          模型输出（实时）
+        </div>
+        <pre class="ai-gen-stream-pre">{{ aiStreamText }}<span
+v-if="aiGenerating"
+                                                               class="ai-gen-stream-cursor"
+        >▍</span></pre>
       </div>
 
-      <div v-if="aiPreviewCases.length" class="ai-gen-preview-block">
-        <div class="ai-gen-label">生成预览（勾选后导入）</div>
-        <el-form-item label="默认模块" class="ai-gen-module-row">
+      <div
+        v-if="aiPreviewCases.length"
+        class="ai-gen-preview-block"
+      >
+        <div class="ai-gen-label">
+          生成预览（勾选后导入）
+        </div>
+        <el-form-item
+          label="默认模块"
+          class="ai-gen-module-row"
+        >
           <el-select
             v-model="aiImportModule"
             placeholder="可选：当无法从用例/需求推断业务模块时，全部归入此模块"
@@ -214,7 +288,12 @@
             clearable
             style="width: 280px"
           >
-            <el-option v-for="m in flatModules" :key="m.id" :label="m.name" :value="m.id" />
+            <el-option
+              v-for="m in flatModules"
+              :key="m.id"
+              :label="m.name"
+              :value="m.id"
+            />
           </el-select>
           <div class="ai-gen-module-hint">
             模块名表示<strong>业务功能域</strong>（如「用户登录」「订单支付」），与接口/安全等测试类型无关。
@@ -222,7 +301,11 @@
             匹配到已有模块则复用，否则<strong>自动新建</strong>同名模块。
           </div>
         </el-form-item>
-        <el-form-item v-if="effectiveTestType === 'api'" label="预检环境/变量" class="ai-gen-module-row">
+        <el-form-item
+          v-if="effectiveTestType === 'api'"
+          label="预检环境/变量"
+          class="ai-gen-module-row"
+        >
           <el-select
             v-model="precheckEnvId"
             placeholder="可选：选择环境用于拼接 base_url"
@@ -232,21 +315,33 @@
             :disabled="aiGenerating || aiImporting"
             @change="() => runPreImportPrecheck(aiPreviewCases)"
           >
-            <el-option v-for="e in envOptions" :key="e.id" :label="e.name" :value="e.id" />
+            <el-option
+              v-for="e in envOptions"
+              :key="e.id"
+              :label="e.name"
+              :value="e.id"
+            />
           </el-select>
           <el-input
             v-model="precheckVarsText"
-            placeholder='可选：运行时变量 JSON，例如 {"token":"xxx"}'
+            placeholder="可选：运行时变量 JSON，例如 {&quot;token&quot;:&quot;xxx&quot;}"
             style="width: 420px"
             :disabled="aiGenerating || aiImporting"
             @blur="() => runPreImportPrecheck(aiPreviewCases)"
           />
         </el-form-item>
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 10px">
-          <el-switch v-model="blockImportOnIssues" active-text="发现问题则阻断导入" inactive-text="允许导入（仅提示）" />
+          <el-switch
+            v-model="blockImportOnIssues"
+            active-text="发现问题则阻断导入"
+            inactive-text="允许导入（仅提示）"
+          />
           <div style="color: var(--el-text-color-secondary); font-size: 12px">
             已勾选 {{ selectedIssuesSummary.total }} 条，其中 {{ selectedIssuesSummary.bad }} 条存在问题
-            <span v-if="preimportPrecheckLoading" style="margin-left: 10px">预检中…</span>
+            <span
+              v-if="preimportPrecheckLoading"
+              style="margin-left: 10px"
+            >预检中…</span>
           </div>
         </div>
         <el-table
@@ -260,10 +355,24 @@
           class="admin-data-table"
           @selection-change="onAiPreviewSelectionChange"
         >
-          <el-table-column type="selection" width="48" align="center" />
-          <el-table-column prop="case_name" label="用例名称" min-width="160" align="left" show-overflow-tooltip>
+          <el-table-column
+            type="selection"
+            width="48"
+            align="center"
+          />
+          <el-table-column
+            prop="case_name"
+            label="用例名称"
+            min-width="160"
+            align="left"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">
-              <el-tooltip v-if="rowIssues(row).length" :content="rowIssues(row).join('；')" placement="top">
+              <el-tooltip
+                v-if="rowIssues(row).length"
+                :content="rowIssues(row).join('；')"
+                placement="top"
+              >
                 <span style="color: var(--el-color-danger)">{{ row.case_name || '（空）' }}</span>
               </el-tooltip>
               <span v-else>{{ row.case_name }}</span>
@@ -277,8 +386,17 @@
             align="center"
             show-overflow-tooltip
           />
-          <el-table-column prop="level" label="等级" width="64" align="center" />
-          <el-table-column label="相似提示" width="84" align="center">
+          <el-table-column
+            prop="level"
+            label="等级"
+            width="64"
+            align="center"
+          />
+          <el-table-column
+            label="相似提示"
+            width="84"
+            align="center"
+          >
             <template #default="{ row }">
               <el-tag
                 v-if="Array.isArray(row?.similar_candidates?.semantic) && row.similar_candidates.semantic.length"
@@ -292,12 +410,21 @@
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column label="目标模块" min-width="100" align="center" show-overflow-tooltip>
+          <el-table-column
+            label="目标模块"
+            min-width="100"
+            align="center"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">
               {{ (row.module_name || '').trim() || '—' }}
             </template>
           </el-table-column>
-          <el-table-column label="模块匹配" min-width="200" align="center">
+          <el-table-column
+            label="模块匹配"
+            min-width="200"
+            align="center"
+          >
             <template #default="{ row }">
               <el-select
                 v-model="row._target_module_id"
@@ -307,20 +434,44 @@
                 style="width: 180px"
                 :disabled="aiGenerating || aiImporting"
               >
-                <el-option v-for="m in flatModules" :key="m.id" :label="m.name" :value="m.id" />
+                <el-option
+                  v-for="m in flatModules"
+                  :key="m.id"
+                  :label="m.name"
+                  :value="m.id"
+                />
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column prop="precondition" label="前置条件" min-width="100" align="center" show-overflow-tooltip />
-          <el-table-column label="步骤数" width="76" align="center">
+          <el-table-column
+            prop="precondition"
+            label="前置条件"
+            min-width="100"
+            align="center"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            label="步骤数"
+            width="76"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag v-if="Array.isArray(row.steps_list) && row.steps_list.length" size="small" type="success">
+              <el-tag
+                v-if="Array.isArray(row.steps_list) && row.steps_list.length"
+                size="small"
+                type="success"
+              >
                 {{ row.steps_list.length }}
               </el-tag>
               <span v-else>—</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作步骤" min-width="160" align="center" show-overflow-tooltip>
+          <el-table-column
+            label="操作步骤"
+            min-width="160"
+            align="center"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">
               <el-popover
                 v-if="Array.isArray(row.steps_list) && row.steps_list.length"
@@ -334,8 +485,14 @@
                   </span>
                 </template>
                 <div style="max-height: 260px; overflow: auto; white-space: pre-wrap; font-size: 12px">
-                  <div v-for="(s, i) in row.steps_list" :key="i" style="margin-bottom: 10px">
-                    <div style="font-weight: 700; margin-bottom: 4px">步骤 {{ i + 1 }}</div>
+                  <div
+                    v-for="(s, i) in row.steps_list"
+                    :key="i"
+                    style="margin-bottom: 10px"
+                  >
+                    <div style="font-weight: 700; margin-bottom: 4px">
+                      步骤 {{ i + 1 }}
+                    </div>
                     <div>{{ s.step_desc || s.desc || s.action || '—' }}</div>
                     <div style="margin-top: 4px; color: var(--el-text-color-secondary)">
                       预期：{{ s.expected_result || s.expected || '—' }}
@@ -346,12 +503,20 @@
               <span v-else>{{ String(row.steps || '') }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="expected_result" label="预期结果" min-width="120" align="center" show-overflow-tooltip />
+          <el-table-column
+            prop="expected_result"
+            label="预期结果"
+            min-width="120"
+            align="center"
+            show-overflow-tooltip
+          />
         </el-table>
       </div>
     </div>
     <template #footer>
-      <el-button @click="closeDialog">关闭</el-button>
+      <el-button @click="closeDialog">
+        关闭
+      </el-button>
       <el-button
         type="primary"
         :loading="aiImporting"
@@ -363,27 +528,62 @@
     </template>
   </el-dialog>
 
-  <el-dialog v-model="showSimilarDialog" title="相似用例对比" width="720px">
-    <div v-if="!activeSimilarRow" style="color: var(--el-text-color-secondary)">
+  <el-dialog
+    v-model="showSimilarDialog"
+    title="相似用例对比"
+    width="720px"
+  >
+    <div
+      v-if="!activeSimilarRow"
+      style="color: var(--el-text-color-secondary)"
+    >
       未选择用例
     </div>
     <template v-else>
       <div class="ai-sim-block">
-        <div class="ai-gen-label">当前生成用例</div>
-        <div class="ai-sim-current-title">{{ activeSimilarRow.case_name || '—' }}</div>
+        <div class="ai-gen-label">
+          当前生成用例
+        </div>
+        <div class="ai-sim-current-title">
+          {{ activeSimilarRow.case_name || '—' }}
+        </div>
         <pre class="ai-sim-current-steps">{{ String(activeSimilarRow.steps || '').slice(0, 600) }}</pre>
       </div>
 
       <div class="ai-sim-block">
-        <div class="ai-gen-label">语义相似候选（Top）</div>
-        <el-table :data="semanticSimilarRows" size="small" border>
-          <el-table-column label="分数" width="80" align="center">
+        <div class="ai-gen-label">
+          语义相似候选（Top）
+        </div>
+        <el-table
+          :data="semanticSimilarRows"
+          size="small"
+          border
+        >
+          <el-table-column
+            label="分数"
+            width="80"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag size="small" type="success">{{ Number(row.score || 0).toFixed(3) }}</el-tag>
+              <el-tag
+                size="small"
+                type="success"
+              >
+                {{ Number(row.score || 0).toFixed(3) }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="case_name" label="标题" min-width="160" show-overflow-tooltip />
-          <el-table-column label="步骤摘要" min-width="240" show-overflow-tooltip>
+          <el-table-column
+            prop="case_name"
+            label="标题"
+            min-width="160"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            label="步骤摘要"
+            min-width="240"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">
               {{ String(row.steps || '').slice(0, 140) }}
             </template>
@@ -392,15 +592,39 @@
       </div>
 
       <div class="ai-sim-block">
-        <div class="ai-gen-label">字符串相似候选（Top）</div>
-        <el-table :data="stringSimilarRows" size="small" border>
-          <el-table-column label="分数" width="80" align="center">
+        <div class="ai-gen-label">
+          字符串相似候选（Top）
+        </div>
+        <el-table
+          :data="stringSimilarRows"
+          size="small"
+          border
+        >
+          <el-table-column
+            label="分数"
+            width="80"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag size="small" type="info">{{ Number(row.score || 0).toFixed(3) }}</el-tag>
+              <el-tag
+                size="small"
+                type="info"
+              >
+                {{ Number(row.score || 0).toFixed(3) }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="case_name" label="标题" min-width="160" show-overflow-tooltip />
-          <el-table-column label="步骤摘要" min-width="240" show-overflow-tooltip>
+          <el-table-column
+            prop="case_name"
+            label="标题"
+            min-width="160"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            label="步骤摘要"
+            min-width="240"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">
               {{ String(row.steps || '').slice(0, 140) }}
             </template>
@@ -410,25 +634,61 @@
     </template>
 
     <template #footer>
-      <el-button @click="showSimilarDialog = false">关闭</el-button>
+      <el-button @click="showSimilarDialog = false">
+        关闭
+      </el-button>
     </template>
   </el-dialog>
 
-  <el-dialog v-model="showPrecheckDialog" title="导入后预检报告（API）" width="860px">
-    <el-table :data="precheckRows" size="small" border v-loading="precheckLoading">
+  <el-dialog
+    v-model="showPrecheckDialog"
+    title="导入后预检报告（API）"
+    width="860px"
+  >
+    <el-table
+      v-loading="precheckLoading"
+      :data="precheckRows"
+      size="small"
+      border
+    >
       <template #empty>
-        <el-empty description="暂无预检结果" :image-size="86" />
+        <el-empty
+          description="暂无预检结果"
+          :image-size="86"
+        />
       </template>
-      <el-table-column prop="id" label="用例ID" width="90" align="center" />
-      <el-table-column prop="case_name" label="用例名称" min-width="180" show-overflow-tooltip />
-      <el-table-column label="结果" width="90" align="center">
+      <el-table-column
+        prop="id"
+        label="用例ID"
+        width="90"
+        align="center"
+      />
+      <el-table-column
+        prop="case_name"
+        label="用例名称"
+        min-width="180"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="结果"
+        width="90"
+        align="center"
+      >
         <template #default="{ row }">
-          <el-tag size="small" :type="row.ok ? 'success' : 'danger'" effect="plain">
+          <el-tag
+            size="small"
+            :type="row.ok ? 'success' : 'danger'"
+            effect="plain"
+          >
             {{ row.ok ? '通过' : '有问题' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="未替换变量" min-width="220" show-overflow-tooltip>
+      <el-table-column
+        label="未替换变量"
+        min-width="220"
+        show-overflow-tooltip
+      >
         <template #default="{ row }">
           <span v-if="Array.isArray(row.unresolved_vars) && row.unresolved_vars.length">
             {{ row.unresolved_vars.join(', ') }}
@@ -436,15 +696,26 @@
           <span v-else>—</span>
         </template>
       </el-table-column>
-      <el-table-column label="请求预览" min-width="240" show-overflow-tooltip>
+      <el-table-column
+        label="请求预览"
+        min-width="240"
+        show-overflow-tooltip
+      >
         <template #default="{ row }">
           {{ (row.request?.method || '—') + ' ' + (row.request?.url || '—') }}
         </template>
       </el-table-column>
-      <el-table-column prop="error" label="错误" min-width="180" show-overflow-tooltip />
+      <el-table-column
+        prop="error"
+        label="错误"
+        min-width="180"
+        show-overflow-tooltip
+      />
     </el-table>
     <template #footer>
-      <el-button @click="showPrecheckDialog = false">关闭</el-button>
+      <el-button @click="showPrecheckDialog = false">
+        关闭
+      </el-button>
     </template>
   </el-dialog>
 </template>
@@ -1345,7 +1616,7 @@ async function confirmAiImport() {
     }
     if (failed.length) {
       ElMessage.warning(`已导入 ${ok} 条；失败 ${failed.length} 条（可在控制台查看原因）`)
-      // eslint-disable-next-line no-console
+       
       console.warn('AI import failed items:', failed)
     } else if (skipped) {
       ElMessage.warning(`已导入 ${ok} 条；另有 ${skipped} 条因缺少模块归属已跳过`)
@@ -1389,7 +1660,7 @@ onBeforeUnmount(() => {
   gap: 10px;
   padding: 10px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(59, 130, 246, 0.35);
+  border: 1px solid rgba(6, 182, 212, 0.35);
   background: linear-gradient(
     90deg,
     rgba(30, 64, 175, 0.22),
@@ -1398,7 +1669,7 @@ onBeforeUnmount(() => {
   margin-bottom: 4px;
 }
 .ai-gen-rag-strip--info {
-  border-color: rgba(59, 130, 246, 0.35);
+  border-color: rgba(6, 182, 212, 0.35);
   background: linear-gradient(
     90deg,
     rgba(30, 64, 175, 0.22),

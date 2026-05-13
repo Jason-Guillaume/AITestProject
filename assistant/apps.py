@@ -7,3 +7,4 @@ class AssistantConfig(AppConfig):
 
     def ready(self):
         import assistant.signals  # noqa: F401
+        import assistant.keyword_driven_models  # noqa: F401

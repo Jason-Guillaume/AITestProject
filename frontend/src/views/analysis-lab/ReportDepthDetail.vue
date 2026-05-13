@@ -8,11 +8,21 @@
       <span class="report-depth__badge">
         {{ headerBadge }}
       </span>
-      <span v-if="lowPerfMode" class="report-depth__perf-hint">性能模式</span>
+      <span
+        v-if="lowPerfMode"
+        class="report-depth__perf-hint"
+      >性能模式</span>
     </header>
 
-    <div v-if="showBlockingLoader" class="report-depth__loader-wrap glass-panel">
-      <div class="cyber-loader cyber-loader--lite" :class="{ 'cyber-loader--static-core': lowPerfMode }" aria-hidden="true">
+    <div
+      v-if="showBlockingLoader"
+      class="report-depth__loader-wrap glass-panel"
+    >
+      <div
+        class="cyber-loader cyber-loader--lite"
+        :class="{ 'cyber-loader--static-core': lowPerfMode }"
+        aria-hidden="true"
+      >
         <span class="cyber-loader__ring cyber-loader__ring--a" />
         <span class="cyber-loader__core" />
       </div>
@@ -21,18 +31,35 @@
       </p>
     </div>
 
-    <div v-else class="report-depth__tri">
+    <div
+      v-else
+      class="report-depth__tri"
+    >
       <aside class="report-depth__col report-depth__col--steps report-depth__step-flow step-flow">
-        <h2 class="report-depth__h">StepFlow</h2>
-        <p v-if="steps.length > 8" class="step-flow__hint">虚拟列表 · 仅渲染可视区</p>
-        <el-empty v-if="steps.length === 0" description="暂无步骤" :image-size="48" />
+        <h2 class="report-depth__h">
+          StepFlow
+        </h2>
+        <p
+          v-if="steps.length > 8"
+          class="step-flow__hint"
+        >
+          虚拟列表 · 仅渲染可视区
+        </p>
+        <el-empty
+          v-if="steps.length === 0"
+          description="暂无步骤"
+          :image-size="48"
+        />
         <div
           v-else
           ref="stepScrollRef"
           class="step-flow-virtual"
           @scroll.passive="onStepsScroll"
         >
-          <div class="step-flow-virtual__sizer" :style="{ height: `${virtualTotalHeight}px` }">
+          <div
+            class="step-flow-virtual__sizer"
+            :style="{ height: `${virtualTotalHeight}px` }"
+          >
             <div
               class="step-flow-virtual__window"
               :style="{ transform: `translateY(${virtualOffsetY}px)` }"
@@ -50,7 +77,10 @@
                   @click="selectStep(v.index)"
                 >
                   <span class="step-label">{{ v.step.title }}</span>
-                  <span v-if="v.step.subtitle" class="step-sub">{{ v.step.subtitle }}</span>
+                  <span
+                    v-if="v.step.subtitle"
+                    class="step-sub"
+                  >{{ v.step.subtitle }}</span>
                 </button>
               </div>
             </div>
@@ -60,21 +90,39 @@
 
       <section class="report-depth__col report-depth__col--media report-depth__evidence-viewer evidence-viewer">
         <div class="report-depth__media-head">
-          <h2 class="report-depth__h">EvidenceViewer</h2>
-          <el-radio-group v-model="mediaMode" size="small">
-            <el-radio-button value="image">Image</el-radio-button>
-            <el-radio-button value="video">Video</el-radio-button>
+          <h2 class="report-depth__h">
+            EvidenceViewer
+          </h2>
+          <el-radio-group
+            v-model="mediaMode"
+            size="small"
+          >
+            <el-radio-button value="image">
+              Image
+            </el-radio-button>
+            <el-radio-button value="video">
+              Video
+            </el-radio-button>
           </el-radio-group>
         </div>
         <div class="report-depth__media-body">
           <template v-if="mediaMode === 'image'">
-            <div v-if="evidenceImageLoading" class="media-state media-state--loading">
-              <div class="cyber-loader cyber-loader--sm cyber-loader--lite" aria-hidden="true">
+            <div
+              v-if="evidenceImageLoading"
+              class="media-state media-state--loading"
+            >
+              <div
+                class="cyber-loader cyber-loader--sm cyber-loader--lite"
+                aria-hidden="true"
+              >
                 <span class="cyber-loader__ring cyber-loader__ring--a" />
               </div>
               <span>加载截图…</span>
             </div>
-            <div v-else-if="evidenceImageError" class="media-state media-state--error">
+            <div
+              v-else-if="evidenceImageError"
+              class="media-state media-state--error"
+            >
               {{ evidenceImageError }}
             </div>
             <img
@@ -82,29 +130,67 @@
               class="evidence-img"
               :src="evidenceObjectUrl"
               alt="step evidence"
-            />
-            <div v-else class="media-state">当前步骤无截图（可查看 Telemetry 文本或右侧堆栈）</div>
+            >
+            <div
+              v-else
+              class="media-state"
+            >
+              当前步骤无截图（可查看 Telemetry 文本或右侧堆栈）
+            </div>
           </template>
           <template v-else>
-            <div v-if="videoUrl" class="media-state">
-              <video class="evidence-video" controls :src="videoUrl" />
+            <div
+              v-if="videoUrl"
+              class="media-state"
+            >
+              <video
+                class="evidence-video"
+                controls
+                :src="videoUrl"
+              />
             </div>
-            <div v-else class="media-state">暂无录像证据</div>
+            <div
+              v-else
+              class="media-state"
+            >
+              暂无录像证据
+            </div>
           </template>
         </div>
       </section>
 
       <aside class="report-depth__col report-depth__col--ai report-depth__diagnostic-panel diagnostic-panel">
-        <h2 class="report-depth__h">DiagnosticPanel</h2>
+        <h2 class="report-depth__h">
+          DiagnosticPanel
+        </h2>
         <section class="diag-block">
-          <h3 class="diag-block__h">Stack / stderr</h3>
+          <h3 class="diag-block__h">
+            Stack / stderr
+          </h3>
           <pre class="diag-block__pre">{{ stackTraceDisplay }}</pre>
         </section>
         <section class="diag-block">
-          <h3 class="diag-block__h">AI 修复建议</h3>
-          <p v-if="aiLoading" class="diag-block__ai diag-block__ai--muted">正在请求模型诊断…</p>
-          <p v-else-if="aiError" class="diag-block__ai diag-block__ai--warn">{{ aiError }}</p>
-          <p v-else class="diag-block__ai">{{ aiSuggestion || '（无失败信息时跳过 AI 诊断）' }}</p>
+          <h3 class="diag-block__h">
+            AI 修复建议
+          </h3>
+          <p
+            v-if="aiLoading"
+            class="diag-block__ai diag-block__ai--muted"
+          >
+            正在请求模型诊断…
+          </p>
+          <p
+            v-else-if="aiError"
+            class="diag-block__ai diag-block__ai--warn"
+          >
+            {{ aiError }}
+          </p>
+          <p
+            v-else
+            class="diag-block__ai"
+          >
+            {{ aiSuggestion || '（无失败信息时跳过 AI 诊断）' }}
+          </p>
         </section>
       </aside>
     </div>

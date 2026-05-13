@@ -1,15 +1,15 @@
 import json
 import logging
 import socket
-import time
-from difflib import SequenceMatcher
 import re
 from urllib.parse import urljoin
 
 import requests
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from common.views import *
+from common.views import BaseModelViewSet
+from common.models import AuditEvent
+from common.services.audit import record_audit_event
 from testcase.models import *
 from testcase.serialize import *
 from testcase.services.case_subtypes import (
@@ -17,6 +17,7 @@ from testcase.services.case_subtypes import (
     get_api_profile_for_execute,
 )
 from testcase.services.ai_import_precheck_core import precheck_api_draft_item
+from testcase.services.ai_import_service import AiImportService
 from testcase.services.api_execution import preview_resolved_request, run_api_case
 from testcase.services.ai_openai import ai_fill_test_data, ai_import_api_cases
 from testcase.services.ai_case_gate import gate_ai_api_cases
@@ -61,26 +62,35 @@ def _recycle_mode_from_params(params) -> bool:
 
 
 def _module_self_and_descendant_ids(root_id: int, project_id=None):
-    """包含 root 及其所有子模块 id（用于树节点筛选用例）。"""
     try:
         rid = int(root_id)
     except (TypeError, ValueError):
         return []
-    ids = {rid}
-    frontier = [rid]
-    q_base = TestModule.objects.filter(is_deleted=False)
+
+    qs = TestModule.objects.filter(is_deleted=False)
     if project_id is not None:
         try:
-            q_base = q_base.filter(project_id=int(project_id))
+            qs = qs.filter(project_id=int(project_id))
         except (TypeError, ValueError):
             pass
+
+    parent_map = {}
+    for mid, pid in qs.values_list("id", "parent_id"):
+        parent_map.setdefault(pid, []).append(mid)
+
+    result = {rid}
+    frontier = [rid]
     while frontier:
-        cur = frontier.pop()
-        for cid in q_base.filter(parent_id=cur).values_list("id", flat=True):
-            if cid not in ids:
-                ids.add(cid)
-                frontier.append(cid)
-    return list(ids)
+        next_frontier = []
+        for fid in frontier:
+            children = parent_map.get(fid, [])
+            for cid in children:
+                if cid not in result:
+                    result.add(cid)
+                    next_frontier.append(cid)
+        frontier = next_frontier
+
+    return list(result)
 
 
 class TestCasePagination(PageNumberPagination):
@@ -319,17 +329,6 @@ class TestCaseViewSet(BaseModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="ai-import")
     def ai_import(self, request):
-        """
-        AI 批量导入测试用例（后端事务 + 逐条结果）：
-        POST /api/testcase/cases/ai-import/
-
-        body:
-        - project_id: 必填
-        - test_type: 必填（functional/api/performance/security/ui-automation）
-        - run_id: 可选（assistant.AiCaseGenerationRun id）
-        - default_module_id: 可选
-        - items: [{ case_name, level, expected_result, precondition, steps, module_name, ...typed fields }]
-        """
         if not isinstance(request.data, dict):
             raise ValidationError({"message": "请求体必须为 JSON 对象"})
 
@@ -381,17 +380,6 @@ class TestCaseViewSet(BaseModelViewSet):
         else:
             run_id = None
 
-        module_qs = TestModule.objects.filter(
-            project_id=project_id, is_deleted=False, test_type=test_type
-        )
-
-        def _norm_module_key(name: str) -> str:
-            return (name or "").strip().lower()
-
-        module_names = list(module_qs.values_list("id", "name"))
-        module_cache = {_norm_module_key(name): mid for (mid, name) in module_names}
-        created_module_cache: dict[str, int] = {}
-
         module_match_threshold = request.data.get("module_match_threshold", 0.92)
         try:
             module_match_threshold = float(module_match_threshold)
@@ -399,305 +387,25 @@ class TestCaseViewSet(BaseModelViewSet):
             module_match_threshold = 0.92
         module_match_threshold = max(0.70, min(module_match_threshold, 0.99))
 
-        def _best_module_match(name: str):
-            """
-            返回 (matched_id, matched_name, score)；当 score 不足阈值时 matched_id 为 None。
-            """
-            raw = (name or "").strip()
-            if not raw:
-                return None, "", 0.0
-            k = _norm_module_key(raw)
-            if k in module_cache:
-                return module_cache[k], raw, 1.0
-            best = (None, "", 0.0)
-            for mid, mname in module_names:
-                try:
-                    score = SequenceMatcher(None, raw, str(mname or "")).ratio()
-                except Exception:
-                    score = 0.0
-                if score > best[2]:
-                    best = (mid, str(mname or ""), float(score))
-            if best[0] is not None and best[2] >= module_match_threshold:
-                return best
-            return None, best[1], best[2]
-
-        def _get_or_create_module_id(module_name: str):
-            raw = (module_name or "").strip()
-            if not raw:
-                return None
-            k = _norm_module_key(raw)
-            if k in created_module_cache:
-                return created_module_cache[k], "created", raw, 1.0
-            if k in module_cache:
-                return module_cache[k], "exact", raw, 1.0
-
-            matched_id, matched_name, score = _best_module_match(raw)
-            if matched_id is not None:
-                module_cache[k] = matched_id
-                return matched_id, "fuzzy", matched_name, score
-
-            user = getattr(request, "user", None)
-            m = TestModule.objects.create(
-                project_id=project_id,
-                name=raw,
-                parent_id=None,
-                test_type=test_type,
-                creator=user if getattr(user, "is_authenticated", False) else None,
-                updater=user if getattr(user, "is_authenticated", False) else None,
-            )
-            module_cache[k] = m.id
-            created_module_cache[k] = m.id
-            module_names.append((m.id, raw))
-            return m.id, "created", raw, 1.0
-
-        def _build_step_desc(row: dict) -> str:
-            parts = []
-            pre = str(row.get("precondition") or "").strip()
-            if pre:
-                parts.append(f"【前置条件】\n{pre}")
-            steps = str(row.get("steps") or "").strip()
-            if steps:
-                parts.append(f"【操作步骤】\n{steps}")
-            return "\n\n".join(parts) or "（无详细步骤，请编辑补充）"
-
-        def _normalize_steps(row: dict):
-            """
-            支持两种导入模式：
-            1) 兼容旧字段：precondition/steps/expected_result -> 单 step
-            2) 结构化 steps：steps_list / steps（数组） -> 多 step
-
-            每个 step:
-            - step_desc: string（必填）
-            - expected_result: string（可选，默认 '—'）
-            """
-            # 结构化数组优先
-            sl = row.get("steps_list")
-            if sl is None:
-                sl = row.get("stepsList")
-            if sl is None and isinstance(row.get("steps"), list):
-                sl = row.get("steps")
-            if isinstance(sl, list) and sl:
-                out = []
-                for it in sl:
-                    if not isinstance(it, dict):
-                        continue
-                    desc = str(
-                        it.get("step_desc") or it.get("desc") or it.get("action") or ""
-                    ).strip()
-                    if not desc:
-                        continue
-                    exp = (
-                        str(
-                            it.get("expected_result") or it.get("expected") or ""
-                        ).strip()
-                        or "—"
-                    )
-                    out.append({"step_desc": desc, "expected_result": exp})
-                if out:
-                    return out
-            # fallback: 单 step
-            exp = str(row.get("expected_result") or "").strip() or "—"
-            return [{"step_desc": _build_step_desc(row), "expected_result": exp}]
-
-        imported = []
-        failed = []
-        skipped = 0
-
-        with transaction.atomic():
-            for idx, raw in enumerate(items):
-                sp = transaction.savepoint()
-                try:
-                    if not isinstance(raw, dict):
-                        raise ValidationError("item 必须为对象")
-                    case_name = str(raw.get("case_name") or "").strip()
-                    if not case_name:
-                        raise ValidationError("case_name 必填")
-                    level = str(raw.get("level") or "").strip() or "P2"
-
-                    module_name = str(
-                        raw.get("module_name") or raw.get("moduleName") or ""
-                    ).strip()
-                    raw_mid = raw.get("module_id") or raw.get("moduleId")
-                    mid = None
-                    module_resolution = None
-                    if raw_mid not in (None, ""):
-                        try:
-                            mid = int(raw_mid)
-                        except (TypeError, ValueError):
-                            mid = None
-                        if mid is not None:
-                            # 校验 module_id 属于本 project + test_type
-                            if not module_qs.filter(id=mid).exists():
-                                raise ValidationError(
-                                    "module_id 不存在或不属于当前项目/测试类型"
-                                )
-                            module_resolution = {
-                                "mode": "explicit",
-                                "matched_name": "",
-                                "score": 1.0,
-                            }
-                    if mid is None:
-                        resolved = (
-                            _get_or_create_module_id(module_name)
-                            if module_name
-                            else None
-                        )
-                        mid = resolved[0] if resolved else None
-                        module_resolution = (
-                            {
-                                "mode": resolved[1],
-                                "matched_name": resolved[2],
-                                "score": resolved[3],
-                            }
-                            if resolved
-                            else None
-                        )
-                    if not mid and default_module_id:
-                        mid = default_module_id
-                    if not mid:
-                        skipped += 1
-                        raise ValidationError(
-                            "缺少模块归属（module_name/default_module_id）"
-                        )
-
-                    payload: dict = {
-                        "case_name": case_name,
-                        "level": level,
-                        "module": mid,
-                        "test_type": test_type,
-                        "ai_run": run_id,
-                    }
-
-                    if test_type == TEST_CASE_TYPE_API:
-                        url = str(raw.get("api_url") or "").strip()
-                        method = (
-                            str(raw.get("api_method") or "GET").strip().upper()[:16]
-                        )
-                        if url:
-                            payload["api_url"] = url
-                        if method:
-                            payload["api_method"] = method
-                        if strict:
-                            if not url:
-                                raise ValidationError("API 用例缺少 api_url")
-                            if not method:
-                                raise ValidationError("API 用例缺少 api_method")
-                            pr = precheck_api_draft_item(raw, precheck_overrides)
-                            if not pr.get("ok"):
-                                msg_parts = []
-                                if pr.get("error"):
-                                    msg_parts.append(str(pr["error"]))
-                                uv = pr.get("unresolved_vars") or []
-                                if uv:
-                                    msg_parts.append(
-                                        "未替换变量: "
-                                        + ", ".join(str(x) for x in uv[:20])
-                                    )
-                                raise ValidationError(
-                                    "; ".join(msg_parts) or "API 导入前预检未通过"
-                                )
-                        if isinstance(raw.get("api_headers"), dict):
-                            payload["api_headers"] = raw.get("api_headers")
-                        if raw.get("api_body") is not None:
-                            payload["api_body"] = raw.get("api_body")
-                        if raw.get("api_expected_status") not in (None, ""):
-                            try:
-                                payload["api_expected_status"] = int(
-                                    raw.get("api_expected_status")
-                                )
-                            except (TypeError, ValueError):
-                                pass
-                        if raw.get("api_source_curl"):
-                            payload["api_source_curl"] = str(
-                                raw.get("api_source_curl") or ""
-                            )[:2000]
-
-                    if test_type == TEST_CASE_TYPE_SECURITY:
-                        if raw.get("attack_surface"):
-                            payload["attack_surface"] = str(
-                                raw.get("attack_surface") or ""
-                            )[:512]
-                        if raw.get("tool_preset"):
-                            payload["tool_preset"] = str(raw.get("tool_preset") or "")[
-                                :128
-                            ]
-                        rl = str(raw.get("risk_level") or "").strip()
-                        if rl in ("高", "中", "低"):
-                            payload["risk_level"] = rl
-
-                    serializer = TestCaseSerializer(
-                        data=payload, context={"request": request}
-                    )
-                    try:
-                        serializer.is_valid(raise_exception=True)
-                    except ValidationError as exc:
-                        detail = getattr(exc, "detail", None)
-                        code = None
-                        if isinstance(detail, dict):
-                            raw_code = detail.get("code")
-                            if isinstance(raw_code, list) and raw_code:
-                                code = str(raw_code[0])
-                            elif raw_code is not None:
-                                code = str(raw_code)
-                        if code == "RECYCLE_CONFLICT":
-                            base = case_name or "用例"
-                            suffix = f"·{int(time.time())}"
-                            next_name = (base + suffix)[:255]
-                            payload["case_name"] = next_name
-                            serializer = TestCaseSerializer(
-                                data=payload, context={"request": request}
-                            )
-                            serializer.is_valid(raise_exception=True)
-                        else:
-                            raise
-                    case_obj = serializer.save()
-
-                    user = getattr(request, "user", None)
-                    steps = _normalize_steps(raw)
-                    if strict and not steps:
-                        raise ValidationError("用例缺少可导入的步骤")
-                    for sidx, st in enumerate(steps, start=1):
-                        TestCaseStep.objects.create(
-                            testcase_id=case_obj.id,
-                            step_number=sidx,
-                            step_desc=str(st.get("step_desc") or "").strip()[:4000]
-                            or "（无详细步骤，请编辑补充）",
-                            expected_result=str(
-                                st.get("expected_result") or ""
-                            ).strip()[:2000]
-                            or "—",
-                            creator=(
-                                user
-                                if getattr(user, "is_authenticated", False)
-                                else None
-                            ),
-                            updater=(
-                                user
-                                if getattr(user, "is_authenticated", False)
-                                else None
-                            ),
-                        )
-
-                    imported.append(
-                        {
-                            "index": idx,
-                            "case_id": case_obj.id,
-                            "case_name": case_obj.case_name,
-                            "steps_created": len(steps),
-                            "module_resolution": module_resolution,
-                        }
-                    )
-                    transaction.savepoint_commit(sp)
-                except Exception as e:
-                    transaction.savepoint_rollback(sp)
-                    failed.append({"index": idx, "error": str(e)})
+        user = getattr(request, "user", None)
+        result = AiImportService(user=user).run(
+            project_id=project_id,
+            test_type=test_type,
+            items=items,
+            run_id=run_id,
+            default_module_id=default_module_id,
+            strict=strict,
+            precheck_overrides=precheck_overrides,
+            module_match_threshold=module_match_threshold,
+            request=request,
+        )
 
         return Response(
             {
                 "success": True,
-                "imported": imported,
-                "failed": failed,
-                "skipped": skipped,
+                "imported": result["imported"],
+                "failed": result["failed"],
+                "skipped": result["skipped"],
             }
         )
 
@@ -751,15 +459,14 @@ class TestCaseViewSet(BaseModelViewSet):
     @action(detail=False, methods=["get"], url_path="recycle-bin")
     def recycle_bin(self, request):
         """回收站列表：与 GET /cases/?recycle=1 相同，复用 get_queryset（含 project/module 等筛选）。"""
-        qp = request.query_params
-        mutable = getattr(qp, "_mutable", False)
-        qp._mutable = True
-        qp["recycle"] = "1"
+        saved_params = request._get
+        mutable_params = request.GET.copy()
+        mutable_params["recycle"] = "1"
+        request._get = mutable_params
         try:
             return self.list(request)
         finally:
-            qp.pop("recycle", None)
-            qp._mutable = mutable
+            request._get = saved_params
 
     @action(detail=True, methods=["post"], url_path="restore")
     def restore(self, request, pk=None):
@@ -1212,29 +919,6 @@ class TestDesignViewSet(BaseModelViewSet):
             return qs.order_by("-update_time", "-id")
         return super().get_queryset()
 
-    def _parse_id_list(self, raw_ids):
-        if raw_ids is None:
-            return [], Response({"msg": "ids 必填"}, status=status.HTTP_400_BAD_REQUEST)
-        if not isinstance(raw_ids, list):
-            return [], Response({"msg": "ids 必须为数组"}, status=status.HTTP_400_BAD_REQUEST)
-        ids = []
-        for x in raw_ids:
-            try:
-                ids.append(int(x))
-            except (TypeError, ValueError):
-                continue
-        ids = [i for i in ids if i > 0]
-        if not ids:
-            return [], Response({"msg": "ids 不能为空"}, status=status.HTTP_400_BAD_REQUEST)
-        seen = set()
-        uniq = []
-        for i in ids:
-            if i in seen:
-                continue
-            seen.add(i)
-            uniq.append(i)
-        return uniq, None
-
     @action(detail=False, methods=["post"], url_path="batch-delete")
     def batch_delete(self, request):
         """
@@ -1242,14 +926,12 @@ class TestDesignViewSet(BaseModelViewSet):
         POST /api/testcase/designs/batch-delete/
         body: { ids: number[] }
         """
-        id_list, err = self._parse_id_list(request.data.get("ids") if isinstance(request.data, dict) else None)
-        if err is not None:
-            return err
-        qs = self.get_queryset().filter(id__in=id_list, is_deleted=False)
+        ids = self._parse_id_list(request.data.get("ids") if isinstance(request.data, dict) else None)
+        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
         found = list(qs)
         found_ids = [int(o.id) for o in found]
         if not found_ids:
-            return Response({"success": True, "deleted": 0, "skipped": len(id_list), "missing_ids": id_list})
+            return Response({"success": True, "deleted": 0, "skipped": len(ids), "missing_ids": ids})
         deleted = 0
         errors = []
         # 注意：单个删除失败会使当前事务进入 broken 状态，继续执行 SQL 会报
@@ -1262,7 +944,7 @@ class TestDesignViewSet(BaseModelViewSet):
                 deleted += 1
             except Exception as e:
                 errors.append({"id": int(obj.id), "error": str(e)})
-        missing = [i for i in id_list if i not in set(found_ids)]
+        missing = [i for i in ids if i not in set(found_ids)]
         return Response(
             {
                 "success": len(errors) == 0,
@@ -1281,9 +963,7 @@ class TestDesignViewSet(BaseModelViewSet):
         """
         if not isinstance(request.data, dict):
             return Response({"msg": "请求体必须为 JSON 对象"}, status=status.HTTP_400_BAD_REQUEST)
-        id_list, err = self._parse_id_list(request.data.get("ids"))
-        if err is not None:
-            return err
+        ids = self._parse_id_list(request.data.get("ids"))
         patch = request.data.get("patch")
         if not isinstance(patch, dict) or not patch:
             return Response({"msg": "patch 必须为非空对象"}, status=status.HTTP_400_BAD_REQUEST)
@@ -1293,10 +973,10 @@ class TestDesignViewSet(BaseModelViewSet):
         if not cleaned:
             return Response({"msg": "patch 未包含可更新字段"}, status=status.HTTP_400_BAD_REQUEST)
 
-        qs = self.get_queryset().filter(id__in=id_list, is_deleted=False)
+        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
         found = list(qs)
         found_ids = {int(o.id) for o in found}
-        missing = [i for i in id_list if i not in found_ids]
+        missing = [i for i in ids if i not in found_ids]
 
         updated_ids = []
         errors = []
@@ -1322,15 +1002,14 @@ class TestDesignViewSet(BaseModelViewSet):
     @action(detail=False, methods=["get"], url_path="recycle")
     def recycle(self, request):
         """回收站列表：等价于 ?recycle=1。"""
-        qp = request.query_params
-        mutable = getattr(qp, "_mutable", False)
-        qp._mutable = True
-        qp["recycle"] = "1"
+        saved_params = request._get
+        mutable_params = request.GET.copy()
+        mutable_params["recycle"] = "1"
+        request._get = mutable_params
         try:
             return self.list(request)
         finally:
-            qp.pop("recycle", None)
-            qp._mutable = mutable
+            request._get = saved_params
 
     @action(detail=True, methods=["post"], url_path="restore")
     def restore(self, request, pk=None):
@@ -1343,25 +1022,23 @@ class TestDesignViewSet(BaseModelViewSet):
     @action(detail=False, methods=["post"], url_path="bulk-soft-delete")
     def bulk_soft_delete(self, request):
         """批量软删除：body { ids: [] }。"""
-        id_list, err = self._parse_id_list(
+        ids = self._parse_id_list(
             request.data.get("ids") if isinstance(request.data, dict) else None
         )
-        if err is not None:
-            return err
-        qs = self.get_queryset().filter(id__in=id_list, is_deleted=False)
+        qs = self.get_queryset().filter(id__in=ids, is_deleted=False)
         found_ids = list(qs.values_list("id", flat=True))
         if not found_ids:
             return Response(
                 {
                     "success": True,
                     "deleted": 0,
-                    "skipped": len(id_list),
-                    "missing_ids": id_list,
+                    "skipped": len(ids),
+                    "missing_ids": ids,
                 }
             )
         with transaction.atomic():
             updated = qs.update(is_deleted=True)
-        missing = [i for i in id_list if i not in set(found_ids)]
+        missing = [i for i in ids if i not in set(found_ids)]
         return Response(
             {
                 "success": True,
@@ -1374,12 +1051,10 @@ class TestDesignViewSet(BaseModelViewSet):
     @action(detail=False, methods=["post"], url_path="bulk-restore")
     def bulk_restore(self, request):
         """回收站批量恢复：body { ids: [] }。"""
-        id_list, err = self._parse_id_list(
+        ids = self._parse_id_list(
             request.data.get("ids") if isinstance(request.data, dict) else None
         )
-        if err is not None:
-            return err
-        qs = TestDesign.objects.filter(id__in=id_list, is_deleted=True)
+        qs = TestDesign.objects.filter(id__in=ids, is_deleted=True)
         user = getattr(request, "user", None)
         if (
             self.enable_data_scope
@@ -1394,13 +1069,13 @@ class TestDesignViewSet(BaseModelViewSet):
                 {
                     "success": True,
                     "restored": 0,
-                    "skipped": len(id_list),
-                    "missing_ids": id_list,
+                    "skipped": len(ids),
+                    "missing_ids": ids,
                 }
             )
         with transaction.atomic():
             updated = qs.update(is_deleted=False)
-        missing = [i for i in id_list if i not in set(found_ids)]
+        missing = [i for i in ids if i not in set(found_ids)]
         return Response(
             {
                 "success": True,
@@ -1433,13 +1108,11 @@ class TestDesignViewSet(BaseModelViewSet):
     @action(detail=False, methods=["post"], url_path="bulk-hard-delete")
     def bulk_hard_delete(self, request):
         """回收站批量彻底删除：body { ids: [] }，仅对 is_deleted=True 生效。"""
-        id_list, err = self._parse_id_list(
+        ids = self._parse_id_list(
             request.data.get("ids") if isinstance(request.data, dict) else None
         )
-        if err is not None:
-            return err
         user = getattr(request, "user", None)
-        qs = TestDesign.objects.filter(id__in=id_list, is_deleted=True).order_by("id")
+        qs = TestDesign.objects.filter(id__in=ids, is_deleted=True).order_by("id")
         if (
             self.enable_data_scope
             and user
@@ -1493,29 +1166,6 @@ class TestApproachViewSet(BaseModelViewSet):
                 qs = self._apply_member_scope(qs, user)
             return qs.order_by("-update_time", "-id")
         return super().get_queryset()
-
-    def _parse_id_list(self, raw_ids):
-        if raw_ids is None:
-            raise ValidationError({"msg": "ids 必填", "code": 400, "data": None})
-        if not isinstance(raw_ids, list):
-            raise ValidationError({"msg": "ids 必须为数组", "code": 400, "data": None})
-        ids = []
-        for x in raw_ids:
-            try:
-                ids.append(int(x))
-            except (TypeError, ValueError):
-                continue
-        ids = [i for i in ids if i > 0]
-        if not ids:
-            raise ValidationError({"msg": "ids 不能为空", "code": 400, "data": None})
-        seen = set()
-        uniq = []
-        for i in ids:
-            if i in seen:
-                continue
-            seen.add(i)
-            uniq.append(i)
-        return uniq
 
     @action(detail=False, methods=["post"], url_path="batch-delete")
     def batch_delete(self, request):
@@ -1707,15 +1357,14 @@ class TestApproachViewSet(BaseModelViewSet):
     @action(detail=False, methods=["get"], url_path="recycle")
     def recycle(self, request):
         """回收站列表：等价于 ?recycle=1。"""
-        qp = request.query_params
-        mutable = getattr(qp, "_mutable", False)
-        qp._mutable = True
-        qp["recycle"] = "1"
+        saved_params = request._get
+        mutable_params = request.GET.copy()
+        mutable_params["recycle"] = "1"
+        request._get = mutable_params
         try:
             return self.list(request)
         finally:
-            qp.pop("recycle", None)
-            qp._mutable = mutable
+            request._get = saved_params
 
     @action(detail=True, methods=["post"], url_path="restore")
     def restore(self, request, pk=None):

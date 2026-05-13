@@ -1,6 +1,12 @@
 <template>
-  <div class="current-env-select" :class="rootClass">
-    <span v-if="showLabel && variant !== 'navbar'" class="current-env-select__label">执行环境</span>
+  <div
+    class="current-env-select"
+    :class="rootClass"
+  >
+    <span
+      v-if="showLabel && variant !== 'navbar'"
+      class="current-env-select__label"
+    >执行环境</span>
     <el-tooltip
       :disabled="variant !== 'navbar'"
       :content="tooltipContent"

@@ -1,29 +1,75 @@
 <template>
   <div class="cyber-page admin-list-page scheduled-task-detail-page">
-    <el-card class="admin-list-card" shadow="never" v-loading="loading">
+    <el-card
+      v-loading="loading"
+      class="admin-list-card"
+      shadow="never"
+    >
       <div class="scheduled-task-title">
         {{ isEdit ? "定时任务详情" : "新建定时任务" }}
       </div>
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
-        <el-form-item label="任务名称" prop="name">
-          <el-input v-model="form.name" placeholder="例如：每日回归任务" />
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="120px"
+      >
+        <el-form-item
+          label="任务名称"
+          prop="name"
+        >
+          <el-input
+            v-model="form.name"
+            placeholder="例如：每日回归任务"
+          />
         </el-form-item>
-        <el-form-item label="Cron 表达式" prop="cron_expression">
-          <el-input v-model="form.cron_expression" placeholder="例如：0 2 * * *" />
+        <el-form-item
+          label="Cron 表达式"
+          prop="cron_expression"
+        >
+          <el-input
+            v-model="form.cron_expression"
+            placeholder="例如：0 2 * * *"
+          />
         </el-form-item>
-        <el-form-item label="任务状态" prop="status">
+        <el-form-item
+          label="任务状态"
+          prop="status"
+        >
           <el-radio-group v-model="form.status">
-            <el-radio-button label="active">启用</el-radio-button>
-            <el-radio-button label="paused">暂停</el-radio-button>
-            <el-radio-button label="disabled">禁用</el-radio-button>
+            <el-radio-button label="active">
+              启用
+            </el-radio-button>
+            <el-radio-button label="paused">
+              暂停
+            </el-radio-button>
+            <el-radio-button label="disabled">
+              禁用
+            </el-radio-button>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="执行环境" prop="environment">
-          <el-select v-model="form.environment" filterable placeholder="请选择环境" class="w-full">
-            <el-option v-for="item in environmentOptions" :key="item.id" :label="item.name" :value="item.id" />
+        <el-form-item
+          label="执行环境"
+          prop="environment"
+        >
+          <el-select
+            v-model="form.environment"
+            filterable
+            placeholder="请选择环境"
+            class="w-full"
+          >
+            <el-option
+              v-for="item in environmentOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="关联用例" prop="test_case_ids">
+        <el-form-item
+          label="关联用例"
+          prop="test_case_ids"
+        >
           <el-select
             v-model="form.test_case_ids"
             multiple
@@ -44,11 +90,40 @@
       </el-form>
 
       <div class="scheduled-task-actions">
-        <el-button @click="onBack">返回</el-button>
-        <el-button type="primary" :loading="saving" @click="onSubmit">保存</el-button>
-        <el-button v-if="isEdit" type="warning" plain @click="onPause">暂停</el-button>
-        <el-button v-if="isEdit" type="success" plain @click="onResume">恢复</el-button>
-        <el-button v-if="isEdit" type="info" plain @click="onTrigger">立即执行</el-button>
+        <el-button @click="onBack">
+          返回
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="onSubmit"
+        >
+          保存
+        </el-button>
+        <el-button
+          v-if="isEdit"
+          type="warning"
+          plain
+          @click="onPause"
+        >
+          暂停
+        </el-button>
+        <el-button
+          v-if="isEdit"
+          type="success"
+          plain
+          @click="onResume"
+        >
+          恢复
+        </el-button>
+        <el-button
+          v-if="isEdit"
+          type="info"
+          plain
+          @click="onTrigger"
+        >
+          立即执行
+        </el-button>
       </div>
     </el-card>
   </div>

@@ -1,9 +1,18 @@
 <template>
   <div class="page-wrap cyber-page admin-list-page sys-admin-page">
-    <el-card class="sys-filter-card" shadow="never">
+    <el-card
+      class="sys-filter-card"
+      shadow="never"
+    >
       <div class="sys-toolbar">
         <div class="sys-toolbar__left">
-          <el-button type="primary" size="default" @click="openCreateDialog">新增组织</el-button>
+          <el-button
+            type="primary"
+            size="default"
+            @click="openCreateDialog"
+          >
+            新增组织
+          </el-button>
           <el-input
             v-model="keyword"
             placeholder="搜索组织名称"
@@ -17,10 +26,13 @@
       </div>
     </el-card>
 
-    <el-card class="sys-table-card" shadow="never">
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
       <el-table
-        :data="treeData"
         v-loading="loading"
+        :data="treeData"
         class="admin-data-table sys-enterprise-table org-tree-table"
         row-key="id"
         :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
@@ -28,32 +40,80 @@
         border
       >
         <template #empty>
-          <el-empty description="暂无组织数据" :image-size="88" />
+          <el-empty
+            description="暂无组织数据"
+            :image-size="88"
+          />
         </template>
-        <el-table-column prop="org_name" label="组织名称" min-width="200" align="left" show-overflow-tooltip />
-        <el-table-column prop="description" label="描述" min-width="200" align="left" show-overflow-tooltip>
+        <el-table-column
+          prop="org_name"
+          label="组织名称"
+          min-width="200"
+          align="left"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="description"
+          label="描述"
+          min-width="200"
+          align="left"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
             <span>{{ row.description || "—" }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="负责人" min-width="120" width="120" align="center" show-overflow-tooltip>
+        <el-table-column
+          label="负责人"
+          min-width="120"
+          width="120"
+          align="center"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
             <span>{{ row.leader_name || "—" }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="编制人数" min-width="100" width="100" align="center">
+        <el-table-column
+          label="编制人数"
+          min-width="100"
+          width="100"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag size="small" type="info" effect="plain">{{ row.headcount ?? 0 }}</el-tag>
+            <el-tag
+              size="small"
+              type="info"
+              effect="plain"
+            >
+              {{ row.headcount ?? 0 }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" min-width="176" width="176" align="center" class-name="col-datetime">
+        <el-table-column
+          label="创建时间"
+          min-width="176"
+          width="176"
+          align="center"
+          class-name="col-datetime"
+        >
           <template #default="{ row }">
             <span>{{ formatDate(row.create_time) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="168" width="168" fixed="right" align="center">
+        <el-table-column
+          label="操作"
+          min-width="168"
+          width="168"
+          fixed="right"
+          align="center"
+        >
           <template #default="{ row }">
-            <TableActionGroup :row="row" :actions="orgTableActions" @action="handleOrgTableAction" />
+            <TableActionGroup
+              :row="row"
+              :actions="orgTableActions"
+              @action="handleOrgTableAction"
+            />
           </template>
         </el-table-column>
       </el-table>
@@ -66,8 +126,16 @@
       destroy-on-close
       class="cyber-dialog-dark"
     >
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="100px">
-        <el-form-item label="上级组织" prop="parent_id">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="100px"
+      >
+        <el-form-item
+          label="上级组织"
+          prop="parent_id"
+        >
           <el-tree-select
             v-model="form.parent_id"
             :data="parentTreeOptions"
@@ -79,19 +147,51 @@
             :props="{ label: 'org_name', value: 'id', children: 'children' }"
           />
         </el-form-item>
-        <el-form-item label="组织名称" prop="org_name">
-          <el-input v-model="form.org_name" placeholder="请输入组织名称" />
+        <el-form-item
+          label="组织名称"
+          prop="org_name"
+        >
+          <el-input
+            v-model="form.org_name"
+            placeholder="请输入组织名称"
+          />
         </el-form-item>
-        <el-form-item label="描述" prop="description">
-          <el-input v-model="form.description" placeholder="可选描述" type="textarea" :rows="3" />
+        <el-form-item
+          label="描述"
+          prop="description"
+        >
+          <el-input
+            v-model="form.description"
+            placeholder="可选描述"
+            type="textarea"
+            :rows="3"
+          />
         </el-form-item>
-        <el-form-item label="负责人" prop="leader_name">
-          <el-input v-model="form.leader_name" placeholder="前端展示用，可对接人事字段" />
+        <el-form-item
+          label="负责人"
+          prop="leader_name"
+        >
+          <el-input
+            v-model="form.leader_name"
+            placeholder="前端展示用，可对接人事字段"
+          />
         </el-form-item>
-        <el-form-item label="编制人数" prop="headcount">
-          <el-input-number v-model="form.headcount" :min="0" :max="99999" controls-position="right" class="w-full-num" />
+        <el-form-item
+          label="编制人数"
+          prop="headcount"
+        >
+          <el-input-number
+            v-model="form.headcount"
+            :min="0"
+            :max="99999"
+            controls-position="right"
+            class="w-full-num"
+          />
         </el-form-item>
-        <el-form-item label="组织成员" prop="member_ids">
+        <el-form-item
+          label="组织成员"
+          prop="member_ids"
+        >
           <el-select
             v-model="form.member_ids"
             multiple
@@ -111,8 +211,16 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSubmit">确定</el-button>
+        <el-button @click="dialogVisible = false">
+          取消
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="handleSubmit"
+        >
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -318,7 +426,7 @@ async function load() {
     treeData.value = buildTree(flatOrgs.value);
   } catch (e) {
     ElMessage.error("获取组织列表失败");
-    // eslint-disable-next-line no-console
+     
     console.error(e);
   } finally {
     loading.value = false;
@@ -345,7 +453,7 @@ async function delRow(row) {
     await load();
   } catch (e) {
     ElMessage.error("删除失败");
-    // eslint-disable-next-line no-console
+     
     console.error(e);
   }
 }
@@ -387,7 +495,7 @@ async function handleSubmit() {
       await load();
     } catch (e) {
       ElMessage.error("提交失败");
-      // eslint-disable-next-line no-console
+       
       console.error(e);
     } finally {
       saving.value = false;

@@ -14,3 +14,7 @@ docker>=7.0.0,<8
 # uvicorn[standard]>=0.27.0,<1
 # 可选：前端底部状态栏「主机负载」需 psutil（未安装时接口返回 supported=false）
 psutil>=5.9.0,<7
+# CORS 跨域支持（settings.py 中已配置 corsheaders 中间件）
+django-cors-headers>=4.0.0,<5
+# 结构化 JSON 日志（LOGGING 配置中 json formatter 使用）
+python-json-logger>=2.0.0,<3

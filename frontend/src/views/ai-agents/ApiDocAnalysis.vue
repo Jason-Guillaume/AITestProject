@@ -1,15 +1,24 @@
 <template>
   <div class="ai-agent-page">
     <div class="agent-header">
-      <div class="agent-icon">📡</div>
+      <div class="agent-icon">
+        📡
+      </div>
       <div class="agent-info">
-        <h1 class="agent-title">AI 接口文档分析</h1>
-        <p class="agent-subtitle">智能解析Swagger/OpenAPI文档，提取接口信息和依赖关系</p>
+        <h1 class="agent-title">
+          AI 接口文档分析
+        </h1>
+        <p class="agent-subtitle">
+          智能解析Swagger/OpenAPI文档，提取接口信息和依赖关系
+        </p>
       </div>
     </div>
 
     <div class="agent-content">
-      <el-card class="feature-card" shadow="never">
+      <el-card
+        class="feature-card"
+        shadow="never"
+      >
         <h3>功能特性</h3>
         <ul>
           <li>📄 文档智能解析</li>
@@ -19,7 +28,10 @@
         </ul>
       </el-card>
 
-      <el-card class="work-area" shadow="never">
+      <el-card
+        class="work-area"
+        shadow="never"
+      >
         <h3>工作区</h3>
         <el-empty description="功能开发中，敬请期待..." />
       </el-card>

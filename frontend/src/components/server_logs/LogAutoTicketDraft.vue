@@ -5,7 +5,12 @@
       成功后自动落库；若未勾选或自动创建失败，可在任务完成后使用「从草稿创建缺陷」补建。
     </p>
     <div class="log-auto-ticket__form">
-      <el-checkbox v-model="createDefect" size="small">同步创建缺陷单</el-checkbox>
+      <el-checkbox
+        v-model="createDefect"
+        size="small"
+      >
+        同步创建缺陷单
+      </el-checkbox>
       <template v-if="createDefect || showManualDefectCreate">
         <el-select
           v-model="handlerId"
@@ -71,9 +76,20 @@
       class="log-auto-ticket__alert"
       :title="localError"
     />
-    <div v-if="job && (polling || isTerminal)" class="log-auto-ticket__status">
-      <el-tag :type="statusTagType" size="small">{{ statusLabel }}</el-tag>
-      <span v-if="job.celery_task_id" class="log-auto-ticket__tid">task {{ job.celery_task_id.slice(0, 12) }}…</span>
+    <div
+      v-if="job && (polling || isTerminal)"
+      class="log-auto-ticket__status"
+    >
+      <el-tag
+        :type="statusTagType"
+        size="small"
+      >
+        {{ statusLabel }}
+      </el-tag>
+      <span
+        v-if="job.celery_task_id"
+        class="log-auto-ticket__tid"
+      >task {{ job.celery_task_id.slice(0, 12) }}…</span>
     </div>
     <el-alert
       v-if="defectCreateBanner === 'ok'"
@@ -83,7 +99,11 @@
       class="log-auto-ticket__alert"
     >
       <span>已创建缺陷：</span>
-      <el-link type="primary" class="log-auto-ticket__link" @click.prevent="goDefect(createdDefectId)">
+      <el-link
+        type="primary"
+        class="log-auto-ticket__link"
+        @click.prevent="goDefect(createdDefectId)"
+      >
         {{ createdDefectLabel }}
       </el-link>
     </el-alert>
@@ -95,25 +115,56 @@
       class="log-auto-ticket__alert"
       :title="`缺陷未创建：${defectCreateError || '未知错误'}`"
     />
-    <div v-if="draft" class="log-auto-ticket__result">
+    <div
+      v-if="draft"
+      class="log-auto-ticket__result"
+    >
       <div class="log-auto-ticket__head">
-        <h4 class="log-auto-ticket__title">{{ draft.title }}</h4>
+        <h4 class="log-auto-ticket__title">
+          {{ draft.title }}
+        </h4>
         <div class="log-auto-ticket__tags">
-          <el-tag size="small">严重：{{ severityLabel(draft.severity) }}</el-tag>
-          <el-tag size="small" type="warning">优先级：{{ priorityLabel(draft.priority) }}</el-tag>
+          <el-tag size="small">
+            严重：{{ severityLabel(draft.severity) }}
+          </el-tag>
+          <el-tag
+            size="small"
+            type="warning"
+          >
+            优先级：{{ priorityLabel(draft.priority) }}
+          </el-tag>
         </div>
       </div>
-      <div class="log-auto-ticket__md" v-html="summaryHtml" />
-      <div v-if="steps.length" class="log-auto-ticket__steps">
-        <div class="log-auto-ticket__steps-title">复现 / 验证步骤</div>
+      <div
+        class="log-auto-ticket__md"
+        v-html="summaryHtml"
+      />
+      <div
+        v-if="steps.length"
+        class="log-auto-ticket__steps"
+      >
+        <div class="log-auto-ticket__steps-title">
+          复现 / 验证步骤
+        </div>
         <ol>
-          <li v-for="(s, i) in steps" :key="i">{{ s }}</li>
+          <li
+            v-for="(s, i) in steps"
+            :key="i"
+          >
+            {{ s }}
+          </li>
         </ol>
       </div>
-      <p v-if="draft.environment_notes" class="log-auto-ticket__env">
+      <p
+        v-if="draft.environment_notes"
+        class="log-auto-ticket__env"
+      >
         <strong>环境说明：</strong>{{ draft.environment_notes }}
       </p>
-      <div v-if="showManualDefectCreate" class="log-auto-ticket__manual">
+      <div
+        v-if="showManualDefectCreate"
+        class="log-auto-ticket__manual"
+      >
         <el-button
           type="success"
           size="small"
@@ -127,7 +178,13 @@
           可选用上方处理人 / 版本 / 模块；未选择时沿用任务入队时的记录（无记录则处理人为本人）。
         </p>
       </div>
-      <el-button size="small" class="log-auto-ticket__copy" @click="copyJson">复制 JSON</el-button>
+      <el-button
+        size="small"
+        class="log-auto-ticket__copy"
+        @click="copyJson"
+      >
+        复制 JSON
+      </el-button>
     </div>
   </div>
 </template>

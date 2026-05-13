@@ -1,13 +1,24 @@
 <template>
   <div class="page-wrap cyber-page sys-admin-page audit-events-page">
-    <el-card class="sys-page-head" shadow="never">
+    <el-card
+      class="sys-page-head"
+      shadow="never"
+    >
       <div class="sys-page-head__row">
         <div>
-          <h2 class="sys-page-head__title">{{ pageTitle }}</h2>
-          <p class="sys-page-head__sub">{{ pageSub }}</p>
+          <h2 class="sys-page-head__title">
+            {{ pageTitle }}
+          </h2>
+          <p class="sys-page-head__sub">
+            {{ pageSub }}
+          </p>
         </div>
         <div class="sys-page-head__actions">
-          <el-button size="default" :loading="loading" @click="reload">
+          <el-button
+            size="default"
+            :loading="loading"
+            @click="reload"
+          >
             <el-icon><Refresh /></el-icon>
             刷新
           </el-button>
@@ -25,7 +36,10 @@
       </div>
     </el-card>
 
-    <el-card class="sys-filter-card" shadow="never">
+    <el-card
+      class="sys-filter-card"
+      shadow="never"
+    >
       <div class="sys-toolbar">
         <div class="sys-toolbar__left">
           <el-date-picker
@@ -40,69 +54,209 @@
             style="width: 260px"
             @change="handleFilterChange"
           />
-          <el-input v-model="filters.action" clearable placeholder="action" style="width: 160px" @change="handleFilterChange" />
-          <el-input v-model="filters.object_app" clearable placeholder="object_app" style="width: 160px" @change="handleFilterChange" />
-          <el-input v-model="filters.object_model" clearable placeholder="object_model" style="width: 200px" @change="handleFilterChange" />
-          <el-input v-model="filters.object_id" clearable placeholder="object_id" style="width: 200px" @change="handleFilterChange" />
+          <el-input
+            v-model="filters.action"
+            clearable
+            placeholder="action"
+            style="width: 160px"
+            @change="handleFilterChange"
+          />
+          <el-input
+            v-model="filters.object_app"
+            clearable
+            placeholder="object_app"
+            style="width: 160px"
+            @change="handleFilterChange"
+          />
+          <el-input
+            v-model="filters.object_model"
+            clearable
+            placeholder="object_model"
+            style="width: 200px"
+            @change="handleFilterChange"
+          />
+          <el-input
+            v-model="filters.object_id"
+            clearable
+            placeholder="object_id"
+            style="width: 200px"
+            @change="handleFilterChange"
+          />
         </div>
         <div class="sys-toolbar__right">
-          <el-button size="default" @click="resetFilters">重置</el-button>
+          <el-button
+            size="default"
+            @click="resetFilters"
+          >
+            重置
+          </el-button>
         </div>
       </div>
     </el-card>
 
-    <el-card class="sys-table-card" shadow="never">
-      <el-table :data="rows" v-loading="loading" class="admin-data-table sys-enterprise-table" border>
+    <el-card
+      class="sys-table-card"
+      shadow="never"
+    >
+      <el-table
+        v-loading="loading"
+        :data="rows"
+        class="admin-data-table sys-enterprise-table"
+        border
+      >
         <template #empty>
-          <el-empty description="暂无审计事件" :image-size="78" />
+          <el-empty
+            description="暂无审计事件"
+            :image-size="78"
+          />
         </template>
-        <el-table-column prop="id" label="ID" width="90" align="center" />
-        <el-table-column prop="create_time" label="时间" width="180" show-overflow-tooltip />
-        <el-table-column prop="action" label="动作" width="120" align="center">
+        <el-table-column
+          prop="id"
+          label="ID"
+          width="90"
+          align="center"
+        />
+        <el-table-column
+          prop="create_time"
+          label="时间"
+          width="180"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="action"
+          label="动作"
+          width="120"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag size="small" type="info" effect="plain">{{ row.action }}</el-tag>
+            <el-tag
+              size="small"
+              type="info"
+              effect="plain"
+            >
+              {{ row.action }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="object_app" label="App" width="120" show-overflow-tooltip />
-        <el-table-column prop="object_model" label="Model" width="160" show-overflow-tooltip />
-        <el-table-column prop="object_id" label="Object ID" width="120" show-overflow-tooltip />
-        <el-table-column prop="object_repr" label="对象" min-width="220" show-overflow-tooltip />
-        <el-table-column v-if="isSysMode" prop="creator_id" label="操作人ID" width="110" align="center" />
-        <el-table-column prop="request_path" label="路径" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="ip" label="IP" width="140" show-overflow-tooltip />
-        <el-table-column v-if="isSysMode" prop="user_agent" label="UA" min-width="220" show-overflow-tooltip />
-        <el-table-column label="extra" min-width="120" align="center">
+        <el-table-column
+          prop="object_app"
+          label="App"
+          width="120"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="object_model"
+          label="Model"
+          width="160"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="object_id"
+          label="Object ID"
+          width="120"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="object_repr"
+          label="对象"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          v-if="isSysMode"
+          prop="creator_id"
+          label="操作人ID"
+          width="110"
+          align="center"
+        />
+        <el-table-column
+          prop="request_path"
+          label="路径"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="ip"
+          label="IP"
+          width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          v-if="isSysMode"
+          prop="user_agent"
+          label="UA"
+          min-width="220"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="extra"
+          min-width="120"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click="openJson('extra', row.extra)">查看</el-button>
+            <el-button
+              link
+              type="primary"
+              @click="openJson('extra', row.extra)"
+            >
+              查看
+            </el-button>
           </template>
         </el-table-column>
-        <el-table-column v-if="isSysMode" label="before" min-width="120" align="center">
+        <el-table-column
+          v-if="isSysMode"
+          label="before"
+          min-width="120"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click="openJson('before', row.before)">查看</el-button>
+            <el-button
+              link
+              type="primary"
+              @click="openJson('before', row.before)"
+            >
+              查看
+            </el-button>
           </template>
         </el-table-column>
-        <el-table-column v-if="isSysMode" label="after" min-width="120" align="center">
+        <el-table-column
+          v-if="isSysMode"
+          label="after"
+          min-width="120"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click="openJson('after', row.after)">查看</el-button>
+            <el-button
+              link
+              type="primary"
+              @click="openJson('after', row.after)"
+            >
+              查看
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <div class="pager-row">
         <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
           background
           layout="total, sizes, prev, pager, next, jumper"
           :page-sizes="[20, 50, 100, 200]"
           :total="total"
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
           @current-change="load"
           @size-change="onPageSizeChange"
         />
       </div>
     </el-card>
 
-    <el-dialog v-model="jsonDialog.visible" :title="jsonDialog.title" width="860px" destroy-on-close>
+    <el-dialog
+      v-model="jsonDialog.visible"
+      :title="jsonDialog.title"
+      width="860px"
+      destroy-on-close
+    >
       <pre class="json-pre">{{ jsonDialog.text }}</pre>
     </el-dialog>
   </div>

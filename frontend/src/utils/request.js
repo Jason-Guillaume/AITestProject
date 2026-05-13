@@ -45,13 +45,40 @@ function notifyBackendHealth(status, message) {
   );
 }
 
+const pendingRequests = new Map();
+
+function generateRequestKey(config) {
+  const { method, url, params, data } = config || {};
+  return [method, url, JSON.stringify(params), JSON.stringify(data)].join("&");
+}
+
+function addPendingRequest(config) {
+  const key = generateRequestKey(config);
+  if (pendingRequests.has(key)) {
+    const cancel = pendingRequests.get(key);
+    if (cancel) cancel();
+  }
+  config.cancelToken = config.cancelToken || new axios.CancelToken((cancel) => {
+    pendingRequests.set(key, cancel);
+  });
+}
+
+function removePendingRequest(config) {
+  const key = generateRequestKey(config);
+  if (pendingRequests.has(key)) {
+    pendingRequests.delete(key);
+  }
+}
+
 const request = axios.create({
   baseURL: "/api",
   timeout: 60000,
+  withCredentials: true,
 });
 
 request.interceptors.request.use(
   (config) => {
+    addPendingRequest(config);
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Token ${token}`;
@@ -63,10 +90,15 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   (response) => {
+    removePendingRequest(response.config);
     notifyBackendHealth("healthy");
     return response;
   },
   (error) => {
+    if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
+    removePendingRequest(error.config || {});
     // Axios 超时：error.response 可能为空，先单独处理以给出更明确的提示
     if (
       error?.code === "ECONNABORTED" ||

@@ -2,14 +2,31 @@
   <div class="script-hub script-hub--cyber">
     <section class="script-hub__workarea">
       <!-- Platform Adapter：紧贴布局区最上方（面包屑在 MainLayout 中） -->
-      <div class="platform-adapter-bar glass-panel" role="toolbar" aria-label="Platform Adapter">
+      <div
+        class="platform-adapter-bar glass-panel"
+        role="toolbar"
+        aria-label="Platform Adapter"
+      >
         <span class="platform-adapter-bar__label">Platform Adapter</span>
-        <el-radio-group v-model="activePlatform" class="platform-adapter-bar__group" size="small">
-          <el-radio-button value="web">Web</el-radio-button>
-          <el-radio-button value="mobile">Mobile</el-radio-button>
-          <el-radio-button value="api">API</el-radio-button>
+        <el-radio-group
+          v-model="activePlatform"
+          class="platform-adapter-bar__group"
+          size="small"
+        >
+          <el-radio-button value="web">
+            Web
+          </el-radio-button>
+          <el-radio-button value="mobile">
+            Mobile
+          </el-radio-button>
+          <el-radio-button value="api">
+            API
+          </el-radio-button>
         </el-radio-group>
-        <span v-if="activePlatform === 'mobile'" class="platform-adapter-bar__telemetry">
+        <span
+          v-if="activePlatform === 'mobile'"
+          class="platform-adapter-bar__telemetry"
+        >
           Telemetry：设备未连接
         </span>
       </div>
@@ -23,8 +40,13 @@
       >
         <!-- 左：Node Explorer -->
         <aside class="workstation-panel__col workstation-panel__col--tree">
-          <div v-show="activePlatform === 'web'" class="tree-pane">
-            <div class="tree-panel-head">Web · Node Explorer</div>
+          <div
+            v-show="activePlatform === 'web'"
+            class="tree-pane"
+          >
+            <div class="tree-panel-head">
+              Web · Node Explorer
+            </div>
             <div class="script-tree-scroll">
               <el-tree
                 :key="uiTreeKey"
@@ -47,8 +69,13 @@
               </el-tree>
             </div>
           </div>
-          <div v-show="activePlatform === 'mobile'" class="tree-pane">
-            <div class="tree-panel-head">Mobile · Node Explorer</div>
+          <div
+            v-show="activePlatform === 'mobile'"
+            class="tree-pane"
+          >
+            <div class="tree-panel-head">
+              Mobile · Node Explorer
+            </div>
             <div class="script-tree-scroll">
               <el-tree
                 :key="mobileTreeKey"
@@ -71,8 +98,13 @@
               </el-tree>
             </div>
           </div>
-          <div v-show="activePlatform === 'api'" class="tree-pane">
-            <div class="tree-panel-head">API · Node Explorer</div>
+          <div
+            v-show="activePlatform === 'api'"
+            class="tree-pane"
+          >
+            <div class="tree-panel-head">
+              API · Node Explorer
+            </div>
             <div class="script-tree-scroll">
               <el-tree
                 :key="apiTreeKey"
@@ -147,10 +179,26 @@
             v-show="activePlatform === 'mobile'"
             class="workspace-main-mount workspace-main-mount--mobile"
           />
-          <div v-show="activePlatform !== 'mobile'" class="editor-stack workspace-main-mount">
-            <p class="editor-path" :title="editorChromeTitle">{{ editorChromeTitle }}</p>
-            <div v-loading="editorLoading" class="monaco-wrap">
-              <p v-if="!isEditorReady" class="editor-defer-hint">编辑器初始化中（500ms 受控唤醒）…</p>
+          <div
+            v-show="activePlatform !== 'mobile'"
+            class="editor-stack workspace-main-mount"
+          >
+            <p
+              class="editor-path"
+              :title="editorChromeTitle"
+            >
+              {{ editorChromeTitle }}
+            </p>
+            <div
+              v-loading="editorLoading"
+              class="monaco-wrap"
+            >
+              <p
+                v-if="!isEditorReady"
+                class="editor-defer-hint"
+              >
+                编辑器初始化中（500ms 受控唤醒）…
+              </p>
               <MonacoEditor
                 v-if="isEditorReady"
                 v-model="editorContent"
@@ -164,8 +212,14 @@
 
           <div class="bottom-telemetry-zone">
             <div class="bottom-telemetry-zone__row">
-              <el-tabs v-model="bottomTab" class="bottom-tabs bottom-telemetry-zone__tabs">
-                <el-tab-pane label="Telemetry（遥测流）" name="telemetry">
+              <el-tabs
+                v-model="bottomTab"
+                class="bottom-tabs bottom-telemetry-zone__tabs"
+              >
+                <el-tab-pane
+                  label="Telemetry（遥测流）"
+                  name="telemetry"
+                >
                   <div class="bottom-pane bottom-pane--terminal">
                     <TerminalTerminal
                       ref="hubTerminalRef"
@@ -173,7 +227,10 @@
                     />
                   </div>
                 </el-tab-pane>
-                <el-tab-pane label="Artifacts（产物）" name="artifacts">
+                <el-tab-pane
+                  label="Artifacts（产物）"
+                  name="artifacts"
+                >
                   <div class="bottom-pane bottom-pane--artifacts">
                     <el-empty
                       description="Artifacts：报告截图、日志包、结构化导出将汇总于此（执行结束后可从 Telemetry 侧栏进入 Analysis Lab）"
@@ -206,21 +263,37 @@
         </div>
 
         <!-- 右：Inspector — Layout Configurator 多态面板 -->
-        <aside v-show="inspectorOpen" class="workstation-panel__col workstation-panel__col--inspector">
+        <aside
+          v-show="inspectorOpen"
+          class="workstation-panel__col workstation-panel__col--inspector"
+        >
           <div class="inspector-head">
             <span class="inspector-head__title">{{ inspectorHeadTitle }}</span>
-            <el-button text type="primary" class="inspector-head__collapse" @click="inspectorOpen = false">
+            <el-button
+              text
+              type="primary"
+              class="inspector-head__collapse"
+              @click="inspectorOpen = false"
+            >
               折叠
             </el-button>
           </div>
           <div class="inspector-body">
             <section class="inspector-block">
-              <h4 class="inspector-block__h">节点元数据 (Node Metadata)</h4>
-              <p class="inspector-block__placeholder">{{ inspectorMetadataPlaceholder }}</p>
+              <h4 class="inspector-block__h">
+                节点元数据 (Node Metadata)
+              </h4>
+              <p class="inspector-block__placeholder">
+                {{ inspectorMetadataPlaceholder }}
+              </p>
             </section>
             <section class="inspector-block">
-              <h4 class="inspector-block__h">最近一次 Telemetry 状态</h4>
-              <p class="inspector-block__mono inspector-block__mono--status">{{ lastTelemetryStatusDisplay }}</p>
+              <h4 class="inspector-block__h">
+                最近一次 Telemetry 状态
+              </h4>
+              <p class="inspector-block__mono inspector-block__mono--status">
+                {{ lastTelemetryStatusDisplay }}
+              </p>
             </section>
           </div>
         </aside>
@@ -238,13 +311,29 @@
     >
       <div class="params-drawer__body">
         <template v-if="activePlatform === 'web'">
-          <p class="params-drawer__hint">Web 运行器参数；与 Inspector 解耦，保持主栏极简。</p>
+          <p class="params-drawer__hint">
+            Web 运行器参数；与 Inspector 解耦，保持主栏极简。
+          </p>
           <div class="params-drawer__row params-drawer__row--top">
             <span class="params-drawer__label">Browser Type</span>
-            <el-select v-model="browserType" size="small" class="params-drawer__select" :disabled="executeLoading">
-              <el-option label="Chrome" value="chrome" />
-              <el-option label="Edge" value="edge" />
-              <el-option label="Firefox" value="firefox" />
+            <el-select
+              v-model="browserType"
+              size="small"
+              class="params-drawer__select"
+              :disabled="executeLoading"
+            >
+              <el-option
+                label="Chrome"
+                value="chrome"
+              />
+              <el-option
+                label="Edge"
+                value="edge"
+              />
+              <el-option
+                label="Firefox"
+                value="firefox"
+              />
             </el-select>
           </div>
           <div class="params-drawer__row params-drawer__row--top params-drawer__row--switch">
@@ -260,11 +349,19 @@
           </div>
           <div class="params-drawer__row params-drawer__row--top">
             <span class="params-drawer__label">并行度 (parallel)</span>
-            <el-input-number v-model="parallelCount" :min="1" :max="50" size="small" controls-position="right" />
+            <el-input-number
+              v-model="parallelCount"
+              :min="1"
+              :max="50"
+              size="small"
+              controls-position="right"
+            />
           </div>
         </template>
         <template v-else-if="activePlatform === 'mobile'">
-          <p class="params-drawer__hint">移动端执行上下文（占位）；Telemetry 接通后由设备服务回填。</p>
+          <p class="params-drawer__hint">
+            移动端执行上下文（占位）；Telemetry 接通后由设备服务回填。
+          </p>
           <div class="params-drawer__row params-drawer__row--top">
             <span class="params-drawer__label">Device</span>
             <el-select
@@ -274,7 +371,10 @@
               disabled
               placeholder="选择设备（占位）"
             >
-              <el-option label="— 暂无设备 —" value="" />
+              <el-option
+                label="— 暂无设备 —"
+                value=""
+              />
             </el-select>
           </div>
           <div class="params-drawer__row params-drawer__row--top">

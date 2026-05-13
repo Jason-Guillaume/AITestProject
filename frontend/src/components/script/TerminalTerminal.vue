@@ -1,6 +1,12 @@
 <template>
-  <div ref="wrapperRef" class="terminal-terminal">
-    <div ref="hostRef" class="terminal-terminal__host" />
+  <div
+    ref="wrapperRef"
+    class="terminal-terminal"
+  >
+    <div
+      ref="hostRef"
+      class="terminal-terminal__host"
+    />
   </div>
 </template>
 

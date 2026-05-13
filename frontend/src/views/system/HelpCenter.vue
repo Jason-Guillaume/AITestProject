@@ -1,6 +1,10 @@
 <template>
   <div class="placeholder-page cyber-page cyber-glass">
-    <el-result icon="info" title="帮助中心" sub-title="该模块正在开发中" />
+    <el-result
+      icon="info"
+      title="帮助中心"
+      sub-title="该模块正在开发中"
+    />
   </div>
 </template>
 

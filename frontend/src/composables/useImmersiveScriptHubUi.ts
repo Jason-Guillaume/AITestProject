@@ -5,7 +5,7 @@
 import { ref, reactive, computed, watch, nextTick, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
-import { useUiExecutionStore } from '@/store/modules/uiExecution'
+import { useUiExecutionStore } from '@/stores/uiExecutionStore'
 
 export interface Project {
   id: string
