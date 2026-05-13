@@ -1,0 +1,7 @@
+- [x] 脚本处理全链路已完整梳理：上传 → 工作空间 → 框架检测 → 命令构建 → 子进程执行 → 日志流 → 前端展示
+- [x] 12 种操作类型（click/input/assert/hover/select/wait/sleep/navigate/switch_window/switch_frame/scroll/execute_js）已从 UIActionStep 模型提取并文档化
+- [x] 8 种元素定位方式（ID/Name/XPath/CSS/Class/Tag/LinkText/PartialLinkText）已从 UIPageElement 模型提取并与 Selenium By 映射
+- [x] AI Mock 生成脚本中的实际定位方式使用情况已分析（仅 TAG_NAME + CSS_SELECTOR，均为硬编码）
+- [x] 「直接编辑代码」模式的 12 项局限性已完整列出（L1~L12）
+- [x] 局限性按类别分组：结构化缺失类（L1/L3/L9）、编辑体验类（L4/L5/L6/L11）、执行调试类（L7/L8/L10/L12）、维护性（L2）
+- [x] spec.md 中包含完整的 Scenario-When-Then 格式描述
